@@ -4,7 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { EventVote } from '../entities/event-vote.entity';
 import { Event } from '../entities/event.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
@@ -45,6 +45,16 @@ export class VotingService {
       throw new BadRequestException('Voting has closed');
     }
 
+    const existingVote = await this.votesRepo.findOne({
+      where: { eventId, userId },
+      select: ['id'],
+    });
+    if (existingVote) {
+      throw new BadRequestException(
+        'You have already submitted votes for this event',
+      );
+    }
+
     const validGameIds = await this.getValidCandidateGameIds(eventId);
     const filteredRankings = rankings.filter((r) => validGameIds.has(r.gameId));
     if (!filteredRankings.length) {
@@ -52,8 +62,6 @@ export class VotingService {
         'No valid votes submitted for current candidate list',
       );
     }
-
-    await this.votesRepo.delete({ eventId, userId });
 
     const votes = filteredRankings.map((r) =>
       this.votesRepo.create({
@@ -161,11 +169,8 @@ export class VotingService {
   }
 
   async getUserVotes(eventId: string, userId: string): Promise<EventVote[]> {
-    const validGameIds = [...(await this.getValidCandidateGameIds(eventId))];
-    if (!validGameIds.length) return [];
-
     return this.votesRepo.find({
-      where: { eventId, userId, gameId: In(validGameIds) },
+      where: { eventId, userId },
       relations: ['game'],
       order: { rank: 'ASC' },
     });

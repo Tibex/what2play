@@ -145,6 +145,7 @@ describe('VotingService', () => {
   describe('submitVotes', () => {
     it('should delete existing votes and save new ones', async () => {
       mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([
         { gameId: 'g1' },
         { gameId: 'g2' },
@@ -158,15 +159,12 @@ describe('VotingService', () => {
 
       await service.submitVotes('e1', 'u1', rankings);
 
-      expect(mockVotesRepo.delete).toHaveBeenCalledWith({
-        eventId: 'e1',
-        userId: 'u1',
-      });
       expect(mockVotesRepo.save).toHaveBeenCalled();
     });
 
     it('should ignore stale game ids not in current candidates', async () => {
       mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([
         { gameId: 'g1' },
         { gameId: 'g2' },
@@ -183,12 +181,23 @@ describe('VotingService', () => {
       ]);
     });
 
+    it('should reject re-submission when user already voted', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockVotesRepo.findOne.mockResolvedValue({ id: 'vote-1' });
+      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
+
+      await expect(
+        service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),
+      ).rejects.toThrow('already submitted');
+    });
+
     it('should reject votes after deadline', async () => {
       const pastDeadline = new Date(Date.now() - 60000).toISOString();
       mockEventsRepo.findOne.mockResolvedValue({
         id: 'e1',
         votingDeadline: pastDeadline,
       });
+      mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
 
       await expect(

@@ -249,6 +249,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
   const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [draggingGameId, setDraggingGameId] = useState<string | null>(null);
+  const hasSubmittedVotes = myVotes.length > 0;
 
   useEffect(() => {
     if (!candidates.length) return;
@@ -284,6 +285,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
   };
 
   const submitVotes = async () => {
+    if (hasSubmittedVotes) return;
     setSubmitting(true);
     try {
       await api.post(`/events/${eventId}/voting`, { rankings });
@@ -321,11 +323,13 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
               return (
                 <div
                   key={r.gameId}
-                  draggable
-                  onDragStart={() => setDraggingGameId(r.gameId)}
+                  draggable={!hasSubmittedVotes}
+                  onDragStart={() => {
+                    if (!hasSubmittedVotes) setDraggingGameId(r.gameId);
+                  }}
                   onDragOver={(e) => {
                     e.preventDefault();
-                    if (draggingGameId) reorderByGameId(draggingGameId, r.gameId);
+                    if (!hasSubmittedVotes && draggingGameId) reorderByGameId(draggingGameId, r.gameId);
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
@@ -344,15 +348,18 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
                     ≡
                   </span>
                   <span className="flex-1 font-medium">{game?.title || r.gameId}</span>
-                  <button onClick={() => moveUp(idx)} disabled={idx === 0} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
-                  <button onClick={() => moveDown(idx)} disabled={idx >= rankings.length - 1} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
+                  <button onClick={() => moveUp(idx)} disabled={hasSubmittedVotes || idx === 0} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
+                  <button onClick={() => moveDown(idx)} disabled={hasSubmittedVotes || idx >= rankings.length - 1} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
                 </div>
               );
             })}
           </div>
-          <button onClick={submitVotes} disabled={submitting} className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
-            {submitting ? 'Submitting...' : 'Submit Votes'}
+          <button onClick={submitVotes} disabled={submitting || hasSubmittedVotes} className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
+            {hasSubmittedVotes ? 'Votes Submitted' : submitting ? 'Submitting...' : 'Submit Votes'}
           </button>
+          {hasSubmittedVotes && (
+            <p className="mt-2 text-sm text-gray-500">You have already voted for this event.</p>
+          )}
         </div>
       )}
 
