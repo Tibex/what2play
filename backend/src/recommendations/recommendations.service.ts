@@ -109,7 +109,8 @@ export class RecommendationsService {
     }
 
     scored.sort((a, b) => b.score - a.score);
-    const topCandidates = scored.slice(0, 10);
+    const deduped = this.dedupeBaseAndExpansion(scored);
+    const topCandidates = deduped.slice(0, 10);
 
     await this.candidatesRepo.delete({ eventId });
 
@@ -198,5 +199,50 @@ export class RecommendationsService {
       .andWhere('f.createdAt >= :since', { since: thirtyDaysAgo })
       .getRawMany();
     return new Set(recent.map((r) => r.gameId));
+  }
+
+  private dedupeBaseAndExpansion(scored: ScoredCandidate[]): ScoredCandidate[] {
+    const byId = new Map<string, ScoredCandidate>();
+    scored.forEach((candidate) => byId.set(candidate.game.id, candidate));
+
+    const groups = new Map<string, ScoredCandidate[]>();
+    for (const candidate of scored) {
+      const groupKey = this.getSeriesGroupKey(candidate.game);
+      const arr = groups.get(groupKey) || [];
+      arr.push(candidate);
+      groups.set(groupKey, arr);
+    }
+
+    const selected = new Set<string>();
+    for (const group of groups.values()) {
+      if (group.length === 1) {
+        selected.add(group[0].game.id);
+        continue;
+      }
+
+      group.sort((a, b) => {
+        if (!!a.game.isExpansion !== !!b.game.isExpansion) {
+          return a.game.isExpansion ? 1 : -1;
+        }
+        if (a.score !== b.score) return b.score - a.score;
+        return a.game.title.length - b.game.title.length;
+      });
+
+      selected.add(group[0].game.id);
+    }
+
+    return scored
+      .filter((candidate) => selected.has(candidate.game.id))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  private getSeriesGroupKey(game: Game): string {
+    if (game.isExpansion && game.expansionForBggIds?.length) {
+      return `bgg:${game.expansionForBggIds[0]}`;
+    }
+    if (game.bggId) {
+      return `bgg:${game.bggId}`;
+    }
+    return `id:${game.id}`;
   }
 }

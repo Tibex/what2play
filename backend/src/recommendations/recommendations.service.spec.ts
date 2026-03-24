@@ -173,5 +173,88 @@ describe('RecommendationsService', () => {
       const result = await service.generateCandidates('e1');
       expect(result).toHaveLength(0);
     });
+
+    it('prefers base game over expansion when both are compatible', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 180,
+        discoveryMode: false,
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+      ]);
+
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'base',
+          bggId: 100,
+          title: 'Great Game',
+          minPlayers: 2,
+          maxPlayers: 4,
+          isExpansion: false,
+        },
+        {
+          id: 'exp',
+          bggId: 101,
+          title: 'Great Game: Expansion',
+          minPlayers: 2,
+          maxPlayers: 5,
+          isExpansion: true,
+          expansionForBggIds: ['100'],
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+
+      const result = await service.generateCandidates('e1');
+      const gameIds = result.map((r) => r.gameId);
+
+      expect(gameIds).toContain('base');
+      expect(gameIds).not.toContain('exp');
+    });
+
+    it('keeps expansion when base game is not player-compatible', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 180,
+        discoveryMode: false,
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+        'u5',
+      ]);
+
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'base',
+          bggId: 100,
+          title: 'Great Game',
+          minPlayers: 2,
+          maxPlayers: 4,
+          isExpansion: false,
+        },
+        {
+          id: 'exp',
+          bggId: 101,
+          title: 'Great Game: Expansion',
+          minPlayers: 2,
+          maxPlayers: 5,
+          isExpansion: true,
+          expansionForBggIds: ['100'],
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+
+      const result = await service.generateCandidates('e1');
+      const gameIds = result.map((r) => r.gameId);
+
+      expect(gameIds).toContain('exp');
+      expect(gameIds).not.toContain('base');
+    });
   });
 });

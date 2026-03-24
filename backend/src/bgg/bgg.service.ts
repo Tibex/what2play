@@ -77,6 +77,8 @@ export class BggService {
         maxPlayers: bg.maxPlayers,
         playingTime: bg.playingTime,
         yearPublished: bg.yearPublished,
+        isExpansion: bg.isExpansion,
+        expansionForBggIds: bg.expansionForBggIds,
       });
       await this.gamesService.addToCollection(userId, game.id);
       if (bg.userRating) {
@@ -94,7 +96,7 @@ export class BggService {
     userId: string,
     xml: string,
   ): Promise<{ imported: number; fetched: number }> {
-    const bggGames = this.parseBggXml(xml);
+    const bggGames = await this.enrichWithThingMetadata(this.parseBggXml(xml));
     let imported = 0;
 
     for (const bg of bggGames) {
@@ -106,6 +108,8 @@ export class BggService {
         maxPlayers: bg.maxPlayers,
         playingTime: bg.playingTime,
         yearPublished: bg.yearPublished,
+        isExpansion: bg.isExpansion,
+        expansionForBggIds: bg.expansionForBggIds,
       });
       await this.gamesService.addToCollection(userId, game.id);
       if (bg.userRating) {
@@ -128,6 +132,8 @@ export class BggService {
       playingTime?: number;
       yearPublished?: number;
       userRating?: number;
+      isExpansion?: boolean;
+      expansionForBggIds?: string[];
     }>
   > {
     const token = this.config.get<string>('BGG_API_TOKEN');
@@ -159,7 +165,7 @@ export class BggService {
       }
 
       const text = await response.text();
-      const games = this.parseBggXml(text);
+      const games = await this.enrichWithThingMetadata(this.parseBggXml(text));
       return games;
     }
 
@@ -178,6 +184,8 @@ export class BggService {
     playingTime?: number;
     yearPublished?: number;
     userRating?: number;
+    isExpansion?: boolean;
+    expansionForBggIds?: string[];
   }> {
     const games: Array<{
       bggId: number;
@@ -189,6 +197,8 @@ export class BggService {
       playingTime?: number;
       yearPublished?: number;
       userRating?: number;
+      isExpansion?: boolean;
+      expansionForBggIds?: string[];
     }> = [];
 
     const itemRegex = /<item[^>]*objectid="(\d+)"[^>]*>([\s\S]*?)<\/item>/g;
@@ -247,6 +257,103 @@ export class BggService {
   private extractStatsNumAttr(block: string, attr: string): number | undefined {
     const m = block.match(new RegExp(`<stats[^>]*\\b${attr}="(\\d+)"`));
     return m ? parseInt(m[1], 10) : undefined;
+  }
+
+  private async enrichWithThingMetadata(
+    games: Array<{
+      bggId: number;
+      title: string;
+      imageUrl?: string;
+      thumbnailUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+      userRating?: number;
+      isExpansion?: boolean;
+      expansionForBggIds?: string[];
+    }>,
+  ): Promise<
+    Array<{
+      bggId: number;
+      title: string;
+      imageUrl?: string;
+      thumbnailUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+      userRating?: number;
+      isExpansion?: boolean;
+      expansionForBggIds?: string[];
+    }>
+  > {
+    if (!games.length) return games;
+    const token = this.config.get<string>('BGG_API_TOKEN');
+    if (!token || token === 'your-bgg-api-token') return games;
+
+    const metadata = new Map<
+      number,
+      { isExpansion: boolean; baseIds: string[] }
+    >();
+    const ids = games.map((g) => g.bggId);
+    const chunkSize = 20;
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      try {
+        const response = await fetch(
+          `https://boardgamegeek.com/xmlapi2/thing?id=${chunk.join(',')}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        if (!response.ok) continue;
+        const xml = await response.text();
+        this.parseThingMetadata(xml, metadata);
+      } catch {
+        // Keep import resilient even if metadata enrichment fails.
+      }
+    }
+
+    return games.map((game) => {
+      const meta = metadata.get(game.bggId);
+      if (!meta) return game;
+      return {
+        ...game,
+        isExpansion: meta.isExpansion,
+        expansionForBggIds: meta.baseIds,
+      };
+    });
+  }
+
+  private parseThingMetadata(
+    xml: string,
+    target: Map<number, { isExpansion: boolean; baseIds: string[] }>,
+  ): void {
+    const itemRegex = /<item\b([^>]*)>([\s\S]*?)<\/item>/g;
+    let itemMatch: RegExpExecArray | null;
+
+    while ((itemMatch = itemRegex.exec(xml)) !== null) {
+      const attrs = itemMatch[1];
+      const body = itemMatch[2];
+      const idMatch = /(?:\s|^)id="(\d+)"/.exec(attrs);
+      if (!idMatch) continue;
+      const id = Number.parseInt(idMatch[1], 10);
+      const typeMatch = /(?:\s|^)type="([^"]+)"/.exec(attrs);
+      const type = typeMatch ? typeMatch[1] : '';
+
+      const baseIds: string[] = [];
+      const baseLinkRegex =
+        /<link[^>]*type="boardgameexpansion"[^>]*id="(\d+)"[^>]*inbound="false"[^>]*\/?>/g;
+      let baseLinkMatch: RegExpExecArray | null;
+      while ((baseLinkMatch = baseLinkRegex.exec(body)) !== null) {
+        baseIds.push(baseLinkMatch[1]);
+      }
+
+      const isExpansion = type === 'boardgameexpansion' || baseIds.length > 0;
+      target.set(id, { isExpansion, baseIds });
+    }
   }
 
   private async sleep(ms: number): Promise<void> {

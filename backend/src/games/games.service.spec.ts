@@ -39,7 +39,10 @@ describe('GamesService', () => {
           provide: getRepositoryToken(UserGameOwnership),
           useValue: mockOwnershipRepo,
         },
-        { provide: getRepositoryToken(UserGameRating), useValue: mockRatingsRepo },
+        {
+          provide: getRepositoryToken(UserGameRating),
+          useValue: mockRatingsRepo,
+        },
       ],
     }).compile();
 
@@ -87,4 +90,3 @@ describe('GamesService', () => {
     );
   });
 });
-

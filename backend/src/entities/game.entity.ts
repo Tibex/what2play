@@ -59,6 +59,12 @@ export class Game {
   @Column({ type: 'simple-array', nullable: true })
   mechanics: string[];
 
+  @Column({ default: false })
+  isExpansion: boolean;
+
+  @Column({ type: 'simple-array', nullable: true })
+  expansionForBggIds: string[];
+
   @CreateDateColumn()
   createdAt: Date;
 
