@@ -18,13 +18,15 @@ This project is easiest to deploy as:
 
 1. Create a new Web Service from this GitHub repository.
 2. Set root directory to `backend`.
-3. Build command: `npm ci && npm run build`
+3. Build command: `npm ci --include=dev && npm run build`
 4. Start command: `npm run start:prod`
 5. Add required environment variables (based on your backend config), including:
    - `DATABASE_URL`
    - `JWT_SECRET`
    - any other app-specific envs you use in `@nestjs/config`
 6. Deploy.
+
+Note: if `NODE_ENV=production` is set in Render, you should still keep `--include=dev` in the build command so Nest CLI is available during build.
 
 ## 3) Database
 
