@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { PENDING_INVITE_STORAGE_KEY } from '@/lib/auth-flow';
 import type { GameEvent } from '@/lib/types';
 
 export default function InvitePage() {
@@ -15,7 +16,7 @@ export default function InvitePage() {
 
   useEffect(() => {
     api
-      .get<GameEvent>(`/events/invite/${token}`)
+      .get<GameEvent>(`/events/invite/${token}`, { auth: false })
       .then(setEvent)
       .catch(() => setError('Invalid or expired invite link'))
       .finally(() => setLoading(false));
@@ -24,7 +25,7 @@ export default function InvitePage() {
   const handleJoin = async () => {
     const hasToken = localStorage.getItem('accessToken');
     if (!hasToken) {
-      localStorage.setItem('pendingInvite', token);
+      localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token);
       router.push('/login');
       return;
     }
@@ -45,7 +46,13 @@ export default function InvitePage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
-          <Link href="/login" className="text-indigo-600 hover:underline">Go to login</Link>
+          <Link
+            href="/login"
+            className="text-indigo-600 hover:underline"
+            onClick={() => localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token)}
+          >
+            Go to login
+          </Link>
         </div>
       </div>
     );

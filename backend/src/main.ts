@@ -8,22 +8,34 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  const nodeEnv = config.get<string>('NODE_ENV') || 'development';
+  const isProd = nodeEnv === 'production';
   const frontendUrl = config.get<string>('FRONTEND_URL');
   const allowedOrigins = new Set([
     'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://[::1]:3000',
     'https://board-game-night.vercel.app',
     ...(frontendUrl ? [frontendUrl] : []),
   ]);
 
+  // Echo allowed origins as explicit strings (not `callback(null, true)`), and keep
+  // credentials off: we use Bearer tokens, not cookies. Credentialed CORS + `true`
+  // reflection has caused Chrome to show "CORS error" on PATCH while preflight 204
+  // still succeeds (no visible status/body in DevTools).
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow non-browser clients and same-origin requests without an Origin header.
       if (!origin) return callback(null, true);
-      if (allowedOrigins.has(origin)) return callback(null, true);
+      if (allowedOrigins.has(origin)) return callback(null, origin);
+      if (
+        !isProd &&
+        /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin)
+      ) {
+        return callback(null, origin);
+      }
       return callback(new Error(`CORS blocked for origin: ${origin}`), false);
     },
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
   });

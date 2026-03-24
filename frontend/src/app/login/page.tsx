@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
+import { redirectPathAfterAuth } from '@/lib/auth-flow';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,7 @@ export default function LoginPage() {
         refreshToken: string;
       }>('/auth/login', { email, password });
       login(data.user, data.accessToken, data.refreshToken);
-      router.push('/dashboard');
+      router.push(redirectPathAfterAuth());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

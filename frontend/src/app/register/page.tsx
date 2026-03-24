@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
+import { redirectPathAfterAuth } from '@/lib/auth-flow';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -26,7 +27,7 @@ export default function RegisterPage() {
         refreshToken: string;
       }>('/auth/register', { name, email, password });
       login(data.user, data.accessToken, data.refreshToken);
-      router.push('/dashboard');
+      router.push(redirectPathAfterAuth());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

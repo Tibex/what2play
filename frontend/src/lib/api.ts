@@ -5,10 +5,16 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  /** When false, omit Bearer token (for public endpoints). Avoids 401 + /login redirect with a stale session. */
+  auth?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const useAuth = options.auth !== false;
+  const token =
+    useAuth && typeof window !== 'undefined'
+      ? localStorage.getItem('accessToken')
+      : null;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -61,7 +67,8 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, opts?: Pick<RequestOptions, 'auth'>) =>
+    request<T>(path, opts ?? {}),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
