@@ -40,6 +40,9 @@ export class VotingService {
   ): Promise<EventVote[]> {
     const event = await this.eventsRepo.findOne({ where: { id: eventId } });
     if (!event) throw new BadRequestException('Event not found');
+    if (event.status !== 'voting') {
+      throw new BadRequestException('Voting is not open for this event yet');
+    }
 
     if (event.votingDeadline && new Date() > new Date(event.votingDeadline)) {
       throw new BadRequestException('Voting has closed');

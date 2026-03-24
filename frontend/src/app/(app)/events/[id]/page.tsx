@@ -5,7 +5,14 @@ import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import GameCard from '@/components/GameCard';
-import type { GameEvent, EventGameCandidate, VoteResult, EventVote, VotingStatus } from '@/lib/types';
+import type {
+  GameEvent,
+  EventGameCandidate,
+  VoteResult,
+  EventVote,
+  VotingStatus,
+  FeedbackStatus,
+} from '@/lib/types';
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +22,7 @@ export default function EventDetailPage() {
   const [results, setResults] = useState<VoteResult[]>([]);
   const [myVotes, setMyVotes] = useState<EventVote[]>([]);
   const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | null>(null);
   const [inviteLink, setInviteLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'details' | 'recommend' | 'vote' | 'feedback'>('details');
@@ -34,6 +42,10 @@ export default function EventDetailPage() {
       const vs = await api.get<VotingStatus>(`/events/${id}/voting/status`);
       setVotingStatus(vs);
     } catch { /* no votes yet */ }
+    try {
+      const fs = await api.get<FeedbackStatus>(`/events/${id}/feedback/status`);
+      setFeedbackStatus(fs);
+    } catch { /* no feedback status yet */ }
     setLoading(false);
   }, [id]);
 
@@ -129,7 +141,11 @@ export default function EventDetailPage() {
               <button onClick={handleCreateInvite} className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200 transition">
                 Create Invite Link
               </button>
-              <button onClick={handleGenerateRecommendations} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+              <button
+                onClick={handleGenerateRecommendations}
+                disabled={event.status !== 'planning'}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
                 Generate Recommendations
               </button>
               {candidates.length > 0 && event.status === 'planning' && (
@@ -159,7 +175,7 @@ export default function EventDetailPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition cursor-pointer ${
               tab === t ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -183,7 +199,13 @@ export default function EventDetailPage() {
           onSelectWinner={handleSelectWinner}
         />
       )}
-      {tab === 'feedback' && <FeedbackSection eventId={id} onSubmitted={loadEvent} />}
+      {tab === 'feedback' && (
+        <FeedbackSection
+          eventId={id}
+          feedbackStatus={feedbackStatus}
+          onSubmitted={loadEvent}
+        />
+      )}
     </div>
   );
 }
@@ -314,7 +336,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
 
   return (
     <div className="space-y-6">
-      {(status === 'voting' || status === 'planning') && candidates.length > 0 && (
+      {status === 'voting' && candidates.length > 0 && (
         <div>
           <h3 className="font-semibold mb-3">Rank your preferences (most wanted at top)</h3>
           <div className="space-y-2">
@@ -397,15 +419,26 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
   );
 }
 
-function FeedbackSection({ eventId, onSubmitted }: { eventId: string; onSubmitted: () => void }) {
+function FeedbackSection({
+  eventId,
+  feedbackStatus,
+  onSubmitted,
+}: {
+  eventId: string;
+  feedbackStatus: FeedbackStatus | null;
+  onSubmitted: () => void;
+}) {
   const [enjoyment, setEnjoyment] = useState(3);
   const [finished, setFinished] = useState(false);
   const [durationFeel, setDurationFeel] = useState('just_right');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const alreadySubmitted = feedbackStatus?.alreadySubmitted || submitted;
+  const canSubmit = feedbackStatus?.canSubmit ?? false;
 
   const handleSubmit = async () => {
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
       await api.post(`/events/${eventId}/feedback`, {
@@ -421,8 +454,16 @@ function FeedbackSection({ eventId, onSubmitted }: { eventId: string; onSubmitte
     }
   };
 
-  if (submitted) {
+  if (alreadySubmitted) {
     return <p className="text-center text-green-600 font-medium py-10">Thanks for your feedback!</p>;
+  }
+
+  if (feedbackStatus && !feedbackStatus.eventEnded) {
+    return (
+      <p className="text-center text-gray-500 py-10">
+        Feedback opens after the event date.
+      </p>
+    );
   }
 
   return (
@@ -460,7 +501,7 @@ function FeedbackSection({ eventId, onSubmitted }: { eventId: string; onSubmitte
         <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
       </div>
-      <button onClick={handleSubmit} disabled={submitting} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
+      <button onClick={handleSubmit} disabled={submitting || !canSubmit} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
         {submitting ? 'Submitting...' : 'Submit Feedback'}
       </button>
     </div>

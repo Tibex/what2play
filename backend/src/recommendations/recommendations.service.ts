@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
@@ -30,6 +30,11 @@ export class RecommendationsService {
 
   async generateCandidates(eventId: string): Promise<EventGameCandidate[]> {
     const event = await this.eventsService.findById(eventId);
+    if (event.status !== 'planning') {
+      throw new BadRequestException(
+        'Recommendations can only be generated while event is in planning',
+      );
+    }
     const attendeeIds = await this.eventsService.getAttendeeUserIds(eventId);
     const playerCount = attendeeIds.length;
 

@@ -30,6 +30,12 @@ export class FeedbackController {
     return this.feedbackService.submitFeedback(eventId, req.user.id, dto);
   }
 
+  @Get('status')
+  @ApiOperation({ summary: 'Get feedback submission status for current user' })
+  getStatus(@Param('eventId') eventId: string, @Request() req) {
+    return this.feedbackService.getFeedbackStatus(eventId, req.user.id);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get event feedback' })
   getEventFeedback(@Param('eventId') eventId: string) {

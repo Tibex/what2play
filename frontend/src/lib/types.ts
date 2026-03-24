@@ -122,6 +122,12 @@ export interface EventFeedback {
   notes?: string;
 }
 
+export interface FeedbackStatus {
+  canSubmit: boolean;
+  alreadySubmitted: boolean;
+  eventEnded: boolean;
+}
+
 export interface Friendship {
   id: string;
   requesterId: string;

@@ -80,6 +80,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 120,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue([
         'u1',
@@ -106,6 +107,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 120,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2']);
 
@@ -130,6 +132,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 120,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2']);
 
@@ -155,6 +158,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 120,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue([
         'u1',
@@ -179,6 +183,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 180,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue([
         'u1',
@@ -220,6 +225,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 180,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue([
         'u1',
@@ -262,6 +268,7 @@ describe('RecommendationsService', () => {
         id: 'e1',
         durationMinutes: 180,
         discoveryMode: false,
+        status: 'planning',
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue([
         'u1',
@@ -305,6 +312,19 @@ describe('RecommendationsService', () => {
 
       expect(duneFamily).toHaveLength(1);
       expect(duneFamily[0].gameId).toBe('base');
+    });
+
+    it('rejects generating recommendations after voting starts', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'voting',
+      });
+
+      await expect(service.generateCandidates('e1')).rejects.toThrow(
+        'only be generated while event is in planning',
+      );
     });
   });
 });

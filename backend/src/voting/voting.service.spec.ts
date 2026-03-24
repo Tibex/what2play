@@ -195,6 +195,7 @@ describe('VotingService', () => {
       const pastDeadline = new Date(Date.now() - 60000).toISOString();
       mockEventsRepo.findOne.mockResolvedValue({
         id: 'e1',
+        status: 'voting',
         votingDeadline: pastDeadline,
       });
       mockVotesRepo.findOne.mockResolvedValue(null);
@@ -203,6 +204,19 @@ describe('VotingService', () => {
       await expect(
         service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),
       ).rejects.toThrow('Voting has closed');
+    });
+
+    it('should reject votes before voting phase starts', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        status: 'planning',
+      });
+      mockVotesRepo.findOne.mockResolvedValue(null);
+      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
+
+      await expect(
+        service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),
+      ).rejects.toThrow('not open');
     });
   });
 

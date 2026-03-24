@@ -30,3 +30,16 @@ textarea::placeholder {
   color: #6b7280;
   opacity: 1;
 }
+
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+a[href],
+summary,
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
