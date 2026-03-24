@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/+$/, '')}/api`;
 
 interface RequestOptions {
   method?: string;
