@@ -256,5 +256,55 @@ describe('RecommendationsService', () => {
       expect(gameIds).toContain('exp');
       expect(gameIds).not.toContain('base');
     });
+
+    it('keeps only one candidate when base and multiple expansions are all compatible', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 180,
+        discoveryMode: false,
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+      ]);
+
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'base',
+          bggId: 200,
+          title: 'Dune',
+          minPlayers: 2,
+          maxPlayers: 6,
+          isExpansion: false,
+        },
+        {
+          id: 'exp1',
+          bggId: 201,
+          title: 'Dune: Ixians & Tleilaxu',
+          minPlayers: 2,
+          maxPlayers: 6,
+          isExpansion: true,
+        },
+        {
+          id: 'exp2',
+          bggId: 202,
+          title: 'Dune: Immortality',
+          minPlayers: 2,
+          maxPlayers: 6,
+          isExpansion: true,
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+
+      const result = await service.generateCandidates('e1');
+      const duneFamily = result.filter((r) =>
+        ['base', 'exp1', 'exp2'].includes(r.gameId),
+      );
+
+      expect(duneFamily).toHaveLength(1);
+      expect(duneFamily[0].gameId).toBe('base');
+    });
   });
 });

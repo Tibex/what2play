@@ -202,12 +202,19 @@ export class RecommendationsService {
   }
 
   private dedupeBaseAndExpansion(scored: ScoredCandidate[]): ScoredCandidate[] {
-    const byId = new Map<string, ScoredCandidate>();
-    scored.forEach((candidate) => byId.set(candidate.game.id, candidate));
+    const referencedBaseIds = new Set<string>();
+    for (const candidate of scored) {
+      for (const baseId of candidate.game.expansionForBggIds || []) {
+        referencedBaseIds.add(baseId);
+      }
+    }
 
     const groups = new Map<string, ScoredCandidate[]>();
     for (const candidate of scored) {
-      const groupKey = this.getSeriesGroupKey(candidate.game);
+      const groupKey = this.getSeriesGroupKey(
+        candidate.game,
+        referencedBaseIds,
+      );
       const arr = groups.get(groupKey) || [];
       arr.push(candidate);
       groups.set(groupKey, arr);
@@ -236,13 +243,23 @@ export class RecommendationsService {
       .sort((a, b) => b.score - a.score);
   }
 
-  private getSeriesGroupKey(game: Game): string {
+  private getSeriesGroupKey(
+    game: Game,
+    referencedBaseIds: Set<string>,
+  ): string {
     if (game.isExpansion && game.expansionForBggIds?.length) {
-      return `bgg:${game.expansionForBggIds[0]}`;
+      const stableBaseId = [...game.expansionForBggIds].sort()[0];
+      return `bgg:${stableBaseId}`;
     }
-    if (game.bggId) {
+    if (game.bggId && referencedBaseIds.has(String(game.bggId))) {
       return `bgg:${game.bggId}`;
     }
-    return `id:${game.id}`;
+    const normalized = game.title
+      .toLowerCase()
+      .replace(/[()]/g, '')
+      .split(/[:\-–]/)[0]
+      .replace(/\s+/g, ' ')
+      .trim();
+    return normalized ? `title:${normalized}` : `id:${game.id}`;
   }
 }
