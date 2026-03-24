@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModule, type TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -19,7 +19,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
+      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
         const databaseUrl = config.get<string>('DATABASE_URL');
 
         if (databaseUrl) {
@@ -41,12 +41,12 @@ import { NotificationsModule } from './notifications/notifications.module';
         }
 
         return {
-          type: 'postgres' as const,
-          host: config.get('DATABASE_HOST'),
-          port: config.get<number>('DATABASE_PORT'),
-          username: config.get('DATABASE_USER'),
-          password: config.get('DATABASE_PASSWORD'),
-          database: config.get('DATABASE_NAME'),
+          type: 'postgres',
+          host: config.getOrThrow<string>('DATABASE_HOST'),
+          port: Number(config.getOrThrow<string>('DATABASE_PORT')),
+          username: config.getOrThrow<string>('DATABASE_USER'),
+          password: config.getOrThrow<string>('DATABASE_PASSWORD'),
+          database: config.getOrThrow<string>('DATABASE_NAME'),
           autoLoadEntities: true,
           synchronize: true,
         };
