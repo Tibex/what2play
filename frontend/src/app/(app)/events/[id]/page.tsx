@@ -245,11 +245,22 @@ function VotingSection({ eventId, candidates, results, myVotes, isHost, status, 
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (myVotes.length > 0) {
-      setRankings(myVotes.map((v) => ({ gameId: v.gameId, rank: v.rank })));
-    } else if (candidates.length > 0) {
-      setRankings(candidates.map((c, i) => ({ gameId: c.gameId, rank: i + 1 })));
+    if (!candidates.length) return;
+    const candidateIds = new Set(candidates.map((c) => c.gameId));
+    const validMyVotes = myVotes
+      .filter((v) => candidateIds.has(v.gameId))
+      .sort((a, b) => a.rank - b.rank);
+
+    if (validMyVotes.length > 0) {
+      const rankedFromVotes = validMyVotes.map((v, i) => ({ gameId: v.gameId, rank: i + 1 }));
+      const missingCandidates = candidates
+        .filter((c) => !validMyVotes.some((v) => v.gameId === c.gameId))
+        .map((c, i) => ({ gameId: c.gameId, rank: rankedFromVotes.length + i + 1 }));
+      setRankings([...rankedFromVotes, ...missingCandidates]);
+      return;
     }
+
+    setRankings(candidates.map((c, i) => ({ gameId: c.gameId, rank: i + 1 })));
   }, [candidates, myVotes]);
 
   const moveUp = (idx: number) => {
@@ -276,7 +287,10 @@ function VotingSection({ eventId, candidates, results, myVotes, isHost, status, 
     }
   };
 
-  const gameMap = new Map(candidates.map((c) => [c.gameId, c.game]));
+  const gameMap = new Map([
+    ...candidates.map((c) => [c.gameId, c.game] as const),
+    ...myVotes.filter((v) => v.game).map((v) => [v.gameId, v.game] as const),
+  ]);
 
   return (
     <div className="space-y-6">

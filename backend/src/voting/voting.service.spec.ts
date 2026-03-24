@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { VotingService } from './voting.service';
 import { EventVote } from '../entities/event-vote.entity';
 import { Event } from '../entities/event.entity';
+import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 
 describe('VotingService', () => {
   let service: VotingService;
@@ -20,12 +21,20 @@ describe('VotingService', () => {
     save: jest.fn(),
   };
 
+  const mockCandidatesRepo = {
+    find: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VotingService,
         { provide: getRepositoryToken(EventVote), useValue: mockVotesRepo },
         { provide: getRepositoryToken(Event), useValue: mockEventsRepo },
+        {
+          provide: getRepositoryToken(EventGameCandidate),
+          useValue: mockCandidatesRepo,
+        },
       ],
     }).compile();
 
@@ -35,12 +44,18 @@ describe('VotingService', () => {
 
   describe('getResults', () => {
     it('should return empty array when no votes', async () => {
+      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
       mockVotesRepo.find.mockResolvedValue([]);
       const results = await service.getResults('event-1');
       expect(results).toEqual([]);
     });
 
     it('should compute Borda scores correctly', async () => {
+      mockCandidatesRepo.find.mockResolvedValue([
+        { gameId: 'g1' },
+        { gameId: 'g2' },
+        { gameId: 'g3' },
+      ]);
       mockVotesRepo.find.mockResolvedValue([
         { eventId: 'e1', userId: 'u1', gameId: 'g1', rank: 1 },
         { eventId: 'e1', userId: 'u1', gameId: 'g2', rank: 2 },
@@ -66,6 +81,10 @@ describe('VotingService', () => {
     });
 
     it('should break ties by average rank', async () => {
+      mockCandidatesRepo.find.mockResolvedValue([
+        { gameId: 'g1' },
+        { gameId: 'g2' },
+      ]);
       mockVotesRepo.find.mockResolvedValue([
         { eventId: 'e1', userId: 'u1', gameId: 'g1', rank: 1 },
         { eventId: 'e1', userId: 'u1', gameId: 'g2', rank: 2 },
@@ -82,6 +101,10 @@ describe('VotingService', () => {
   describe('submitVotes', () => {
     it('should delete existing votes and save new ones', async () => {
       mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockCandidatesRepo.find.mockResolvedValue([
+        { gameId: 'g1' },
+        { gameId: 'g2' },
+      ]);
       mockVotesRepo.save.mockImplementation((v) => Promise.resolve(v));
 
       const rankings = [
@@ -98,12 +121,31 @@ describe('VotingService', () => {
       expect(mockVotesRepo.save).toHaveBeenCalled();
     });
 
+    it('should ignore stale game ids not in current candidates', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockCandidatesRepo.find.mockResolvedValue([
+        { gameId: 'g1' },
+        { gameId: 'g2' },
+      ]);
+      mockVotesRepo.save.mockImplementation((v) => Promise.resolve(v));
+
+      await service.submitVotes('e1', 'u1', [
+        { gameId: 'g1', rank: 1 },
+        { gameId: 'stale-id', rank: 2 },
+      ]);
+
+      expect(mockVotesRepo.save).toHaveBeenCalledWith([
+        expect.objectContaining({ gameId: 'g1' }),
+      ]);
+    });
+
     it('should reject votes after deadline', async () => {
       const pastDeadline = new Date(Date.now() - 60000).toISOString();
       mockEventsRepo.findOne.mockResolvedValue({
         id: 'e1',
         votingDeadline: pastDeadline,
       });
+      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
 
       await expect(
         service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),

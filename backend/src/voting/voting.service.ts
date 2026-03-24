@@ -4,9 +4,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventVote } from '../entities/event-vote.entity';
 import { Event } from '../entities/event.entity';
+import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 
 export interface VoteResult {
   gameId: string;
@@ -22,6 +23,8 @@ export class VotingService {
     private votesRepo: Repository<EventVote>,
     @InjectRepository(Event)
     private eventsRepo: Repository<Event>,
+    @InjectRepository(EventGameCandidate)
+    private candidatesRepo: Repository<EventGameCandidate>,
   ) {}
 
   async submitVotes(
@@ -36,9 +39,17 @@ export class VotingService {
       throw new BadRequestException('Voting has closed');
     }
 
+    const validGameIds = await this.getValidCandidateGameIds(eventId);
+    const filteredRankings = rankings.filter((r) => validGameIds.has(r.gameId));
+    if (!filteredRankings.length) {
+      throw new BadRequestException(
+        'No valid votes submitted for current candidate list',
+      );
+    }
+
     await this.votesRepo.delete({ eventId, userId });
 
-    const votes = rankings.map((r) =>
+    const votes = filteredRankings.map((r) =>
       this.votesRepo.create({
         eventId,
         userId,
@@ -51,22 +62,26 @@ export class VotingService {
   }
 
   async getResults(eventId: string): Promise<VoteResult[]> {
+    const validGameIds = await this.getValidCandidateGameIds(eventId);
+    if (!validGameIds.size) return [];
+
     const votes = await this.votesRepo.find({
       where: { eventId },
       relations: ['game'],
     });
+    const validVotes = votes.filter((v) => validGameIds.has(v.gameId));
 
-    const totalVoters = new Set(votes.map((v) => v.userId)).size;
+    const totalVoters = new Set(validVotes.map((v) => v.userId)).size;
     if (totalVoters === 0) return [];
 
-    const maxRank = Math.max(...votes.map((v) => v.rank), 1);
+    const maxRank = Math.max(...validVotes.map((v) => v.rank), 1);
 
     const gameScores = new Map<
       string,
       { totalScore: number; ranks: number[] }
     >();
 
-    for (const vote of votes) {
+    for (const vote of validVotes) {
       const entry = gameScores.get(vote.gameId) || { totalScore: 0, ranks: [] };
       const bordaScore = maxRank - vote.rank + 1;
       entry.totalScore += bordaScore;
@@ -93,8 +108,11 @@ export class VotingService {
   }
 
   async getUserVotes(eventId: string, userId: string): Promise<EventVote[]> {
+    const validGameIds = [...(await this.getValidCandidateGameIds(eventId))];
+    if (!validGameIds.length) return [];
+
     return this.votesRepo.find({
-      where: { eventId, userId },
+      where: { eventId, userId, gameId: In(validGameIds) },
       relations: ['game'],
       order: { rank: 'ASC' },
     });
@@ -133,5 +151,15 @@ export class VotingService {
       event.status = 'confirmed';
       await this.eventsRepo.save(event);
     }
+  }
+
+  private async getValidCandidateGameIds(
+    eventId: string,
+  ): Promise<Set<string>> {
+    const candidates = await this.candidatesRepo.find({
+      where: { eventId },
+      select: ['gameId'],
+    });
+    return new Set(candidates.map((candidate) => candidate.gameId));
   }
 }
