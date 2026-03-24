@@ -1,0 +1,42 @@
+import { Controller, Post, Get, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { FeedbackService } from './feedback.service';
+import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
+import { SubmitTimingDto } from './dto/submit-timing.dto';
+
+@ApiTags('feedback')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('api/events/:eventId/feedback')
+export class FeedbackController {
+  constructor(private feedbackService: FeedbackService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Submit post-event feedback' })
+  submitFeedback(
+    @Param('eventId') eventId: string,
+    @Request() req,
+    @Body() dto: SubmitFeedbackDto,
+  ) {
+    return this.feedbackService.submitFeedback(eventId, req.user.id, dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get event feedback' })
+  getEventFeedback(@Param('eventId') eventId: string) {
+    return this.feedbackService.getEventFeedback(eventId);
+  }
+
+  @Post('timing')
+  @ApiOperation({ summary: 'Submit session timing' })
+  submitTiming(@Param('eventId') eventId: string, @Body() dto: SubmitTimingDto) {
+    return this.feedbackService.submitTiming(eventId, dto);
+  }
+
+  @Get('timing')
+  @ApiOperation({ summary: 'Get session timings' })
+  getTimings(@Param('eventId') eventId: string) {
+    return this.feedbackService.getEventTimings(eventId);
+  }
+}
