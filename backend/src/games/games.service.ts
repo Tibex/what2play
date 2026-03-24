@@ -35,6 +35,13 @@ export class GamesService {
     if (!game) {
       game = this.gamesRepo.create({ ...data, bggId });
       await this.gamesRepo.save(game);
+    } else {
+      Object.assign(game, {
+        ...game,
+        ...data,
+        bggId,
+      });
+      await this.gamesRepo.save(game);
     }
     return game;
   }

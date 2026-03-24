@@ -202,9 +202,15 @@ export class BggService {
       const imageUrl = this.extractTag(block, 'image');
       const thumbnailUrl = this.extractTag(block, 'thumbnail');
       const yearPublished = this.extractNumAttr(block, 'yearpublished');
-      const minPlayers = this.extractNumAttr(block, 'minplayers');
-      const maxPlayers = this.extractNumAttr(block, 'maxplayers');
-      const playingTime = this.extractNumAttr(block, 'playingtime');
+      const minPlayers =
+        this.extractStatsNumAttr(block, 'minplayers') ??
+        this.extractNumAttr(block, 'minplayers');
+      const maxPlayers =
+        this.extractStatsNumAttr(block, 'maxplayers') ??
+        this.extractNumAttr(block, 'maxplayers');
+      const playingTime =
+        this.extractStatsNumAttr(block, 'playingtime') ??
+        this.extractNumAttr(block, 'playingtime');
 
       const ratingMatch = block.match(/<rating\s+value="([\d.]+)"/);
       const userRating =
@@ -235,6 +241,11 @@ export class BggService {
 
   private extractNumAttr(block: string, attr: string): number | undefined {
     const m = block.match(new RegExp(`<${attr}[^>]*value="(\\d+)"`));
+    return m ? parseInt(m[1], 10) : undefined;
+  }
+
+  private extractStatsNumAttr(block: string, attr: string): number | undefined {
+    const m = block.match(new RegExp(`<stats[^>]*\\b${attr}="(\\d+)"`));
     return m ? parseInt(m[1], 10) : undefined;
   }
 
