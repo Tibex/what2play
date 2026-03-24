@@ -53,9 +53,18 @@ describe('RecommendationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RecommendationsService,
-        { provide: getRepositoryToken(EventGameCandidate), useValue: mockCandidatesRepo },
-        { provide: getRepositoryToken(SessionTiming), useValue: mockTimingsRepo },
-        { provide: getRepositoryToken(EventFeedback), useValue: mockFeedbackRepo },
+        {
+          provide: getRepositoryToken(EventGameCandidate),
+          useValue: mockCandidatesRepo,
+        },
+        {
+          provide: getRepositoryToken(SessionTiming),
+          useValue: mockTimingsRepo,
+        },
+        {
+          provide: getRepositoryToken(EventFeedback),
+          useValue: mockFeedbackRepo,
+        },
         { provide: GamesService, useValue: mockGamesService },
         { provide: EventsService, useValue: mockEventsService },
       ],
@@ -72,7 +81,11 @@ describe('RecommendationsService', () => {
         durationMinutes: 120,
         discoveryMode: false,
       });
-      mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2', 'u3']);
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+      ]);
 
       mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
         { id: 'g1', title: 'Game 1', minPlayers: 2, maxPlayers: 4 },
@@ -121,7 +134,13 @@ describe('RecommendationsService', () => {
       mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2']);
 
       mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
-        { id: 'g1', title: 'Game 1', minPlayers: 2, maxPlayers: 4, playingTime: 90 },
+        {
+          id: 'g1',
+          title: 'Game 1',
+          minPlayers: 2,
+          maxPlayers: 4,
+          playingTime: 90,
+        },
       ]);
       mockGamesService.getRatingsForGames.mockResolvedValue([]);
 
@@ -137,7 +156,14 @@ describe('RecommendationsService', () => {
         durationMinutes: 120,
         discoveryMode: false,
       });
-      mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2', 'u3', 'u4', 'u5', 'u6']);
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+        'u5',
+        'u6',
+      ]);
 
       mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
         { id: 'g1', title: 'Too Small', minPlayers: 2, maxPlayers: 3 },

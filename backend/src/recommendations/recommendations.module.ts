@@ -10,7 +10,11 @@ import { RecommendationsController } from './recommendations.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([EventGameCandidate, SessionTiming, EventFeedback]),
+    TypeOrmModule.forFeature([
+      EventGameCandidate,
+      SessionTiming,
+      EventFeedback,
+    ]),
     GamesModule,
     EventsModule,
   ],

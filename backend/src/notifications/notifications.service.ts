@@ -26,7 +26,9 @@ export class NotificationsService {
     });
 
     for (const event of events) {
-      this.logger.log(`Auto-closing voting for event ${event.id}: ${event.title}`);
+      this.logger.log(
+        `Auto-closing voting for event ${event.id}: ${event.title}`,
+      );
       await this.votingService.autoCloseVoting(event.id);
     }
   }
@@ -45,7 +47,9 @@ export class NotificationsService {
     });
 
     for (const event of upcomingEvents) {
-      const goingAttendees = event.attendees.filter((a) => a.rsvpStatus === 'going');
+      const goingAttendees = event.attendees.filter(
+        (a) => a.rsvpStatus === 'going',
+      );
       this.logger.log(
         `Reminder: Event "${event.title}" in <24h — ${goingAttendees.length} attendees going`,
       );
@@ -68,7 +72,9 @@ export class NotificationsService {
 
     for (const event of recentlyCompleted) {
       const attendeesWithoutFeedback = event.attendees.filter(
-        (a) => a.rsvpStatus === 'going' && !event.feedbacks.some((f) => f.userId === a.userId),
+        (a) =>
+          a.rsvpStatus === 'going' &&
+          !event.feedbacks.some((f) => f.userId === a.userId),
       );
 
       if (attendeesWithoutFeedback.length > 0) {

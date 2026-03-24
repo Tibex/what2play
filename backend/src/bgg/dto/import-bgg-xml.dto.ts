@@ -11,4 +11,3 @@ export class ImportBggXmlDto {
   @MinLength(20)
   xml: string;
 }
-

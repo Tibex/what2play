@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Unique } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Unique,
+} from 'typeorm';
 import { User } from './user.entity';
 import { Event } from './event.entity';
 
@@ -14,7 +22,10 @@ export class EventAttendee {
   @Column()
   eventId: string;
 
-  @ManyToOne(() => User, (u) => u.attendances, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => User, (u) => u.attendances, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   user: User;
 
   @Column({ nullable: true })

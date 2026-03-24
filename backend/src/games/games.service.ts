@@ -39,7 +39,9 @@ export class GamesService {
     return game;
   }
 
-  async getUserCollection(userId: string): Promise<(UserGameOwnership & { game: Game })[]> {
+  async getUserCollection(
+    userId: string,
+  ): Promise<(UserGameOwnership & { game: Game })[]> {
     return this.ownershipRepo.find({
       where: { userId },
       relations: ['game'],
@@ -47,8 +49,13 @@ export class GamesService {
     });
   }
 
-  async addToCollection(userId: string, gameId: string): Promise<UserGameOwnership> {
-    const existing = await this.ownershipRepo.findOne({ where: { userId, gameId } });
+  async addToCollection(
+    userId: string,
+    gameId: string,
+  ): Promise<UserGameOwnership> {
+    const existing = await this.ownershipRepo.findOne({
+      where: { userId, gameId },
+    });
     if (existing) return existing;
     const ownership = this.ownershipRepo.create({ userId, gameId });
     return this.ownershipRepo.save(ownership);
@@ -58,8 +65,15 @@ export class GamesService {
     await this.ownershipRepo.delete({ userId, gameId });
   }
 
-  async rateGame(userId: string, gameId: string, rating: number, notes?: string): Promise<UserGameRating> {
-    let existing = await this.ratingsRepo.findOne({ where: { userId, gameId } });
+  async rateGame(
+    userId: string,
+    gameId: string,
+    rating: number,
+    notes?: string,
+  ): Promise<UserGameRating> {
+    const existing = await this.ratingsRepo.findOne({
+      where: { userId, gameId },
+    });
     if (existing) {
       existing.rating = rating;
       if (notes !== undefined) existing.notes = notes;
@@ -83,7 +97,10 @@ export class GamesService {
     return Array.from(gameMap.values());
   }
 
-  async getRatingsForGames(userIds: string[], gameIds: string[]): Promise<UserGameRating[]> {
+  async getRatingsForGames(
+    userIds: string[],
+    gameIds: string[],
+  ): Promise<UserGameRating[]> {
     if (!gameIds.length || !userIds.length) return [];
     return this.ratingsRepo.find({
       where: { userId: In(userIds), gameId: In(gameIds) },

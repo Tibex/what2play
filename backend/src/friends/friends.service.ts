@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Friendship } from '../entities/friendship.entity';
@@ -13,10 +17,16 @@ export class FriendsService {
     private usersRepo: Repository<User>,
   ) {}
 
-  async sendRequest(requesterId: string, addresseeEmail: string): Promise<Friendship> {
-    const addressee = await this.usersRepo.findOne({ where: { email: addresseeEmail } });
+  async sendRequest(
+    requesterId: string,
+    addresseeEmail: string,
+  ): Promise<Friendship> {
+    const addressee = await this.usersRepo.findOne({
+      where: { email: addresseeEmail },
+    });
     if (!addressee) throw new NotFoundException('User not found');
-    if (addressee.id === requesterId) throw new BadRequestException('Cannot friend yourself');
+    if (addressee.id === requesterId)
+      throw new BadRequestException('Cannot friend yourself');
 
     const existing = await this.friendsRepo.findOne({
       where: [
@@ -24,7 +34,8 @@ export class FriendsService {
         { requesterId: addressee.id, addresseeId: requesterId },
       ],
     });
-    if (existing) throw new BadRequestException('Friend request already exists');
+    if (existing)
+      throw new BadRequestException('Friend request already exists');
 
     const friendship = this.friendsRepo.create({
       requesterId,
@@ -34,10 +45,17 @@ export class FriendsService {
     return this.friendsRepo.save(friendship);
   }
 
-  async respondToRequest(friendshipId: string, userId: string, accept: boolean): Promise<Friendship> {
-    const friendship = await this.friendsRepo.findOne({ where: { id: friendshipId } });
+  async respondToRequest(
+    friendshipId: string,
+    userId: string,
+    accept: boolean,
+  ): Promise<Friendship> {
+    const friendship = await this.friendsRepo.findOne({
+      where: { id: friendshipId },
+    });
     if (!friendship) throw new NotFoundException('Friend request not found');
-    if (friendship.addresseeId !== userId) throw new BadRequestException('Not your request');
+    if (friendship.addresseeId !== userId)
+      throw new BadRequestException('Not your request');
 
     friendship.status = accept ? 'accepted' : 'rejected';
     return this.friendsRepo.save(friendship);

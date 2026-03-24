@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
@@ -37,7 +41,13 @@ export class EventsService {
   async findById(id: string): Promise<Event> {
     const event = await this.eventsRepo.findOne({
       where: { id },
-      relations: ['host', 'attendees', 'attendees.user', 'candidates', 'candidates.game'],
+      relations: [
+        'host',
+        'attendees',
+        'attendees.user',
+        'candidates',
+        'candidates.game',
+      ],
     });
     if (!event) throw new NotFoundException('Event not found');
     return event;
@@ -62,25 +72,44 @@ export class EventsService {
     });
   }
 
-  async update(id: string, userId: string, dto: UpdateEventDto): Promise<Event> {
+  async update(
+    id: string,
+    userId: string,
+    dto: UpdateEventDto,
+  ): Promise<Event> {
     const event = await this.findById(id);
-    if (event.hostId !== userId) throw new ForbiddenException('Only host can update');
+    if (event.hostId !== userId)
+      throw new ForbiddenException('Only host can update');
     Object.assign(event, dto);
     await this.eventsRepo.save(event);
     return this.findById(id);
   }
 
-  async rsvp(eventId: string, userId: string, status: string): Promise<EventAttendee> {
-    let attendee = await this.attendeesRepo.findOne({ where: { eventId, userId } });
+  async rsvp(
+    eventId: string,
+    userId: string,
+    status: string,
+  ): Promise<EventAttendee> {
+    let attendee = await this.attendeesRepo.findOne({
+      where: { eventId, userId },
+    });
     if (attendee) {
       attendee.rsvpStatus = status;
       return this.attendeesRepo.save(attendee);
     }
-    attendee = this.attendeesRepo.create({ eventId, userId, rsvpStatus: status });
+    attendee = this.attendeesRepo.create({
+      eventId,
+      userId,
+      rsvpStatus: status,
+    });
     return this.attendeesRepo.save(attendee);
   }
 
-  async guestRsvp(eventId: string, guestName: string, status: string): Promise<EventAttendee> {
+  async guestRsvp(
+    eventId: string,
+    guestName: string,
+    status: string,
+  ): Promise<EventAttendee> {
     const attendee = this.attendeesRepo.create({
       eventId,
       guestName,
@@ -90,9 +119,13 @@ export class EventsService {
     return this.attendeesRepo.save(attendee);
   }
 
-  async createInviteLink(eventId: string, userId: string): Promise<EventInvite> {
+  async createInviteLink(
+    eventId: string,
+    userId: string,
+  ): Promise<EventInvite> {
     const event = await this.findById(eventId);
-    if (event.hostId !== userId) throw new ForbiddenException('Only host can create invite links');
+    if (event.hostId !== userId)
+      throw new ForbiddenException('Only host can create invite links');
     const token = uuid();
     const invite = this.invitesRepo.create({ eventId, token });
     return this.invitesRepo.save(invite);
@@ -119,7 +152,8 @@ export class EventsService {
 
   async delete(id: string, userId: string): Promise<void> {
     const event = await this.findById(id);
-    if (event.hostId !== userId) throw new ForbiddenException('Only host can delete');
+    if (event.hostId !== userId)
+      throw new ForbiddenException('Only host can delete');
     await this.eventsRepo.remove(event);
   }
 }

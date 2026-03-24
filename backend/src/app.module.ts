@@ -25,7 +25,8 @@ import { NotificationsModule } from './notifications/notifications.module';
         if (databaseUrl) {
           const url = new URL(databaseUrl);
           const sslMode = url.searchParams.get('sslmode');
-          const useSsl = sslMode === 'require' || config.get('DATABASE_SSL') === 'true';
+          const useSsl =
+            sslMode === 'require' || config.get('DATABASE_SSL') === 'true';
 
           return {
             type: 'postgres' as const,

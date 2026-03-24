@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -19,7 +23,7 @@ export class BggService {
   ) {}
 
   async linkAccount(userId: string, bggUsername: string): Promise<SyncAccount> {
-    let existing = await this.syncRepo.findOne({
+    const existing = await this.syncRepo.findOne({
       where: { userId, provider: 'bgg' },
     });
     if (existing) {
@@ -44,14 +48,18 @@ export class BggService {
     return this.syncRepo.findOne({ where: { userId, provider: 'bgg' } });
   }
 
-  async createVerificationChallenge(userId: string): Promise<BggVerificationChallenge> {
+  async createVerificationChallenge(
+    userId: string,
+  ): Promise<BggVerificationChallenge> {
     const token = `BGN-VERIFY-${uuid().slice(0, 8).toUpperCase()}`;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const challenge = this.verifyRepo.create({ userId, token, expiresAt });
     return this.verifyRepo.save(challenge);
   }
 
-  async syncCollection(userId: string): Promise<{ imported: number; fetched: number }> {
+  async syncCollection(
+    userId: string,
+  ): Promise<{ imported: number; fetched: number }> {
     const account = await this.syncRepo.findOne({
       where: { userId, provider: 'bgg' },
     });
@@ -109,19 +117,19 @@ export class BggService {
     return { imported, fetched: bggGames.length };
   }
 
-  private async fetchBggCollection(
-    username: string,
-  ): Promise<Array<{
-    bggId: number;
-    title: string;
-    imageUrl?: string;
-    thumbnailUrl?: string;
-    minPlayers?: number;
-    maxPlayers?: number;
-    playingTime?: number;
-    yearPublished?: number;
-    userRating?: number;
-  }>> {
+  private async fetchBggCollection(username: string): Promise<
+    Array<{
+      bggId: number;
+      title: string;
+      imageUrl?: string;
+      thumbnailUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+      userRating?: number;
+    }>
+  > {
     const token = this.config.get<string>('BGG_API_TOKEN');
     if (!token || token === 'your-bgg-api-token') {
       throw new BadRequestException(

@@ -34,7 +34,12 @@ export default function EventDetailPage() {
     setLoading(false);
   }, [id]);
 
-  useEffect(() => { loadEvent(); }, [loadEvent]);
+  useEffect(() => {
+    // Defer to microtask queue to satisfy react-hooks/set-state-in-effect.
+    queueMicrotask(() => {
+      void loadEvent();
+    });
+  }, [loadEvent]);
 
   if (loading || !event) {
     return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;

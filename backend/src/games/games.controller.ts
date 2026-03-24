@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GamesService } from './games.service';
 import { RateGameDto } from './dto/rate-game.dto';
@@ -39,7 +54,12 @@ export class GamesController {
   @Post('rate')
   @ApiOperation({ summary: 'Rate a game' })
   rateGame(@Request() req, @Body() dto: RateGameDto) {
-    return this.gamesService.rateGame(req.user.id, dto.gameId, dto.rating, dto.notes);
+    return this.gamesService.rateGame(
+      req.user.id,
+      dto.gameId,
+      dto.rating,
+      dto.notes,
+    );
   }
 
   @Get('ratings')

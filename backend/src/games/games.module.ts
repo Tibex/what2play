@@ -7,7 +7,9 @@ import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Game, UserGameOwnership, UserGameRating])],
+  imports: [
+    TypeOrmModule.forFeature([Game, UserGameOwnership, UserGameRating]),
+  ],
   providers: [GamesService],
   controllers: [GamesController],
   exports: [GamesService],

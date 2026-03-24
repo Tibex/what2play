@@ -58,7 +58,10 @@ describe('AuthService', () => {
     });
 
     it('should throw ConflictException if email exists', async () => {
-      mockUsersRepo.findOne.mockResolvedValue({ id: 'existing', email: 'test@example.com' });
+      mockUsersRepo.findOne.mockResolvedValue({
+        id: 'existing',
+        email: 'test@example.com',
+      });
 
       await expect(
         service.register({
@@ -81,7 +84,11 @@ describe('AuthService', () => {
     });
 
     it('should return null when password wrong', async () => {
-      mockUsersRepo.findOne.mockResolvedValue({ id: 'u1', email: 'test@example.com', password: 'hashed' });
+      mockUsersRepo.findOne.mockResolvedValue({
+        id: 'u1',
+        email: 'test@example.com',
+        password: 'hashed',
+      });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       const result = await service.validateUser('test@example.com', 'wrong');
@@ -98,8 +105,15 @@ describe('AuthService', () => {
 
   describe('refreshToken', () => {
     it('should return new tokens for valid refresh token', async () => {
-      mockJwtService.verify.mockReturnValue({ sub: 'u1', email: 'test@example.com' });
-      mockUsersRepo.findOne.mockResolvedValue({ id: 'u1', email: 'test@example.com', name: 'Test' });
+      mockJwtService.verify.mockReturnValue({
+        sub: 'u1',
+        email: 'test@example.com',
+      });
+      mockUsersRepo.findOne.mockResolvedValue({
+        id: 'u1',
+        email: 'test@example.com',
+        name: 'Test',
+      });
 
       const result = await service.refreshToken('valid-token');
       expect(result).toHaveProperty('accessToken');
@@ -110,7 +124,9 @@ describe('AuthService', () => {
       mockJwtService.verify.mockReturnValue({ sub: 'deleted-user' });
       mockUsersRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.refreshToken('token')).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshToken('token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });

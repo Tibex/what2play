@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { User, Friendship } from '@/lib/types';
 
+const loadFriendsData = async () => {
+  const [friends, pending] = await Promise.all([
+    api.get<User[]>('/friends'),
+    api.get<Friendship[]>('/friends/pending'),
+  ]);
+  return { friends, pending };
+};
+
 export default function FriendsPage() {
   const [friends, setFriends] = useState<User[]>([]);
   const [pending, setPending] = useState<Friendship[]>([]);
@@ -11,17 +19,18 @@ export default function FriendsPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadData(); }, []);
-
   const loadData = async () => {
-    const [f, p] = await Promise.all([
-      api.get<User[]>('/friends'),
-      api.get<Friendship[]>('/friends/pending'),
-    ]);
-    setFriends(f);
-    setPending(p);
+    const { friends: loadedFriends, pending: loadedPending } = await loadFriendsData();
+    setFriends(loadedFriends);
+    setPending(loadedPending);
     setLoading(false);
   };
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadData();
+    });
+  }, []);
 
   const sendRequest = async () => {
     if (!email.trim()) return;

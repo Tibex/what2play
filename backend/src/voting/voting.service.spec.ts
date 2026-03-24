@@ -91,13 +91,19 @@ describe('VotingService', () => {
 
       await service.submitVotes('e1', 'u1', rankings);
 
-      expect(mockVotesRepo.delete).toHaveBeenCalledWith({ eventId: 'e1', userId: 'u1' });
+      expect(mockVotesRepo.delete).toHaveBeenCalledWith({
+        eventId: 'e1',
+        userId: 'u1',
+      });
       expect(mockVotesRepo.save).toHaveBeenCalled();
     });
 
     it('should reject votes after deadline', async () => {
       const pastDeadline = new Date(Date.now() - 60000).toISOString();
-      mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', votingDeadline: pastDeadline });
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        votingDeadline: pastDeadline,
+      });
 
       await expect(
         service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),

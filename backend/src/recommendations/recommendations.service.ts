@@ -33,9 +33,13 @@ export class RecommendationsService {
     const attendeeIds = await this.eventsService.getAttendeeUserIds(eventId);
     const playerCount = attendeeIds.length;
 
-    const ownedGames = await this.gamesService.getGamesOwnedByUsers(attendeeIds);
+    const ownedGames =
+      await this.gamesService.getGamesOwnedByUsers(attendeeIds);
     const gameIds = ownedGames.map((g) => g.id);
-    const ratings = await this.gamesService.getRatingsForGames(attendeeIds, gameIds);
+    const ratings = await this.gamesService.getRatingsForGames(
+      attendeeIds,
+      gameIds,
+    );
 
     const ratingsByGame = new Map<string, number[]>();
     ratings.forEach((r) => {
@@ -44,19 +48,24 @@ export class RecommendationsService {
       ratingsByGame.set(r.gameId, arr);
     });
 
-    const historicalTimings = await this.getAverageTimings(gameIds, playerCount);
+    const historicalTimings = await this.getAverageTimings(
+      gameIds,
+      playerCount,
+    );
     const historicalFeedback = await this.getAverageFeedback(gameIds);
     const recentlyPlayed = await this.getRecentlyPlayedGameIds(attendeeIds);
 
     const scored: ScoredCandidate[] = [];
 
     for (const game of ownedGames) {
-      if (game.minPlayers > playerCount || game.maxPlayers < playerCount) continue;
+      if (game.minPlayers > playerCount || game.maxPlayers < playerCount)
+        continue;
 
       const explanation: Record<string, string> = {};
       let score = 50;
 
-      explanation['players'] = `Fits ${playerCount} players (${game.minPlayers}-${game.maxPlayers})`;
+      explanation['players'] =
+        `Fits ${playerCount} players (${game.minPlayers}-${game.maxPlayers})`;
 
       const gameRatings = ratingsByGame.get(game.id);
       if (gameRatings && gameRatings.length > 0) {
@@ -87,7 +96,8 @@ export class RecommendationsService {
       if (feedback) {
         score += (feedback.avgEnjoyment - 3) * 5;
         score += feedback.completionRate * 10;
-        explanation['history'] = `${(feedback.completionRate * 100).toFixed(0)}% completion, ${feedback.avgEnjoyment.toFixed(1)}/5 enjoyment`;
+        explanation['history'] =
+          `${(feedback.completionRate * 100).toFixed(0)}% completion, ${feedback.avgEnjoyment.toFixed(1)}/5 enjoyment`;
       }
 
       if (recentlyPlayed.has(game.id)) {
@@ -155,12 +165,18 @@ export class RecommendationsService {
       .createQueryBuilder('f')
       .select('f.gameId', 'gameId')
       .addSelect('AVG(f.enjoymentRating)', 'avgEnjoyment')
-      .addSelect('AVG(CASE WHEN f.finishedGame THEN 1 ELSE 0 END)', 'completionRate')
+      .addSelect(
+        'AVG(CASE WHEN f.finishedGame THEN 1 ELSE 0 END)',
+        'completionRate',
+      )
       .where('f.gameId IN (:...gameIds)', { gameIds })
       .groupBy('f.gameId')
       .getRawMany();
 
-    const map = new Map<string, { avgEnjoyment: number; completionRate: number }>();
+    const map = new Map<
+      string,
+      { avgEnjoyment: number; completionRate: number }
+    >();
     feedback.forEach((f) =>
       map.set(f.gameId, {
         avgEnjoyment: parseFloat(f.avgEnjoyment),
@@ -170,7 +186,9 @@ export class RecommendationsService {
     return map;
   }
 
-  private async getRecentlyPlayedGameIds(userIds: string[]): Promise<Set<string>> {
+  private async getRecentlyPlayedGameIds(
+    userIds: string[],
+  ): Promise<Set<string>> {
     if (!userIds.length) return new Set();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recent = await this.feedbackRepo

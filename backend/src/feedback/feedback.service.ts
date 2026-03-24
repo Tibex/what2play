@@ -15,8 +15,14 @@ export class FeedbackService {
     private timingRepo: Repository<SessionTiming>,
   ) {}
 
-  async submitFeedback(eventId: string, userId: string, dto: SubmitFeedbackDto): Promise<EventFeedback> {
-    let existing = await this.feedbackRepo.findOne({ where: { eventId, userId } });
+  async submitFeedback(
+    eventId: string,
+    userId: string,
+    dto: SubmitFeedbackDto,
+  ): Promise<EventFeedback> {
+    const existing = await this.feedbackRepo.findOne({
+      where: { eventId, userId },
+    });
     if (existing) {
       Object.assign(existing, dto);
       return this.feedbackRepo.save(existing);
@@ -32,7 +38,10 @@ export class FeedbackService {
     });
   }
 
-  async submitTiming(eventId: string, dto: SubmitTimingDto): Promise<SessionTiming> {
+  async submitTiming(
+    eventId: string,
+    dto: SubmitTimingDto,
+  ): Promise<SessionTiming> {
     const timing = this.timingRepo.create({ eventId, ...dto });
     return this.timingRepo.save(timing);
   }
@@ -49,7 +58,8 @@ export class FeedbackService {
     const timings = await this.timingRepo.find({ where: { gameId } });
 
     const avgEnjoyment = feedbacks.length
-      ? feedbacks.reduce((sum, f) => sum + f.enjoymentRating, 0) / feedbacks.length
+      ? feedbacks.reduce((sum, f) => sum + f.enjoymentRating, 0) /
+        feedbacks.length
       : null;
 
     const completionRate = feedbacks.length
@@ -57,7 +67,8 @@ export class FeedbackService {
       : null;
 
     const avgDuration = timings.length
-      ? timings.reduce((sum, t) => sum + (t.totalMinutes || 0), 0) / timings.length
+      ? timings.reduce((sum, t) => sum + (t.totalMinutes || 0), 0) /
+        timings.length
       : null;
 
     return {

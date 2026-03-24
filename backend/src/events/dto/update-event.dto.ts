@@ -4,7 +4,16 @@ import { IsOptional, IsDateString, IsString, IsIn } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateEventDto extends PartialType(CreateEventDto) {
-  @ApiPropertyOptional({ enum: ['planning', 'voting', 'confirmed', 'active', 'completed', 'cancelled'] })
+  @ApiPropertyOptional({
+    enum: [
+      'planning',
+      'voting',
+      'confirmed',
+      'active',
+      'completed',
+      'cancelled',
+    ],
+  })
   @IsOptional()
   @IsIn(['planning', 'voting', 'confirmed', 'active', 'completed', 'cancelled'])
   status?: string;

@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -17,7 +21,9 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.usersRepo.findOne({ where: { email: dto.email } });
+    const existing = await this.usersRepo.findOne({
+      where: { email: dto.email },
+    });
     if (existing) throw new ConflictException('Email already registered');
 
     const hashed = await bcrypt.hash(dto.password, 12);
@@ -28,7 +34,11 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersRepo.findOne({ where: { email } });
-    if (user && user.password && (await bcrypt.compare(password, user.password))) {
+    if (
+      user &&
+      user.password &&
+      (await bcrypt.compare(password, user.password))
+    ) {
       return user;
     }
     return null;
@@ -54,7 +64,13 @@ export class AuthService {
   private generateTokens(user: User) {
     const payload = { sub: user.id, email: user.email };
     return {
-      user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl, subscriptionTier: user.subscriptionTier },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+        subscriptionTier: user.subscriptionTier,
+      },
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {
         expiresIn: this.configService.get('JWT_REFRESH_EXPIRATION', '7d'),

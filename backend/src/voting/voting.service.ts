@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventVote } from '../entities/event-vote.entity';
@@ -57,7 +61,10 @@ export class VotingService {
 
     const maxRank = Math.max(...votes.map((v) => v.rank), 1);
 
-    const gameScores = new Map<string, { totalScore: number; ranks: number[] }>();
+    const gameScores = new Map<
+      string,
+      { totalScore: number; ranks: number[] }
+    >();
 
     for (const vote of votes) {
       const entry = gameScores.get(vote.gameId) || { totalScore: 0, ranks: [] };
@@ -93,10 +100,15 @@ export class VotingService {
     });
   }
 
-  async selectWinner(eventId: string, userId: string, gameId?: string): Promise<Event> {
+  async selectWinner(
+    eventId: string,
+    userId: string,
+    gameId?: string,
+  ): Promise<Event> {
     const event = await this.eventsRepo.findOne({ where: { id: eventId } });
     if (!event) throw new BadRequestException('Event not found');
-    if (event.hostId !== userId) throw new ForbiddenException('Only host can select');
+    if (event.hostId !== userId)
+      throw new ForbiddenException('Only host can select');
 
     if (gameId) {
       event.selectedGameId = gameId;
