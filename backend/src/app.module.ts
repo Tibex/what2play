@@ -19,16 +19,38 @@ import { NotificationsModule } from './notifications/notifications.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get('DATABASE_HOST'),
-        port: config.get<number>('DATABASE_PORT'),
-        username: config.get('DATABASE_USER'),
-        password: config.get('DATABASE_PASSWORD'),
-        database: config.get('DATABASE_NAME'),
-        autoLoadEntities: true,
-        synchronize: true,
-      }),
+      useFactory: (config: ConfigService) => {
+        const databaseUrl = config.get<string>('DATABASE_URL');
+
+        if (databaseUrl) {
+          const url = new URL(databaseUrl);
+          const sslMode = url.searchParams.get('sslmode');
+          const useSsl = sslMode === 'require' || config.get('DATABASE_SSL') === 'true';
+
+          return {
+            type: 'postgres' as const,
+            host: url.hostname,
+            port: Number(url.port || 5432),
+            username: decodeURIComponent(url.username),
+            password: decodeURIComponent(url.password),
+            database: url.pathname.replace(/^\//, ''),
+            ssl: useSsl ? { rejectUnauthorized: false } : false,
+            autoLoadEntities: true,
+            synchronize: true,
+          };
+        }
+
+        return {
+          type: 'postgres' as const,
+          host: config.get('DATABASE_HOST'),
+          port: config.get<number>('DATABASE_PORT'),
+          username: config.get('DATABASE_USER'),
+          password: config.get('DATABASE_PASSWORD'),
+          database: config.get('DATABASE_NAME'),
+          autoLoadEntities: true,
+          synchronize: true,
+        };
+      },
     }),
     ScheduleModule.forRoot(),
     AuthModule,
