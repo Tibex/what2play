@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import GameCard from '@/components/GameCard';
-import type { GameEvent, EventGameCandidate, VoteResult, EventVote } from '@/lib/types';
+import type { GameEvent, EventGameCandidate, VoteResult, EventVote, VotingStatus } from '@/lib/types';
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +14,7 @@ export default function EventDetailPage() {
   const [candidates, setCandidates] = useState<EventGameCandidate[]>([]);
   const [results, setResults] = useState<VoteResult[]>([]);
   const [myVotes, setMyVotes] = useState<EventVote[]>([]);
+  const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null);
   const [inviteLink, setInviteLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'details' | 'recommend' | 'vote' | 'feedback'>('details');
@@ -30,6 +31,8 @@ export default function EventDetailPage() {
       setResults(r);
       const mv = await api.get<EventVote[]>(`/events/${id}/voting/my-votes`);
       setMyVotes(mv);
+      const vs = await api.get<VotingStatus>(`/events/${id}/voting/status`);
+      setVotingStatus(vs);
     } catch { /* no votes yet */ }
     setLoading(false);
   }, [id]);
@@ -173,6 +176,7 @@ export default function EventDetailPage() {
           candidates={candidates}
           results={results}
           myVotes={myVotes}
+          votingStatus={votingStatus}
           isHost={isHost}
           status={event.status}
           onVoted={loadEvent}
@@ -231,11 +235,12 @@ function RecommendationsSection({ candidates }: { candidates: EventGameCandidate
   );
 }
 
-function VotingSection({ eventId, candidates, results, myVotes, isHost, status, onVoted, onSelectWinner }: {
+function VotingSection({ eventId, candidates, results, myVotes, votingStatus, isHost, status, onVoted, onSelectWinner }: {
   eventId: string;
   candidates: EventGameCandidate[];
   results: VoteResult[];
   myVotes: EventVote[];
+  votingStatus: VotingStatus | null;
   isHost: boolean;
   status: string;
   onVoted: () => void;
@@ -243,6 +248,7 @@ function VotingSection({ eventId, candidates, results, myVotes, isHost, status, 
 }) {
   const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [draggingGameId, setDraggingGameId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!candidates.length) return;
@@ -287,6 +293,18 @@ function VotingSection({ eventId, candidates, results, myVotes, isHost, status, 
     }
   };
 
+  const reorderByGameId = (fromGameId: string, toGameId: string) => {
+    if (fromGameId === toGameId) return;
+    const fromIndex = rankings.findIndex((r) => r.gameId === fromGameId);
+    const toIndex = rankings.findIndex((r) => r.gameId === toGameId);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const next = [...rankings];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setRankings(next.map((r, i) => ({ ...r, rank: i + 1 })));
+  };
+
   const gameMap = new Map([
     ...candidates.map((c) => [c.gameId, c.game] as const),
     ...myVotes.filter((v) => v.game).map((v) => [v.gameId, v.game] as const),
@@ -303,6 +321,20 @@ function VotingSection({ eventId, candidates, results, myVotes, isHost, status, 
               return (
                 <div key={r.gameId} className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3">
                   <span className="text-lg font-bold text-gray-400 w-8 text-center">{idx + 1}</span>
+                  <span
+                    draggable
+                    onDragStart={() => setDraggingGameId(r.gameId)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (draggingGameId) reorderByGameId(draggingGameId, r.gameId);
+                      setDraggingGameId(null);
+                    }}
+                    onDragEnd={() => setDraggingGameId(null)}
+                    className="cursor-grab select-none text-gray-400"
+                    title="Drag to reorder"
+                  >
+                    ≡
+                  </span>
                   <span className="flex-1 font-medium">{game?.title || r.gameId}</span>
                   <button onClick={() => moveUp(idx)} disabled={idx === 0} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
                   <button onClick={() => moveDown(idx)} disabled={idx >= rankings.length - 1} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
@@ -316,7 +348,13 @@ function VotingSection({ eventId, candidates, results, myVotes, isHost, status, 
         </div>
       )}
 
-      {results.length > 0 && (
+      {votingStatus && !votingStatus.allVoted && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+          Results are hidden until everyone votes ({votingStatus.submittedVoters}/{votingStatus.expectedVoters} submitted).
+        </div>
+      )}
+
+      {results.length > 0 && votingStatus?.allVoted && (
         <div>
           <h3 className="font-semibold mb-3">Current Results</h3>
           <div className="space-y-2">

@@ -104,6 +104,12 @@ export interface VoteResult {
   averageRank: number;
 }
 
+export interface VotingStatus {
+  expectedVoters: number;
+  submittedVoters: number;
+  allVoted: boolean;
+}
+
 export interface EventFeedback {
   id: string;
   eventId: string;

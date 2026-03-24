@@ -35,6 +35,12 @@ export class VotingController {
     return this.votingService.getResults(eventId);
   }
 
+  @Get('status')
+  @ApiOperation({ summary: 'Get voting completion status' })
+  getStatus(@Param('eventId') eventId: string) {
+    return this.votingService.getVotingStatus(eventId);
+  }
+
   @Get('my-votes')
   @ApiOperation({ summary: 'Get current user votes' })
   getMyVotes(@Param('eventId') eventId: string, @Request() req) {

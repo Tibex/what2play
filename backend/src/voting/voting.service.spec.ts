@@ -44,6 +44,11 @@ describe('VotingService', () => {
 
   describe('getResults', () => {
     it('should return empty array when no votes', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'event-1',
+        hostId: 'u1',
+        attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
+      });
       mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
       mockVotesRepo.find.mockResolvedValue([]);
       const results = await service.getResults('event-1');
@@ -51,6 +56,14 @@ describe('VotingService', () => {
     });
 
     it('should compute Borda scores correctly', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        hostId: 'u1',
+        attendees: [
+          { userId: 'u1', rsvpStatus: 'going' },
+          { userId: 'u2', rsvpStatus: 'going' },
+        ],
+      });
       mockCandidatesRepo.find.mockResolvedValue([
         { gameId: 'g1' },
         { gameId: 'g2' },
@@ -81,6 +94,14 @@ describe('VotingService', () => {
     });
 
     it('should break ties by average rank', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        hostId: 'u1',
+        attendees: [
+          { userId: 'u1', rsvpStatus: 'going' },
+          { userId: 'u2', rsvpStatus: 'going' },
+        ],
+      });
       mockCandidatesRepo.find.mockResolvedValue([
         { gameId: 'g1' },
         { gameId: 'g2' },
@@ -95,6 +116,29 @@ describe('VotingService', () => {
       const results = await service.getResults('e1');
       // Both have same score, tie-break by average rank (both 1.5), so order is stable
       expect(results[0].totalScore).toBe(results[1].totalScore);
+    });
+
+    it('should hide results until all expected voters have submitted', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        hostId: 'u1',
+        attendees: [
+          { userId: 'u1', rsvpStatus: 'going' },
+          { userId: 'u2', rsvpStatus: 'going' },
+          { userId: 'u3', rsvpStatus: 'going' },
+        ],
+      });
+      mockCandidatesRepo.find.mockResolvedValue([
+        { gameId: 'g1' },
+        { gameId: 'g2' },
+      ]);
+      mockVotesRepo.find.mockResolvedValue([
+        { eventId: 'e1', userId: 'u1', gameId: 'g1', rank: 1 },
+        { eventId: 'e1', userId: 'u2', gameId: 'g2', rank: 1 },
+      ]);
+
+      const results = await service.getResults('e1');
+      expect(results).toEqual([]);
     });
   });
 

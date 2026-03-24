@@ -16,6 +16,12 @@ export interface VoteResult {
   averageRank: number;
 }
 
+export interface VotingStatus {
+  expectedVoters: number;
+  submittedVoters: number;
+  allVoted: boolean;
+}
+
 @Injectable()
 export class VotingService {
   constructor(
@@ -62,9 +68,56 @@ export class VotingService {
   }
 
   async getResults(eventId: string): Promise<VoteResult[]> {
+    const status = await this.getVotingStatus(eventId);
+    if (!status.allVoted) return [];
+    return this.computeResults(eventId);
+  }
+
+  async getVotingStatus(eventId: string): Promise<VotingStatus> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees'],
+    });
+    if (!event) throw new BadRequestException('Event not found');
+
+    const expectedVoterIds = new Set<string>();
+    expectedVoterIds.add(event.hostId);
+    for (const attendee of event.attendees || []) {
+      if (attendee.userId && attendee.rsvpStatus === 'going') {
+        expectedVoterIds.add(attendee.userId);
+      }
+    }
+
+    const validGameIds = await this.getValidCandidateGameIds(eventId);
+    if (!validGameIds.size) {
+      return {
+        expectedVoters: expectedVoterIds.size,
+        submittedVoters: 0,
+        allVoted: false,
+      };
+    }
+
+    const votes = await this.votesRepo.find({ where: { eventId } });
+    const submittedVoterIds = new Set(
+      votes.filter((v) => validGameIds.has(v.gameId)).map((v) => v.userId),
+    );
+
+    const expectedVoters = expectedVoterIds.size;
+    let submittedVoters = 0;
+    for (const userId of expectedVoterIds) {
+      if (submittedVoterIds.has(userId)) submittedVoters++;
+    }
+
+    return {
+      expectedVoters,
+      submittedVoters,
+      allVoted: expectedVoters > 0 && submittedVoters >= expectedVoters,
+    };
+  }
+
+  private async computeResults(eventId: string): Promise<VoteResult[]> {
     const validGameIds = await this.getValidCandidateGameIds(eventId);
     if (!validGameIds.size) return [];
-
     const votes = await this.votesRepo.find({
       where: { eventId },
       relations: ['game'],
@@ -131,7 +184,7 @@ export class VotingService {
     if (gameId) {
       event.selectedGameId = gameId;
     } else {
-      const results = await this.getResults(eventId);
+      const results = await this.computeResults(eventId);
       if (results.length > 0) {
         event.selectedGameId = results[0].gameId;
       }
@@ -145,7 +198,7 @@ export class VotingService {
     const event = await this.eventsRepo.findOne({ where: { id: eventId } });
     if (!event || event.status !== 'voting') return;
 
-    const results = await this.getResults(eventId);
+    const results = await this.computeResults(eventId);
     if (results.length > 0) {
       event.selectedGameId = results[0].gameId;
       event.status = 'confirmed';
