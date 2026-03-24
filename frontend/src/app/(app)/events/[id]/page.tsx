@@ -319,20 +319,28 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
             {rankings.map((r, idx) => {
               const game = gameMap.get(r.gameId);
               return (
-                <div key={r.gameId} className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3">
+                <div
+                  key={r.gameId}
+                  draggable
+                  onDragStart={() => setDraggingGameId(r.gameId)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggingGameId) reorderByGameId(draggingGameId, r.gameId);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDraggingGameId(null);
+                  }}
+                  onDragEnd={() => setDraggingGameId(null)}
+                  className={`flex items-center gap-3 bg-white border rounded-lg p-3 transition ${
+                    draggingGameId === r.gameId
+                      ? 'border-indigo-300 opacity-60'
+                      : 'border-gray-200'
+                  }`}
+                  title="Drag to reorder"
+                >
                   <span className="text-lg font-bold text-gray-400 w-8 text-center">{idx + 1}</span>
-                  <span
-                    draggable
-                    onDragStart={() => setDraggingGameId(r.gameId)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => {
-                      if (draggingGameId) reorderByGameId(draggingGameId, r.gameId);
-                      setDraggingGameId(null);
-                    }}
-                    onDragEnd={() => setDraggingGameId(null)}
-                    className="cursor-grab select-none text-gray-400"
-                    title="Drag to reorder"
-                  >
+                  <span className="cursor-grab select-none text-gray-400">
                     ≡
                   </span>
                   <span className="flex-1 font-medium">{game?.title || r.gameId}</span>
