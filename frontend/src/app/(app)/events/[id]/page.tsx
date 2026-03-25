@@ -29,10 +29,6 @@ export default function EventDetailPage() {
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | null>(null);
   const [inviteLink, setInviteLink] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'details' | 'recommend' | 'vote' | 'feedback'>(
-    'recommend',
-  );
-  const [defaultTabApplied, setDefaultTabApplied] = useState(false);
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -63,18 +59,6 @@ export default function EventDetailPage() {
     });
   }, [loadEvent]);
 
-  useEffect(() => {
-    // When switching to a different event, allow re-applying the default tab.
-    setDefaultTabApplied(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  useEffect(() => {
-    if (!event || defaultTabApplied) return;
-    setTab(event.status === 'planning' ? 'recommend' : 'vote');
-    setDefaultTabApplied(true);
-  }, [event, defaultTabApplied]);
-
   if (loading || !event) {
     return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
   }
@@ -83,6 +67,10 @@ export default function EventDetailPage() {
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const date = new Date(event.dateTime);
+  const eventEndsAt =
+    new Date(event.dateTime).getTime() +
+    (event.durationMinutes ?? 0) * 60_000;
+  const hasPassed = Date.now() >= eventEndsAt;
   const formatDurationMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
@@ -105,7 +93,6 @@ export default function EventDetailPage() {
       const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
       setCandidates(c);
       toast.success('Recommendations generated');
-      setTab('recommend');
     } catch { /* toast auto-shown */ }
   };
 
@@ -125,7 +112,6 @@ export default function EventDetailPage() {
       await api.patch(`/events/${id}`, { status: 'voting', votingDeadline: deadline });
       toast.success('Voting started!');
       loadEvent();
-      setTab('vote');
     } catch { /* toast auto-shown */ }
   };
 
@@ -172,6 +158,10 @@ export default function EventDetailPage() {
           )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
           <span>{event.type === 'open' ? '🌐 Open' : '🔒 Invite only'}</span>
+        </div>
+
+        <div className="mb-4">
+          <AttendeesSection attendees={event.attendees} />
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -231,63 +221,34 @@ export default function EventDetailPage() {
         )}
       </div>
 
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1">
-        {(
-          event.status === 'planning'
-            ? (['recommend', 'details', 'feedback'] as Array<
-                'details' | 'recommend' | 'feedback'
-              >)
-            : (['vote', 'details', 'feedback'] as Array<
-                'details' | 'vote' | 'feedback'
-              >)
-        ).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition cursor-pointer ${
-              tab === t ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t === 'details'
-              ? 'Attendees'
-              : t === 'recommend'
-                ? 'Recommendations'
-                : t === 'vote'
-                  ? 'Voting'
-                  : 'Feedback'}
-          </button>
-        ))}
+      <div className="mt-6">
+        {hasPassed ? (
+          <FeedbackSection
+            eventId={id}
+            feedbackStatus={feedbackStatus}
+            onSubmitted={loadEvent}
+          />
+        ) : event.status === 'voting' ? (
+          <VotingSection
+            eventId={id}
+            candidates={candidates}
+            results={results}
+            myVotes={myVotes}
+            votingStatus={votingStatus}
+            isHost={isHost}
+            status={event.status}
+            onVoted={loadEvent}
+            onSelectWinner={handleSelectWinner}
+          />
+        ) : (
+          <RecommendationsSection
+            eventId={id}
+            candidates={candidates}
+            isPlanning={event.status === 'planning'}
+            onChanged={loadEvent}
+          />
+        )}
       </div>
-
-      {tab === 'details' && <AttendeesSection attendees={event.attendees} />}
-      {tab === 'recommend' && event.status === 'planning' && (
-        <RecommendationsSection
-          eventId={id}
-          candidates={candidates}
-          isPlanning={event.status === 'planning'}
-          onChanged={loadEvent}
-        />
-      )}
-      {tab === 'vote' && (
-        <VotingSection
-          eventId={id}
-          candidates={candidates}
-          results={results}
-          myVotes={myVotes}
-          votingStatus={votingStatus}
-          isHost={isHost}
-          status={event.status}
-          onVoted={loadEvent}
-          onSelectWinner={handleSelectWinner}
-        />
-      )}
-      {tab === 'feedback' && (
-        <FeedbackSection
-          eventId={id}
-          feedbackStatus={feedbackStatus}
-          onSubmitted={loadEvent}
-        />
-      )}
     </div>
   );
 }
@@ -306,6 +267,10 @@ function StatusBadge({ status }: { status: string }) {
 
 function AttendeesSection({ attendees }: { attendees: GameEvent['attendees'] }) {
   const groups = { going: attendees.filter((a) => a.rsvpStatus === 'going'), maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'), not_going: attendees.filter((a) => a.rsvpStatus === 'not_going') };
+  const total = groups.going.length + groups.maybe.length + groups.not_going.length;
+  if (total === 0) {
+    return <div className="text-sm text-gray-500">No attendees yet.</div>;
+  }
   return (
     <div className="space-y-4">
       {Object.entries(groups).map(([status, list]) => list.length > 0 && (
