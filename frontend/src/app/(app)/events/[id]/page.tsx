@@ -635,14 +635,6 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
             </>
           ) : (
             <>
-              <button
-                onClick={() => undefined}
-                disabled
-                className="mt-0 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
-                type="button"
-              >
-                Votes Submitted
-              </button>
               <p className="mt-2 text-sm text-gray-500">You have already voted for this event.</p>
 
               <div className="mt-4">
