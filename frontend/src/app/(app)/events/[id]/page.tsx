@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
@@ -17,6 +17,7 @@ import type {
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { user } = useAuthStore();
   const [event, setEvent] = useState<GameEvent | null>(null);
   const [candidates, setCandidates] = useState<EventGameCandidate[]>([]);
@@ -110,6 +111,15 @@ export default function EventDetailPage() {
     } catch { /* toast auto-shown */ }
   };
 
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this event? This cannot be undone.')) return;
+    try {
+      await api.delete(`/events/${id}`);
+      toast.success('Event deleted');
+      router.push('/dashboard');
+    } catch { /* toast auto-shown */ }
+  };
+
   return (
     <div>
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
@@ -169,6 +179,9 @@ export default function EventDetailPage() {
                   Start Voting
                 </button>
               )}
+              <button onClick={handleDelete} className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-200 transition">
+                Delete Event
+              </button>
             </>
           )}
         </div>
