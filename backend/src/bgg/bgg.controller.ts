@@ -8,7 +8,12 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { BggService } from './bgg.service';
 import { LinkBggDto } from './dto/link-bgg.dto';
@@ -66,7 +71,9 @@ export class BggController {
   }
 
   @Post('import-one')
-  @ApiOperation({ summary: 'Import a single game from BGG and add to collection' })
+  @ApiOperation({
+    summary: 'Import a single game from BGG and add to collection',
+  })
   importOne(@Request() req, @Body() dto: ImportOneGameDto) {
     return this.bggService.importOneGame(req.user.id, dto.bggId);
   }

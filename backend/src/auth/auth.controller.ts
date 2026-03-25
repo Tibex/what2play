@@ -57,10 +57,7 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Google OAuth callback' })
-  async googleCallback(
-    @Request() req,
-    @Response() res: ExpressResponse,
-  ) {
+  async googleCallback(@Request() req, @Response() res: ExpressResponse) {
     const data = await this.authService.login(req.user);
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';

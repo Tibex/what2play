@@ -127,9 +127,7 @@ export class BggService {
     return { Authorization: `Bearer ${token}` };
   }
 
-  async searchBgg(
-    query: string,
-  ): Promise<
+  async searchBgg(query: string): Promise<
     Array<{
       bggId: number;
       title: string;
@@ -178,9 +176,7 @@ export class BggService {
   ): Promise<{ game: import('../entities/game.entity').Game }> {
     const headers = this.getBggHeaders();
     if (!Object.keys(headers).length) {
-      throw new BadRequestException(
-        'BGG_API_TOKEN is not configured.',
-      );
+      throw new BadRequestException('BGG_API_TOKEN is not configured.');
     }
     const details = await this.fetchThingDetails([bggId]);
     if (!details.length) {
@@ -221,12 +217,8 @@ export class BggService {
       );
       const title = nameMatch ? nameMatch[1] : `Game ${bggId}`;
 
-      const yearMatch = block.match(
-        /<yearpublished[^>]*value="(\d+)"/,
-      );
-      const yearPublished = yearMatch
-        ? parseInt(yearMatch[1], 10)
-        : undefined;
+      const yearMatch = block.match(/<yearpublished[^>]*value="(\d+)"/);
+      const yearPublished = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
 
       results.push({ bggId, title, yearPublished });
       if (results.length >= 25) break;
@@ -235,9 +227,7 @@ export class BggService {
     return results;
   }
 
-  private async fetchThingDetails(
-    bggIds: number[],
-  ): Promise<
+  private async fetchThingDetails(bggIds: number[]): Promise<
     Array<{
       bggId: number;
       title: string;
@@ -281,9 +271,7 @@ export class BggService {
     return results;
   }
 
-  private parseThingDetailsXml(
-    xml: string,
-  ): Array<{
+  private parseThingDetailsXml(xml: string): Array<{
     bggId: number;
     title: string;
     thumbnailUrl?: string;
