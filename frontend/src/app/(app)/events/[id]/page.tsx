@@ -642,9 +642,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
               </button>
             </>
           ) : (
-            <>
-              <p className="mt-2 text-sm text-gray-500">You have already voted for this event.</p>
-            </>
+            <></>
           )}
         </div>
       )}
