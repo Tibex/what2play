@@ -7,23 +7,50 @@ interface GameCardProps {
   actions?: React.ReactNode;
   explanation?: Record<string, string>;
   showScore?: number;
+  bggUrl?: string;
 }
 
-export default function GameCard({ game, actions, explanation, showScore }: GameCardProps) {
+export default function GameCard({
+  game,
+  actions,
+  explanation,
+  showScore,
+  bggUrl,
+}: GameCardProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
       <div className="flex">
-        {game.thumbnailUrl && (
-          <img
-            src={game.thumbnailUrl}
-            alt={game.title}
-            className="w-24 h-24 object-cover flex-shrink-0"
-          />
-        )}
+        {game.thumbnailUrl &&
+          (bggUrl ? (
+            <a href={bggUrl} target="_blank" rel="noreferrer" className="flex-shrink-0">
+              <img
+                src={game.thumbnailUrl}
+                alt={game.title}
+                className="w-24 h-24 object-cover"
+              />
+            </a>
+          ) : (
+            <img
+              src={game.thumbnailUrl}
+              alt={game.title}
+              className="w-24 h-24 object-cover flex-shrink-0"
+            />
+          ))}
         <div className="p-4 flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="font-semibold text-gray-900 truncate">{game.title}</h3>
+              {bggUrl ? (
+                <a
+                  href={bggUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-gray-900 truncate hover:underline"
+                >
+                  {game.title}
+                </a>
+              ) : (
+                <h3 className="font-semibold text-gray-900 truncate">{game.title}</h3>
+              )}
               <p className="text-sm text-gray-500 mt-0.5">
                 {game.minPlayers}-{game.maxPlayers} players
                 {game.playingTime && ` · ${game.playingTime} min`}

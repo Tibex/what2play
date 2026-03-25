@@ -98,6 +98,8 @@ export default function EventDetailPage() {
   const handleStartVoting = async () => {
     try {
       const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      // Optimistic UI: lock recommendations immediately.
+      setEvent((prev) => (prev ? { ...prev, status: 'voting', votingDeadline: deadline } : prev));
       await api.patch(`/events/${id}`, { status: 'voting', votingDeadline: deadline });
       toast.success('Voting started!');
       loadEvent();
@@ -205,7 +207,11 @@ export default function EventDetailPage() {
       </div>
 
       <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1">
-        {(['details', 'recommend', 'vote', 'feedback'] as const).map((t) => (
+        {(
+          event.status === 'planning'
+            ? (['details', 'recommend', 'vote', 'feedback'] as Array<'details' | 'recommend' | 'vote' | 'feedback'>)
+            : (['details', 'vote', 'feedback'] as Array<'details' | 'recommend' | 'vote' | 'feedback'>)
+        ).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -219,7 +225,7 @@ export default function EventDetailPage() {
       </div>
 
       {tab === 'details' && <AttendeesSection attendees={event.attendees} />}
-      {tab === 'recommend' && (
+      {tab === 'recommend' && event.status === 'planning' && (
         <RecommendationsSection
           eventId={id}
           candidates={candidates}
@@ -398,6 +404,7 @@ function RecommendationsSection({
               game={c.game}
               explanation={c.explanation}
               showScore={Number(c.score)}
+              bggUrl={c.game.bggId ? `https://boardgamegeek.com/boardgame/${c.game.bggId}` : undefined}
               actions={
                 isHost && isPlanning ? (
                   <button
@@ -432,6 +439,12 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
   const [submitting, setSubmitting] = useState(false);
   const [draggingGameId, setDraggingGameId] = useState<string | null>(null);
   const hasSubmittedVotes = myVotes.length > 0;
+  const [showMyVotes, setShowMyVotes] = useState(false);
+
+  useEffect(() => {
+    // Collapse the ranked tiles by default once the user has submitted.
+    setShowMyVotes(!hasSubmittedVotes);
+  }, [hasSubmittedVotes]);
 
   useEffect(() => {
     if (!candidates.length) return;
@@ -494,53 +507,159 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
     ...myVotes.filter((v) => v.game).map((v) => [v.gameId, v.game] as const),
   ]);
 
+  const myVotesSorted = myVotes.slice().sort((a, b) => a.rank - b.rank);
+  const displayedRankings = hasSubmittedVotes
+    ? myVotesSorted.map((v) => ({ gameId: v.gameId, rank: v.rank }))
+    : rankings;
+
+  const voteTiles = displayedRankings.map((r, idx) => {
+    const game = gameMap.get(r.gameId);
+    const bggUrl =
+      game?.bggId != null ? `https://boardgamegeek.com/boardgame/${game.bggId}` : undefined;
+
+    return (
+      <div
+        key={r.gameId}
+        draggable={!hasSubmittedVotes}
+        onDragStart={() => {
+          if (!hasSubmittedVotes) setDraggingGameId(r.gameId);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!hasSubmittedVotes && draggingGameId) reorderByGameId(draggingGameId, r.gameId);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDraggingGameId(null);
+        }}
+        onDragEnd={() => setDraggingGameId(null)}
+        className={`flex items-center gap-3 bg-white border rounded-xl p-3 transition ${
+          draggingGameId === r.gameId ? 'border-indigo-300 opacity-60' : 'border-gray-200'
+        }`}
+        title="Drag to reorder"
+      >
+        <span className="text-lg font-bold text-gray-400 w-8 text-center">
+          {idx + 1}
+        </span>
+        <span className="cursor-grab select-none text-gray-400">≡</span>
+
+        {game?.thumbnailUrl && bggUrl ? (
+          <a
+            href={bggUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={game.thumbnailUrl}
+              alt={game.title}
+              className="w-10 h-10 object-cover rounded"
+            />
+          </a>
+        ) : game?.thumbnailUrl ? (
+          <img
+            src={game.thumbnailUrl}
+            alt={game.title}
+            className="w-10 h-10 object-cover rounded flex-shrink-0"
+          />
+        ) : null}
+
+        <div className="flex-1 min-w-0">
+          {bggUrl ? (
+            <a
+              href={bggUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="font-medium text-gray-900 truncate hover:underline block"
+              title="Open on BoardGameGeek"
+            >
+              {game?.title || r.gameId}
+            </a>
+          ) : (
+            <span className="font-medium text-gray-900 truncate block">
+              {game?.title || r.gameId}
+            </span>
+          )}
+
+          <p className="text-xs text-gray-500 mt-0.5">
+            {game?.minPlayers != null && game?.maxPlayers != null
+              ? `${game.minPlayers}-${game.maxPlayers} players`
+              : ''}
+            {game?.playingTime != null ? ` · ${game.playingTime} min` : ''}
+            {game?.yearPublished != null ? ` · ${game.yearPublished}` : ''}
+          </p>
+        </div>
+
+        {!hasSubmittedVotes && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => moveUp(idx)}
+              disabled={idx === 0}
+              className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+              type="button"
+            >
+              ▲
+            </button>
+            <button
+              onClick={() => moveDown(idx)}
+              disabled={idx >= displayedRankings.length - 1}
+              className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+              type="button"
+            >
+              ▼
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  });
+
   return (
     <div className="space-y-6">
       {status === 'voting' && candidates.length > 0 && (
         <div>
-          <h3 className="font-semibold mb-3">Rank your preferences (most wanted at top)</h3>
-          <div className="space-y-2">
-            {rankings.map((r, idx) => {
-              const game = gameMap.get(r.gameId);
-              return (
-                <div
-                  key={r.gameId}
-                  draggable={!hasSubmittedVotes}
-                  onDragStart={() => {
-                    if (!hasSubmittedVotes) setDraggingGameId(r.gameId);
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (!hasSubmittedVotes && draggingGameId) reorderByGameId(draggingGameId, r.gameId);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDraggingGameId(null);
-                  }}
-                  onDragEnd={() => setDraggingGameId(null)}
-                  className={`flex items-center gap-3 bg-white border rounded-lg p-3 transition ${
-                    draggingGameId === r.gameId
-                      ? 'border-indigo-300 opacity-60'
-                      : 'border-gray-200'
-                  }`}
-                  title="Drag to reorder"
+          {!hasSubmittedVotes ? (
+            <>
+              <h3 className="font-semibold mb-3">Rank your preferences (most wanted at top)</h3>
+              <div className="space-y-2">{voteTiles}</div>
+              <button
+                onClick={submitVotes}
+                disabled={submitting || hasSubmittedVotes}
+                className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+                type="button"
+              >
+                {submitting ? 'Submitting...' : 'Submit Votes'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => undefined}
+                disabled
+                className="mt-0 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+                type="button"
+              >
+                Votes Submitted
+              </button>
+              <p className="mt-2 text-sm text-gray-500">You have already voted for this event.</p>
+
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowMyVotes((v) => !v)}
+                  className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-medium hover:bg-gray-50 transition"
                 >
-                  <span className="text-lg font-bold text-gray-400 w-8 text-center">{idx + 1}</span>
-                  <span className="cursor-grab select-none text-gray-400">
-                    ≡
+                  <span>My votes</span>
+                  <span aria-hidden className="text-gray-500">
+                    {showMyVotes ? '▾' : '▸'}
                   </span>
-                  <span className="flex-1 font-medium">{game?.title || r.gameId}</span>
-                  <button onClick={() => moveUp(idx)} disabled={hasSubmittedVotes || idx === 0} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
-                  <button onClick={() => moveDown(idx)} disabled={hasSubmittedVotes || idx >= rankings.length - 1} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
-                </div>
-              );
-            })}
-          </div>
-          <button onClick={submitVotes} disabled={submitting || hasSubmittedVotes} className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
-            {hasSubmittedVotes ? 'Votes Submitted' : submitting ? 'Submitting...' : 'Submit Votes'}
-          </button>
-          {hasSubmittedVotes && (
-            <p className="mt-2 text-sm text-gray-500">You have already voted for this event.</p>
+                </button>
+
+                {showMyVotes && <div className="space-y-2 mt-3">{voteTiles}</div>}
+              </div>
+            </>
           )}
         </div>
       )}
