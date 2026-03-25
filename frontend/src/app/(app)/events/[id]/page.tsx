@@ -32,6 +32,7 @@ export default function EventDetailPage() {
   const [tab, setTab] = useState<'details' | 'recommend' | 'vote' | 'feedback'>(
     'recommend',
   );
+  const [defaultTabApplied, setDefaultTabApplied] = useState(false);
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -63,16 +64,16 @@ export default function EventDetailPage() {
   }, [loadEvent]);
 
   useEffect(() => {
-    if (!event) return;
-    // Set a sensible default based on the current stage, but avoid clobbering
-    // the user's tab choice once they've switched.
-    if (event.status === 'planning' && tab === 'details') {
-      setTab('recommend');
-    }
-    if (event.status !== 'planning' && tab === 'recommend') {
-      setTab('vote');
-    }
-  }, [event, tab]);
+    // When switching to a different event, allow re-applying the default tab.
+    setDefaultTabApplied(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  useEffect(() => {
+    if (!event || defaultTabApplied) return;
+    setTab(event.status === 'planning' ? 'recommend' : 'vote');
+    setDefaultTabApplied(true);
+  }, [event, defaultTabApplied]);
 
   if (loading || !event) {
     return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
