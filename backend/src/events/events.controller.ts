@@ -6,7 +6,6 @@ import {
   Delete,
   Param,
   Body,
-  Query,
   UseGuards,
   Request,
   Inject,
@@ -63,9 +62,9 @@ export class EventsController {
   @ApiOperation({ summary: 'Join event via invite link' })
   async joinViaInvite(@Param('token') token: string, @Request() req) {
     const result = await this.eventsService.joinViaInvite(token, req.user.id);
-    this.recommendationsService
-      .generateCandidates(result.eventId)
-      .catch(() => {/* non-critical */});
+    this.recommendationsService.generateCandidates(result.eventId).catch(() => {
+      /* non-critical */
+    });
     return result;
   }
 
@@ -95,9 +94,9 @@ export class EventsController {
     const goingAfter = await this.eventsService.getAttendeeUserIds(id);
 
     if (goingBefore.length !== goingAfter.length) {
-      this.recommendationsService
-        .generateCandidates(id)
-        .catch(() => {/* non-critical */});
+      this.recommendationsService.generateCandidates(id).catch(() => {
+        /* non-critical */
+      });
     }
 
     return result;

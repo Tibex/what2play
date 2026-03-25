@@ -169,7 +169,9 @@ export class RecommendationsService {
   ): Promise<EventGameCandidate> {
     const event = await this.eventsService.findById(eventId);
     if (event.status !== 'planning') {
-      throw new BadRequestException('Can only modify recommendations during planning');
+      throw new BadRequestException(
+        'Can only modify recommendations during planning',
+      );
     }
 
     const existing = await this.candidatesRepo.findOne({
@@ -199,10 +201,7 @@ export class RecommendationsService {
     return this.candidatesRepo.save(candidate);
   }
 
-  async removeCandidate(
-    eventId: string,
-    candidateId: string,
-  ): Promise<void> {
+  async removeCandidate(eventId: string, candidateId: string): Promise<void> {
     const candidate = await this.candidatesRepo.findOne({
       where: { id: candidateId, eventId },
     });

@@ -13,7 +13,7 @@ export interface EventFormData {
   discoveryMode: boolean;
 }
 
-const DURATION_OPTIONS = [60, 90, 120, 180, 240, 300];
+const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
 
 function durationLabel(mins: number): string {
   const h = Math.floor(mins / 60);

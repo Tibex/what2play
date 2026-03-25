@@ -35,9 +35,11 @@ async function bootstrap() {
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`), false);
     },
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    preflightContinue: false,
     optionsSuccessStatus: 204,
+    maxAge: 0,
   });
 
   // Allow larger payloads for manual BGG XML imports.

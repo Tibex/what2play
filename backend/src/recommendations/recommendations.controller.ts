@@ -37,10 +37,7 @@ export class RecommendationsController {
     @Param('eventId') eventId: string,
     @Body() body: { gameId: string },
   ) {
-    return this.recommendationsService.addManualCandidate(
-      eventId,
-      body.gameId,
-    );
+    return this.recommendationsService.addManualCandidate(eventId, body.gameId);
   }
 
   @Delete(':candidateId')

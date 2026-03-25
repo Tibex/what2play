@@ -56,7 +56,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new Error(msg);
   }
 
-  return res.json();
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
 async function tryRefresh(): Promise<boolean> {
