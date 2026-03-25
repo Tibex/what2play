@@ -174,13 +174,14 @@ export default function EventDetailPage() {
               <button onClick={handleCreateInvite} className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200 transition">
                 Create Invite Link
               </button>
-              <button
-                onClick={handleGenerateRecommendations}
-                disabled={event.status !== 'planning'}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
-              >
-                Generate Recommendations
-              </button>
+              {event.status === 'planning' && (
+                <button
+                  onClick={handleGenerateRecommendations}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+                >
+                  Generate Recommendations
+                </button>
+              )}
               {candidates.length > 0 && event.status === 'planning' && (
                 <button onClick={handleStartVoting} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
                   Start Voting
