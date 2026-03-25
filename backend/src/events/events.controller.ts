@@ -9,10 +9,13 @@ import {
   Query,
   UseGuards,
   Request,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EventsService } from './events.service';
+import { RecommendationsService } from '../recommendations/recommendations.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
@@ -20,7 +23,11 @@ import { RsvpDto } from './dto/rsvp.dto';
 @ApiTags('events')
 @Controller('api/events')
 export class EventsController {
-  constructor(private eventsService: EventsService) {}
+  constructor(
+    private eventsService: EventsService,
+    @Inject(forwardRef(() => RecommendationsService))
+    private recommendationsService: RecommendationsService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -54,8 +61,12 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Join event via invite link' })
-  joinViaInvite(@Param('token') token: string, @Request() req) {
-    return this.eventsService.joinViaInvite(token, req.user.id);
+  async joinViaInvite(@Param('token') token: string, @Request() req) {
+    const result = await this.eventsService.joinViaInvite(token, req.user.id);
+    this.recommendationsService
+      .generateCandidates(result.eventId)
+      .catch(() => {/* non-critical */});
+    return result;
   }
 
   @Get(':id')
@@ -78,8 +89,18 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'RSVP to an event' })
-  rsvp(@Param('id') id: string, @Request() req, @Body() dto: RsvpDto) {
-    return this.eventsService.rsvp(id, req.user.id, dto.status);
+  async rsvp(@Param('id') id: string, @Request() req, @Body() dto: RsvpDto) {
+    const goingBefore = await this.eventsService.getAttendeeUserIds(id);
+    const result = await this.eventsService.rsvp(id, req.user.id, dto.status);
+    const goingAfter = await this.eventsService.getAttendeeUserIds(id);
+
+    if (goingBefore.length !== goingAfter.length) {
+      this.recommendationsService
+        .generateCandidates(id)
+        .catch(() => {/* non-critical */});
+    }
+
+    return result;
   }
 
   @Post(':id/invite-link')

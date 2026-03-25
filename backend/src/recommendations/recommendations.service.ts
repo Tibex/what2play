@@ -1,7 +1,12 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
+import { Event } from '../entities/event.entity';
 import { SessionTiming } from '../entities/session-timing.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { Game } from '../entities/game.entity';
@@ -20,6 +25,8 @@ export class RecommendationsService {
   constructor(
     @InjectRepository(EventGameCandidate)
     private candidatesRepo: Repository<EventGameCandidate>,
+    @InjectRepository(Event)
+    private eventsRepo: Repository<Event>,
     @InjectRepository(SessionTiming)
     private timingsRepo: Repository<SessionTiming>,
     @InjectRepository(EventFeedback)
@@ -115,21 +122,37 @@ export class RecommendationsService {
 
     scored.sort((a, b) => b.score - a.score);
     const deduped = this.dedupeBaseAndExpansion(scored);
-    const topCandidates = deduped.slice(0, 10);
 
-    await this.candidatesRepo.delete({ eventId });
+    const excludedIds = new Set(event.excludedGameIds || []);
+    const filtered = deduped.filter((c) => !excludedIds.has(c.game.id));
+    const topCandidates = filtered.slice(0, 10);
 
-    const candidates = topCandidates.map((c) =>
-      this.candidatesRepo.create({
-        eventId,
-        gameId: c.game.id,
-        source: c.source,
-        score: c.score,
-        explanation: c.explanation,
-      }),
-    );
+    const manualCandidates = await this.candidatesRepo.find({
+      where: { eventId, source: 'manual' },
+    });
+    const manualGameIds = new Set(manualCandidates.map((c) => c.gameId));
 
-    return this.candidatesRepo.save(candidates);
+    await this.candidatesRepo
+      .createQueryBuilder()
+      .delete()
+      .from(EventGameCandidate)
+      .where('eventId = :eventId', { eventId })
+      .andWhere('source != :source', { source: 'manual' })
+      .execute();
+
+    const newCandidates = topCandidates
+      .filter((c) => !manualGameIds.has(c.game.id))
+      .map((c) =>
+        this.candidatesRepo.create({
+          eventId,
+          gameId: c.game.id,
+          source: c.source,
+          score: c.score,
+          explanation: c.explanation,
+        }),
+      );
+
+    return this.candidatesRepo.save(newCandidates);
   }
 
   async getCandidates(eventId: string): Promise<EventGameCandidate[]> {
@@ -138,6 +161,63 @@ export class RecommendationsService {
       relations: ['game'],
       order: { score: 'DESC' },
     });
+  }
+
+  async addManualCandidate(
+    eventId: string,
+    gameId: string,
+  ): Promise<EventGameCandidate> {
+    const event = await this.eventsService.findById(eventId);
+    if (event.status !== 'planning') {
+      throw new BadRequestException('Can only modify recommendations during planning');
+    }
+
+    const existing = await this.candidatesRepo.findOne({
+      where: { eventId, gameId },
+    });
+    if (existing) {
+      throw new BadRequestException('Game is already in recommendations');
+    }
+
+    const game = await this.gamesService.findById(gameId);
+    if (!game) throw new NotFoundException('Game not found');
+
+    if (event.excludedGameIds?.includes(gameId)) {
+      event.excludedGameIds = event.excludedGameIds.filter(
+        (id) => id !== gameId,
+      );
+      await this.eventsRepo.save(event);
+    }
+
+    const candidate = this.candidatesRepo.create({
+      eventId,
+      gameId,
+      source: 'manual',
+      score: 100,
+      explanation: { source: 'Manually added by host' },
+    });
+    return this.candidatesRepo.save(candidate);
+  }
+
+  async removeCandidate(
+    eventId: string,
+    candidateId: string,
+  ): Promise<void> {
+    const candidate = await this.candidatesRepo.findOne({
+      where: { id: candidateId, eventId },
+    });
+    if (!candidate) throw new NotFoundException('Candidate not found');
+
+    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    if (event) {
+      const excluded = event.excludedGameIds || [];
+      if (!excluded.includes(candidate.gameId)) {
+        event.excludedGameIds = [...excluded, candidate.gameId];
+        await this.eventsRepo.save(event);
+      }
+    }
+
+    await this.candidatesRepo.remove(candidate);
   }
 
   private async getAverageTimings(

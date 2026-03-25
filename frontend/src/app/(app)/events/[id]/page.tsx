@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import GameCard from '@/components/GameCard';
 import type {
+  Game,
   GameEvent,
   EventGameCandidate,
   VoteResult,
@@ -218,7 +219,15 @@ export default function EventDetailPage() {
       </div>
 
       {tab === 'details' && <AttendeesSection attendees={event.attendees} />}
-      {tab === 'recommend' && <RecommendationsSection candidates={candidates} />}
+      {tab === 'recommend' && (
+        <RecommendationsSection
+          eventId={id}
+          candidates={candidates}
+          isHost={isHost}
+          isPlanning={event.status === 'planning'}
+          onChanged={loadEvent}
+        />
+      )}
       {tab === 'vote' && (
         <VotingSection
           eventId={id}
@@ -275,17 +284,135 @@ function AttendeesSection({ attendees }: { attendees: GameEvent['attendees'] }) 
   );
 }
 
-function RecommendationsSection({ candidates }: { candidates: EventGameCandidate[] }) {
-  const safeCandidates = candidates.filter((c) => c?.game);
+function RecommendationsSection({
+  eventId,
+  candidates,
+  isHost,
+  isPlanning,
+  onChanged,
+}: {
+  eventId: string;
+  candidates: EventGameCandidate[];
+  isHost: boolean;
+  isPlanning: boolean;
+  onChanged: () => void;
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Game[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
-  if (!safeCandidates.length) {
-    return <p className="text-gray-500 text-center py-10">No recommendations generated yet. The host can generate them.</p>;
-  }
+  const safeCandidates = candidates.filter((c) => c?.game);
+  const candidateGameIds = new Set(safeCandidates.map((c) => c.gameId));
+
+  const handleSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    try {
+      const results = await api.get<Game[]>(`/games/search?q=${encodeURIComponent(q)}`);
+      setSearchResults(results.filter((g) => !candidateGameIds.has(g.id)));
+    } catch { /* toast auto-shown */ }
+    finally { setSearching(false); }
+  };
+
+  const handleAdd = async (gameId: string) => {
+    setAdding(gameId);
+    try {
+      await api.post(`/events/${eventId}/recommendations/add`, { gameId });
+      toast.success('Game added to recommendations');
+      setSearchResults((prev) => prev.filter((g) => g.id !== gameId));
+      onChanged();
+    } catch { /* toast auto-shown */ }
+    finally { setAdding(null); }
+  };
+
+  const handleRemove = async (candidateId: string) => {
+    setRemoving(candidateId);
+    try {
+      await api.delete(`/events/${eventId}/recommendations/${candidateId}`);
+      toast.success('Game removed from recommendations');
+      onChanged();
+    } catch { /* toast auto-shown */ }
+    finally { setRemoving(null); }
+  };
+
   return (
-    <div className="space-y-3">
-      {safeCandidates.map((c) => (
-        <GameCard key={c.id} game={c.game} explanation={c.explanation} showScore={Number(c.score)} />
-      ))}
+    <div className="space-y-6">
+      {isHost && isPlanning && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Add a game manually</h3>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="Search games in database..."
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={searching}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              {searching ? 'Searching...' : 'Search'}
+            </button>
+          </div>
+          {searchResults.length > 0 && (
+            <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+              {searchResults.map((game) => (
+                <div key={game.id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
+                  {game.thumbnailUrl && (
+                    <img src={game.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{game.title}</p>
+                    <p className="text-xs text-gray-500">
+                      {game.minPlayers}-{game.maxPlayers} players
+                      {game.playingTime ? ` · ${game.playingTime} min` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleAdd(game.id)}
+                    disabled={adding === game.id}
+                    className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50 transition"
+                  >
+                    {adding === game.id ? 'Adding...' : '+ Add'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!safeCandidates.length ? (
+        <p className="text-gray-500 text-center py-10">No recommendations yet. The host can generate them or add games manually.</p>
+      ) : (
+        <div className="space-y-3">
+          {safeCandidates.map((c) => (
+            <GameCard
+              key={c.id}
+              game={c.game}
+              explanation={c.explanation}
+              showScore={Number(c.score)}
+              actions={
+                isHost && isPlanning ? (
+                  <button
+                    onClick={() => handleRemove(c.id)}
+                    disabled={removing === c.id}
+                    className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 transition"
+                  >
+                    {removing === c.id ? 'Removing...' : 'Remove'}
+                  </button>
+                ) : undefined
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

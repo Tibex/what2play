@@ -59,6 +59,9 @@ export class Event {
   @Column({ default: false })
   discoveryMode: boolean;
 
+  @Column({ type: 'simple-json', nullable: true })
+  excludedGameIds: string[];
+
   @CreateDateColumn()
   createdAt: Date;
 
