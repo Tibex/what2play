@@ -127,6 +127,7 @@ export interface EventFeedback {
   userId: string;
   user: User;
   gameId?: string;
+  game?: Game;
   enjoymentRating: number;
   finishedGame: boolean;
   durationFeel?: string;

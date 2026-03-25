@@ -11,6 +11,7 @@ import type {
   Game,
   GameEvent,
   EventGameCandidate,
+  EventFeedback,
   VoteResult,
   EventVote,
   VotingStatus,
@@ -29,6 +30,7 @@ export default function EventDetailPage() {
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | null>(null);
   const [inviteLink, setInviteLink] = useState('');
   const [loading, setLoading] = useState(true);
+  const [nowTs] = useState(() => Date.now());
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -70,7 +72,7 @@ export default function EventDetailPage() {
   const eventEndsAt =
     new Date(event.dateTime).getTime() +
     (event.durationMinutes ?? 0) * 60_000;
-  const hasPassed = Date.now() >= eventEndsAt;
+  const hasPassed = nowTs >= eventEndsAt;
   const formatDurationMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
@@ -732,6 +734,37 @@ function FeedbackSection({
   const [submitted, setSubmitted] = useState(false);
   const alreadySubmitted = feedbackStatus?.alreadySubmitted || submitted;
   const canSubmit = feedbackStatus?.canSubmit ?? false;
+  const canViewFeedback = alreadySubmitted || feedbackStatus?.eventEnded;
+
+  const [feedbackEntries, setFeedbackEntries] = useState<EventFeedback[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(false);
+
+  useEffect(() => {
+    if (!canViewFeedback) return;
+    setLoadingEntries(true);
+    api
+      .get<EventFeedback[]>(`/events/${eventId}/feedback`, { showErrorToast: false })
+      .then(setFeedbackEntries)
+      .catch(() => {})
+      .finally(() => setLoadingEntries(false));
+  }, [canViewFeedback, eventId]);
+
+  const noteTextCount = feedbackEntries.filter((f) =>
+    (f.notes ?? '').trim(),
+  ).length;
+
+  const avgEnjoyment =
+    feedbackEntries.length > 0
+      ? feedbackEntries.reduce(
+          (sum, f) => sum + Number(f.enjoymentRating),
+          0,
+        ) / feedbackEntries.length
+      : null;
+
+  const completionRate =
+    feedbackEntries.length > 0
+      ? feedbackEntries.filter((f) => f.finishedGame).length / feedbackEntries.length
+      : null;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -750,11 +783,7 @@ function FeedbackSection({
     }
   };
 
-  if (alreadySubmitted) {
-    return <p className="text-center text-green-600 font-medium py-10">Thanks for your feedback!</p>;
-  }
-
-  if (feedbackStatus && !feedbackStatus.eventEnded) {
+  if (!canViewFeedback && feedbackStatus && !feedbackStatus.eventEnded) {
     return (
       <p className="text-center text-gray-500 py-10">
         Feedback opens after the event date.
@@ -763,43 +792,193 @@ function FeedbackSection({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-lg mx-auto space-y-5">
-      <h3 className="font-semibold text-lg">How was the game night?</h3>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Enjoyment (1-5)</label>
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              onClick={() => setEnjoyment(n)}
-              className={`w-10 h-10 rounded-full text-lg font-bold transition ${
-                enjoyment >= n ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-400'
-              }`}
+    <div className="space-y-6">
+      {canSubmit && !alreadySubmitted && (
+        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-lg mx-auto space-y-5">
+          <h3 className="font-semibold text-lg">How was the game night?</h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enjoyment (1-5)
+            </label>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setEnjoyment(n)}
+                  className={`w-10 h-10 rounded-full text-lg font-bold transition ${
+                    enjoyment >= n
+                      ? 'bg-yellow-400 text-white'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={finished}
+              onChange={(e) => setFinished(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600"
+            />
+            We finished at least one game
+          </label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              How did the duration feel?
+            </label>
+            <select
+              value={durationFeel}
+              onChange={(e) => setDurationFeel(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             >
-              {n}
-            </button>
-          ))}
+              <option value="too_short">Too short</option>
+              <option value="just_right">Just right</option>
+              <option value="too_long">Too long</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !canSubmit}
+            className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Submitting...' : 'Submit Feedback'}
+          </button>
         </div>
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={finished} onChange={(e) => setFinished(e.target.checked)} className="rounded border-gray-300 text-indigo-600" />
-        We finished at least one game
-      </label>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">How did the duration feel?</label>
-        <select value={durationFeel} onChange={(e) => setDurationFeel(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-          <option value="too_short">Too short</option>
-          <option value="just_right">Just right</option>
-          <option value="too_long">Too long</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-      </div>
-      <button onClick={handleSubmit} disabled={submitting || !canSubmit} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition">
-        {submitting ? 'Submitting...' : 'Submit Feedback'}
-      </button>
+      )}
+
+      {canViewFeedback && (
+        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-3xl mx-auto space-y-4">
+          {alreadySubmitted && (
+            <p className="text-center text-green-600 font-medium">
+              Thanks for your feedback!
+            </p>
+          )}
+
+          {loadingEntries ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+            </div>
+          ) : feedbackEntries.length === 0 ? (
+            <p className="text-center text-gray-500 py-6">
+              No feedback entries yet.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                  <div className="text-xs text-indigo-700 font-medium">
+                    Avg enjoyment
+                  </div>
+                  <div className="text-2xl font-bold text-indigo-900">
+                    {avgEnjoyment != null ? avgEnjoyment.toFixed(1) : '—'}
+                    /5
+                  </div>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                  <div className="text-xs text-indigo-700 font-medium">
+                    Completion rate
+                  </div>
+                  <div className="text-2xl font-bold text-indigo-900">
+                    {completionRate != null
+                      ? `${Math.round(completionRate * 100)}%`
+                      : '—'}
+                  </div>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                  <div className="text-xs text-indigo-700 font-medium">
+                    Entries / Notes
+                  </div>
+                  <div className="text-2xl font-bold text-indigo-900">
+                    {feedbackEntries.length} / {noteTextCount}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {feedbackEntries.map((f) => {
+                  const note = (f.notes ?? '').trim();
+                  const bggUrl =
+                    f.game?.bggId != null
+                      ? `https://boardgamegeek.com/boardgame/${f.game.bggId}`
+                      : undefined;
+
+                  return (
+                    <div
+                      key={f.id}
+                      className="flex gap-3 bg-gray-50 border border-gray-100 rounded-lg p-3"
+                    >
+                      {f.game?.thumbnailUrl ? (
+                        <img
+                          src={f.game.thumbnailUrl}
+                          alt={f.game.title}
+                          className="w-14 h-14 object-cover rounded flex-shrink-0"
+                        />
+                      ) : null}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 truncate">
+                              {f.user?.name || 'Guest'}
+                            </div>
+                            {f.game?.title ? (
+                              bggUrl ? (
+                                <a
+                                  href={bggUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-indigo-700 hover:underline truncate block mt-0.5"
+                                >
+                                  {f.game.title}
+                                </a>
+                              ) : (
+                                <div className="text-xs text-gray-600 truncate block mt-0.5">
+                                  {f.game.title}
+                                </div>
+                              )
+                            ) : (
+                              <div className="text-xs text-gray-500 truncate block mt-0.5">
+                                General feedback
+                              </div>
+                            )}
+                          </div>
+
+                          <span className="flex-shrink-0 bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-lg">
+                            {f.enjoymentRating}/5
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-gray-600 mt-1">
+                          {f.finishedGame ? 'Finished game' : 'Did not finish'}
+                          {f.durationFeel ? ` · ${f.durationFeel}` : ''}
+                        </div>
+
+                        <div className="text-sm text-gray-800 mt-2">
+                          {note ? note : <span className="text-gray-400">No comments</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
