@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import GameCard from '@/components/GameCard';
@@ -31,19 +32,19 @@ export default function EventDetailPage() {
     const ev = await api.get<GameEvent>(`/events/${id}`);
     setEvent(ev);
     try {
-      const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
+      const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`, { showErrorToast: false });
       setCandidates(c);
     } catch { /* no candidates yet */ }
     try {
-      const r = await api.get<VoteResult[]>(`/events/${id}/voting/results`);
+      const r = await api.get<VoteResult[]>(`/events/${id}/voting/results`, { showErrorToast: false });
       setResults(r);
-      const mv = await api.get<EventVote[]>(`/events/${id}/voting/my-votes`);
+      const mv = await api.get<EventVote[]>(`/events/${id}/voting/my-votes`, { showErrorToast: false });
       setMyVotes(mv);
-      const vs = await api.get<VotingStatus>(`/events/${id}/voting/status`);
+      const vs = await api.get<VotingStatus>(`/events/${id}/voting/status`, { showErrorToast: false });
       setVotingStatus(vs);
     } catch { /* no votes yet */ }
     try {
-      const fs = await api.get<FeedbackStatus>(`/events/${id}/feedback/status`);
+      const fs = await api.get<FeedbackStatus>(`/events/${id}/feedback/status`, { showErrorToast: false });
       setFeedbackStatus(fs);
     } catch { /* no feedback status yet */ }
     setLoading(false);
@@ -66,32 +67,47 @@ export default function EventDetailPage() {
   const date = new Date(event.dateTime);
 
   const handleRsvp = async (status: string) => {
-    await api.post(`/events/${id}/rsvp`, { status });
-    loadEvent();
+    try {
+      await api.post(`/events/${id}/rsvp`, { status });
+      toast.success(`RSVP updated to ${status}`);
+      loadEvent();
+    } catch { /* toast auto-shown */ }
   };
 
   const handleGenerateRecommendations = async () => {
-    await api.post<EventGameCandidate[]>(`/events/${id}/recommendations/generate`);
-    const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
-    setCandidates(c);
-    setTab('recommend');
+    try {
+      await api.post<EventGameCandidate[]>(`/events/${id}/recommendations/generate`);
+      const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
+      setCandidates(c);
+      toast.success('Recommendations generated');
+      setTab('recommend');
+    } catch { /* toast auto-shown */ }
   };
 
   const handleCreateInvite = async () => {
-    const inv = await api.post<{ token: string }>(`/events/${id}/invite-link`);
-    setInviteLink(`${window.location.origin}/invite/${inv.token}`);
+    try {
+      const inv = await api.post<{ token: string }>(`/events/${id}/invite-link`);
+      setInviteLink(`${window.location.origin}/invite/${inv.token}`);
+      toast.success('Invite link created');
+    } catch { /* toast auto-shown */ }
   };
 
   const handleStartVoting = async () => {
-    const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    await api.patch(`/events/${id}`, { status: 'voting', votingDeadline: deadline });
-    loadEvent();
-    setTab('vote');
+    try {
+      const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await api.patch(`/events/${id}`, { status: 'voting', votingDeadline: deadline });
+      toast.success('Voting started!');
+      loadEvent();
+      setTab('vote');
+    } catch { /* toast auto-shown */ }
   };
 
   const handleSelectWinner = async (gameId?: string) => {
-    await api.post(`/events/${id}/voting/select-winner`, { gameId });
-    loadEvent();
+    try {
+      await api.post(`/events/${id}/voting/select-winner`, { gameId });
+      toast.success('Winner selected!');
+      loadEvent();
+    } catch { /* toast auto-shown */ }
   };
 
   return (

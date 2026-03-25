@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { redirectPathAfterAuth } from '@/lib/auth-flow';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -74,6 +75,18 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
+          <GoogleSignInButton />
+
           <p className="text-center text-sm text-gray-500">
             Don&apos;t have an account?{' '}
             <Link href="/register" className="text-indigo-600 hover:underline font-medium">

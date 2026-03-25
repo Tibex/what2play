@@ -1,3 +1,5 @@
+import toast from 'react-hot-toast';
+
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/+$/, '')}/api`;
 
@@ -7,6 +9,8 @@ interface RequestOptions {
   headers?: Record<string, string>;
   /** When false, omit Bearer token (for public endpoints). Avoids 401 + /login redirect with a stale session. */
   auth?: boolean;
+  /** When false, suppress the automatic error toast. Default true. */
+  showErrorToast?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -22,11 +26,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method: options.method || 'GET',
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    const msg = 'Network error — is the backend running?';
+    if (options.showErrorToast !== false) toast.error(msg);
+    throw new Error(msg);
+  }
 
   if (res.status === 401 && token) {
     const refreshed = await tryRefresh();
@@ -40,7 +51,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || `HTTP ${res.status}`);
+    const msg = error.message || `HTTP ${res.status}`;
+    if (options.showErrorToast !== false) toast.error(msg);
+    throw new Error(msg);
   }
 
   return res.json();
@@ -67,7 +80,7 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export const api = {
-  get: <T>(path: string, opts?: Pick<RequestOptions, 'auth'>) =>
+  get: <T>(path: string, opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>) =>
     request<T>(path, opts ?? {}),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),

@@ -48,6 +48,35 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
+  async findOrCreateGoogleUser(profile: {
+    email: string;
+    name: string;
+    googleId: string;
+    avatarUrl?: string;
+  }): Promise<User> {
+    let user = await this.usersRepo.findOne({
+      where: { email: profile.email },
+    });
+
+    if (user) {
+      user.socialProvider = 'google';
+      user.socialId = profile.googleId;
+      if (!user.avatarUrl && profile.avatarUrl) {
+        user.avatarUrl = profile.avatarUrl;
+      }
+      return this.usersRepo.save(user);
+    }
+
+    user = this.usersRepo.create({
+      email: profile.email,
+      name: profile.name,
+      socialProvider: 'google',
+      socialId: profile.googleId,
+      avatarUrl: profile.avatarUrl,
+    });
+    return this.usersRepo.save(user);
+  }
+
   async refreshToken(refreshToken: string) {
     try {
       const payload = this.jwtService.verify(refreshToken, {

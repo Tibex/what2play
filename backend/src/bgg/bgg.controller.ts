@@ -4,14 +4,16 @@ import {
   Delete,
   Get,
   Body,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { BggService } from './bgg.service';
 import { LinkBggDto } from './dto/link-bgg.dto';
 import { ImportBggXmlDto } from './dto/import-bgg-xml.dto';
+import { ImportOneGameDto } from './dto/import-one-game.dto';
 
 @ApiTags('bgg')
 @ApiBearerAuth()
@@ -54,5 +56,18 @@ export class BggController {
   @ApiOperation({ summary: 'Import BGG collection from pasted XML' })
   importXml(@Request() req, @Body() dto: ImportBggXmlDto) {
     return this.bggService.importCollectionFromXml(req.user.id, dto.xml);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search BoardGameGeek catalog by title' })
+  @ApiQuery({ name: 'q', required: true })
+  searchBgg(@Query('q') q: string) {
+    return this.bggService.searchBgg(q);
+  }
+
+  @Post('import-one')
+  @ApiOperation({ summary: 'Import a single game from BGG and add to collection' })
+  importOne(@Request() req, @Body() dto: ImportOneGameDto) {
+    return this.bggService.importOneGame(req.user.id, dto.bggId);
   }
 }

@@ -121,6 +121,226 @@ export class BggService {
     return { imported, fetched: bggGames.length };
   }
 
+  private getBggHeaders(): Record<string, string> {
+    const token = this.config.get<string>('BGG_API_TOKEN');
+    if (!token || token === 'your-bgg-api-token') return {};
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  async searchBgg(
+    query: string,
+  ): Promise<
+    Array<{
+      bggId: number;
+      title: string;
+      yearPublished?: number;
+      thumbnailUrl?: string;
+      imageUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+    }>
+  > {
+    if (!query.trim()) return [];
+
+    const headers = this.getBggHeaders();
+    if (!Object.keys(headers).length) {
+      throw new BadRequestException(
+        'BGG_API_TOKEN is not configured. Register an app at boardgamegeek.com/applications and add your token to backend/.env.',
+      );
+    }
+
+    const url = `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new BadRequestException(
+        `BGG search failed (${response.status}). Check your BGG_API_TOKEN.`,
+      );
+    }
+
+    const xml = await response.text();
+    const hits = this.parseBggSearchXml(xml);
+    if (!hits.length) return [];
+
+    const enriched = await this.fetchThingDetails(hits.map((h) => h.bggId));
+    const detailMap = new Map(enriched.map((d) => [d.bggId, d]));
+
+    return hits.map((hit) => {
+      const detail = detailMap.get(hit.bggId);
+      if (detail) return { ...hit, ...detail };
+      return hit;
+    });
+  }
+
+  async importOneGame(
+    userId: string,
+    bggId: number,
+  ): Promise<{ game: import('../entities/game.entity').Game }> {
+    const headers = this.getBggHeaders();
+    if (!Object.keys(headers).length) {
+      throw new BadRequestException(
+        'BGG_API_TOKEN is not configured.',
+      );
+    }
+    const details = await this.fetchThingDetails([bggId]);
+    if (!details.length) {
+      throw new NotFoundException(`No game found on BGG with id ${bggId}`);
+    }
+    const d = details[0];
+    const game = await this.gamesService.findOrCreateByBggId(d.bggId, {
+      title: d.title,
+      imageUrl: d.imageUrl,
+      thumbnailUrl: d.thumbnailUrl,
+      minPlayers: d.minPlayers,
+      maxPlayers: d.maxPlayers,
+      playingTime: d.playingTime,
+      yearPublished: d.yearPublished,
+    });
+    await this.gamesService.addToCollection(userId, game.id);
+    return { game };
+  }
+
+  private parseBggSearchXml(
+    xml: string,
+  ): Array<{ bggId: number; title: string; yearPublished?: number }> {
+    const results: Array<{
+      bggId: number;
+      title: string;
+      yearPublished?: number;
+    }> = [];
+
+    const itemRegex = /<item[^>]*id="(\d+)"[^>]*>([\s\S]*?)<\/item>/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = itemRegex.exec(xml)) !== null) {
+      const bggId = parseInt(match[1], 10);
+      const block = match[2];
+
+      const nameMatch = block.match(
+        /<name[^>]*type="primary"[^>]*value="([^"]+)"/,
+      );
+      const title = nameMatch ? nameMatch[1] : `Game ${bggId}`;
+
+      const yearMatch = block.match(
+        /<yearpublished[^>]*value="(\d+)"/,
+      );
+      const yearPublished = yearMatch
+        ? parseInt(yearMatch[1], 10)
+        : undefined;
+
+      results.push({ bggId, title, yearPublished });
+      if (results.length >= 25) break;
+    }
+
+    return results;
+  }
+
+  private async fetchThingDetails(
+    bggIds: number[],
+  ): Promise<
+    Array<{
+      bggId: number;
+      title: string;
+      thumbnailUrl?: string;
+      imageUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+    }>
+  > {
+    if (!bggIds.length) return [];
+    const results: Array<{
+      bggId: number;
+      title: string;
+      thumbnailUrl?: string;
+      imageUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+    }> = [];
+
+    const headers = this.getBggHeaders();
+    const chunkSize = 20;
+    for (let i = 0; i < bggIds.length; i += chunkSize) {
+      const chunk = bggIds.slice(i, i + chunkSize);
+      try {
+        const response = await fetch(
+          `https://boardgamegeek.com/xmlapi2/thing?id=${chunk.join(',')}&stats=1`,
+          { headers },
+        );
+        if (!response.ok) continue;
+        const xml = await response.text();
+        results.push(...this.parseThingDetailsXml(xml));
+      } catch {
+        // Resilient: skip failed chunks.
+      }
+    }
+
+    return results;
+  }
+
+  private parseThingDetailsXml(
+    xml: string,
+  ): Array<{
+    bggId: number;
+    title: string;
+    thumbnailUrl?: string;
+    imageUrl?: string;
+    minPlayers?: number;
+    maxPlayers?: number;
+    playingTime?: number;
+    yearPublished?: number;
+  }> {
+    const results: Array<{
+      bggId: number;
+      title: string;
+      thumbnailUrl?: string;
+      imageUrl?: string;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+    }> = [];
+
+    const itemRegex = /<item\b([^>]*)>([\s\S]*?)<\/item>/g;
+    let itemMatch: RegExpExecArray | null;
+
+    while ((itemMatch = itemRegex.exec(xml)) !== null) {
+      const attrs = itemMatch[1];
+      const body = itemMatch[2];
+
+      const idMatch = /(?:\s|^)id="(\d+)"/.exec(attrs);
+      if (!idMatch) continue;
+      const bggId = parseInt(idMatch[1], 10);
+
+      const nameMatch = body.match(
+        /<name[^>]*type="primary"[^>]*value="([^"]+)"/,
+      );
+      const title = nameMatch ? nameMatch[1] : `Game ${bggId}`;
+      const thumbnailUrl = this.extractTag(body, 'thumbnail');
+      const imageUrl = this.extractTag(body, 'image');
+      const minPlayers = this.extractNumAttr(body, 'minplayers');
+      const maxPlayers = this.extractNumAttr(body, 'maxplayers');
+      const playingTime = this.extractNumAttr(body, 'playingtime');
+      const yearPublished = this.extractNumAttr(body, 'yearpublished');
+
+      results.push({
+        bggId,
+        title,
+        thumbnailUrl,
+        imageUrl,
+        minPlayers,
+        maxPlayers,
+        playingTime,
+        yearPublished,
+      });
+    }
+
+    return results;
+  }
+
   private async fetchBggCollection(username: string): Promise<
     Array<{
       bggId: number;

@@ -26,6 +26,17 @@ export interface Game {
   mechanics?: string[];
 }
 
+export interface BggSearchResult {
+  bggId: number;
+  title: string;
+  yearPublished?: number;
+  thumbnailUrl?: string;
+  imageUrl?: string;
+  minPlayers?: number;
+  maxPlayers?: number;
+  playingTime?: number;
+}
+
 export interface GameOwnership {
   id: string;
   userId: string;
