@@ -636,21 +636,6 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
           ) : (
             <>
               <p className="mt-2 text-sm text-gray-500">You have already voted for this event.</p>
-
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowMyVotes((v) => !v)}
-                  className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-medium hover:bg-gray-50 transition"
-                >
-                  <span>My votes</span>
-                  <span aria-hidden className="text-gray-500">
-                    {showMyVotes ? '▾' : '▸'}
-                  </span>
-                </button>
-
-                {showMyVotes && <div className="space-y-2 mt-3">{voteTiles}</div>}
-              </div>
             </>
           )}
         </div>
@@ -684,6 +669,23 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
               );
             })}
           </div>
+        </div>
+      )}
+
+      {hasSubmittedVotes && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowMyVotes((v) => !v)}
+            className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-medium hover:bg-gray-50 transition"
+          >
+            <span>My votes</span>
+            <span aria-hidden className="text-gray-500">
+              {showMyVotes ? '▾' : '▸'}
+            </span>
+          </button>
+
+          {showMyVotes && <div className="space-y-2 mt-3">{voteTiles}</div>}
         </div>
       )}
     </div>
