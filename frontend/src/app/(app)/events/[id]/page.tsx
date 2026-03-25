@@ -210,11 +210,11 @@ export default function EventDetailPage() {
       <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1">
         {(
           event.status === 'planning'
-            ? (['details', 'recommend', 'feedback'] as Array<
+            ? (['recommend', 'details', 'feedback'] as Array<
                 'details' | 'recommend' | 'feedback'
               >)
-            : (['details', 'vote', 'feedback'] as Array<
-                'details' | 'recommend' | 'vote' | 'feedback'
+            : (['vote', 'details', 'feedback'] as Array<
+                'details' | 'vote' | 'feedback'
               >)
         ).map((t) => (
           <button
