@@ -209,8 +209,12 @@ export default function EventDetailPage() {
       <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1">
         {(
           event.status === 'planning'
-            ? (['details', 'recommend', 'vote', 'feedback'] as Array<'details' | 'recommend' | 'vote' | 'feedback'>)
-            : (['details', 'vote', 'feedback'] as Array<'details' | 'recommend' | 'vote' | 'feedback'>)
+            ? (['details', 'recommend', 'feedback'] as Array<
+                'details' | 'recommend' | 'feedback'
+              >)
+            : (['details', 'vote', 'feedback'] as Array<
+                'details' | 'recommend' | 'vote' | 'feedback'
+              >)
         ).map((t) => (
           <button
             key={t}
@@ -219,7 +223,13 @@ export default function EventDetailPage() {
               tab === t ? 'bg-white shadow-sm text-indigo-700' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t === 'details' ? 'Attendees' : t === 'recommend' ? 'Recommendations' : t === 'vote' ? 'Voting' : 'Feedback'}
+            {t === 'details'
+              ? 'Attendees'
+              : t === 'recommend'
+                ? 'Recommendations'
+                : t === 'vote'
+                  ? 'Voting'
+                  : 'Feedback'}
           </button>
         ))}
       </div>
