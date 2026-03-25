@@ -15,16 +15,20 @@ jobs:
         env:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         run: |
-          if [ -n "${VERCEL_DEPLOY_HOOK_URL}" ]; then
-            curl -fsS -X POST "${VERCEL_DEPLOY_HOOK_URL}"
+          # Some secrets may contain accidental whitespace/newlines; remove them to keep curl happy.
+          VERCEL_HOOK_URL="$(echo "${VERCEL_DEPLOY_HOOK_URL}" | tr -d '[:space:]')"
+          if [ -n "${VERCEL_HOOK_URL}" ]; then
+            curl -fsS -X POST "${VERCEL_HOOK_URL}"
           fi
 
       - name: Trigger backend deploy (Render)
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          if [ -n "${RENDER_DEPLOY_HOOK_URL}" ]; then
-            curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}"
+          # Some secrets may contain accidental whitespace/newlines; remove them to keep curl happy.
+          RENDER_HOOK_URL="$(echo "${RENDER_DEPLOY_HOOK_URL}" | tr -d '[:space:]')"
+          if [ -n "${RENDER_HOOK_URL}" ]; then
+            curl -fsS -X POST "${RENDER_HOOK_URL}"
           fi
 
       - name: Fail when hooks are missing
@@ -32,7 +36,9 @@ jobs:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          if [ -z "${VERCEL_DEPLOY_HOOK_URL}" ] && [ -z "${RENDER_DEPLOY_HOOK_URL}" ]; then
+          VERCEL_HOOK_URL="$(echo "${VERCEL_DEPLOY_HOOK_URL}" | tr -d '[:space:]')"
+          RENDER_HOOK_URL="$(echo "${RENDER_DEPLOY_HOOK_URL}" | tr -d '[:space:]')"
+          if [ -z "${VERCEL_HOOK_URL}" ] && [ -z "${RENDER_HOOK_URL}" ]; then
             echo "No deploy hooks configured."
             echo "Set VERCEL_DEPLOY_HOOK_URL and/or RENDER_DEPLOY_HOOK_URL in GitHub repo secrets."
             exit 1
