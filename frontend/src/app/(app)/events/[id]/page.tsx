@@ -659,12 +659,40 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
           <div className="space-y-2">
             {results.map((r, idx) => {
               const game = gameMap.get(r.gameId);
+              const bggUrl =
+                game?.bggId != null
+                  ? `https://boardgamegeek.com/boardgame/${game.bggId}`
+                  : undefined;
               return (
-                <div key={r.gameId} className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3">
+                <div
+                  key={r.gameId}
+                  className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3"
+                >
                   <span className={`text-lg font-bold w-8 text-center ${idx === 0 ? 'text-yellow-500' : 'text-gray-400'}`}>
                     {idx === 0 ? '🏆' : `#${idx + 1}`}
                   </span>
-                  <span className="flex-1 font-medium">{game?.title || r.gameId}</span>
+                  {game?.thumbnailUrl ? (
+                    <img
+                      src={game.thumbnailUrl}
+                      alt={game.title}
+                      className="w-10 h-10 object-cover rounded flex-shrink-0"
+                    />
+                  ) : null}
+                  {bggUrl ? (
+                    <a
+                      href={bggUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 font-medium truncate hover:underline"
+                      title="Open on BoardGameGeek"
+                    >
+                      {game?.title || r.gameId}
+                    </a>
+                  ) : (
+                    <span className="flex-1 font-medium truncate">
+                      {game?.title || r.gameId}
+                    </span>
+                  )}
                   <span className="text-sm text-gray-500">{r.totalScore} pts · {r.voteCount} votes</span>
                   {isHost && (
                     <button onClick={() => onSelectWinner(r.gameId)} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition">
