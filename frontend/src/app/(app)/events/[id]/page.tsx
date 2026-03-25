@@ -82,6 +82,13 @@ export default function EventDetailPage() {
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const date = new Date(event.dateTime);
+  const formatDurationMinutes = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h${m}m`;
+  };
 
   const handleRsvp = async (status: string) => {
     try {
@@ -159,7 +166,9 @@ export default function EventDetailPage() {
 
         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
           {event.location && <span>📍 {event.location}</span>}
-          {event.durationMinutes && <span>⏱ {event.durationMinutes} min</span>}
+          {event.durationMinutes && (
+            <span>⏱ {formatDurationMinutes(event.durationMinutes)}</span>
+          )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
           <span>{event.type === 'open' ? '🌐 Open' : '🔒 Invite only'}</span>
         </div>

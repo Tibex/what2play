@@ -81,6 +81,14 @@ function EventCard({ event }: { event: GameEvent }) {
   const isPast = date < new Date();
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
 
+  const formatDurationMinutes = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h${m}m`;
+  };
+
   const statusColors: Record<string, string> = {
     planning: 'bg-yellow-100 text-yellow-700',
     voting: 'bg-blue-100 text-blue-700',
@@ -107,7 +115,9 @@ function EventCard({ event }: { event: GameEvent }) {
         {event.location && <p className="text-sm text-gray-500 mt-1">{event.location}</p>}
         <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
           <span>{attendeeCount} going</span>
-          {event.durationMinutes && <span>{event.durationMinutes} min</span>}
+          {event.durationMinutes && (
+            <span>{formatDurationMinutes(event.durationMinutes)}</span>
+          )}
           <span className={event.type === 'open' ? 'text-green-600' : 'text-gray-400'}>
             {event.type === 'open' ? 'Open' : 'Invite only'}
           </span>
