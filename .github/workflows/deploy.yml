@@ -12,17 +12,29 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Trigger frontend deploy (Vercel)
-        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
-        run: curl -fsS -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "${VERCEL_DEPLOY_HOOK_URL}" ]; then
+            curl -fsS -X POST "${VERCEL_DEPLOY_HOOK_URL}"
+          fi
 
       - name: Trigger backend deploy (Render)
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
-        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "${RENDER_DEPLOY_HOOK_URL}" ]; then
+            curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}"
+          fi
 
       - name: Fail when hooks are missing
-        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL == '' && secrets.RENDER_DEPLOY_HOOK_URL == '' }}
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          echo "No deploy hooks configured."
-          echo "Set VERCEL_DEPLOY_HOOK_URL and/or RENDER_DEPLOY_HOOK_URL in GitHub repo secrets."
-          exit 1
+          if [ -z "${VERCEL_DEPLOY_HOOK_URL}" ] && [ -z "${RENDER_DEPLOY_HOOK_URL}" ]; then
+            echo "No deploy hooks configured."
+            echo "Set VERCEL_DEPLOY_HOOK_URL and/or RENDER_DEPLOY_HOOK_URL in GitHub repo secrets."
+            exit 1
+          fi
 
