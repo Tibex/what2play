@@ -240,7 +240,6 @@ export default function EventDetailPage() {
         <RecommendationsSection
           eventId={id}
           candidates={candidates}
-          isHost={isHost}
           isPlanning={event.status === 'planning'}
           onChanged={loadEvent}
         />
@@ -304,13 +303,11 @@ function AttendeesSection({ attendees }: { attendees: GameEvent['attendees'] }) 
 function RecommendationsSection({
   eventId,
   candidates,
-  isHost,
   isPlanning,
   onChanged,
 }: {
   eventId: string;
   candidates: EventGameCandidate[];
-  isHost: boolean;
   isPlanning: boolean;
   onChanged: () => void;
 }) {
@@ -357,7 +354,7 @@ function RecommendationsSection({
 
   return (
     <div className="space-y-6">
-      {isHost && isPlanning && (
+      {isPlanning && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Add a game manually</h3>
           <div className="flex gap-2">
@@ -417,7 +414,7 @@ function RecommendationsSection({
               showScore={Number(c.score)}
               bggUrl={c.game.bggId ? `https://boardgamegeek.com/boardgame/${c.game.bggId}` : undefined}
               actions={
-                isHost && isPlanning ? (
+                isPlanning ? (
                   <button
                     onClick={() => handleRemove(c.id)}
                     disabled={removing === c.id}
