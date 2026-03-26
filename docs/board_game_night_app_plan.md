@@ -70,7 +70,8 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - Post-event feedback loop
   - Quick survey for attendees: enjoyment rating + did you finish at least one game?
   - Persist outcomes and feed recommendation weights for future events
-  - Session timer logging (setup/gameplay/total duration) to improve time-fit predictions
+  - V1 session timer logging with two taps (`Start night` / `End night`) to capture total duration
+  - Optional manual time fix fallback when host forgets to start/end
 
 ## Suggested Additional Features (High Value)
 
@@ -105,9 +106,10 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - `users`, `friendships`
 - `games`, `user_game_ownership`, `user_game_ratings`
 - `events`, `event_attendees`, `event_invites`
+- `events` stores canonical UTC start time plus `event_timezone` for consistent local rendering
 - `event_game_candidates`, `event_votes`, `event_selected_game`
 - `event_feedback` (enjoyment, finished_game, notes)
-- `session_timings` (event_id, game_id, player_count, setup_minutes, gameplay_minutes, total_minutes, completed)
+- `session_timings` (historical game-level timing samples) + event-level V1 timer fields (started_at, ended_at, total_minutes, source)
 - `sync_accounts` (BoardGameGeek linkage and sync metadata)
 - `bgg_verification_challenges` (challenge token, status, expiry, verified_at)
 

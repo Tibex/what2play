@@ -12,6 +12,11 @@ import { EventAttendee } from '../entities/event-attendee.entity';
 import { EventInvite } from '../entities/event-invite.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { ManualSessionTimingDto } from './dto/manual-session-timing.dto';
+import {
+  resolveEventDateTime,
+  resolveEventTimezone,
+} from './timezone.utils';
 
 @Injectable()
 export class EventsService {
@@ -25,7 +30,14 @@ export class EventsService {
   ) {}
 
   async create(hostId: string, dto: CreateEventDto): Promise<Event> {
-    const event = this.eventsRepo.create({ ...dto, hostId });
+    const eventTimezone = resolveEventTimezone(dto.eventTimezone);
+    const dateTime = resolveEventDateTime(dto.dateTime, eventTimezone);
+    const event = this.eventsRepo.create({
+      ...dto,
+      hostId,
+      dateTime,
+      eventTimezone,
+    });
     const saved = await this.eventsRepo.save(event);
 
     await this.attendeesRepo.save(
@@ -81,9 +93,89 @@ export class EventsService {
     const event = await this.findById(id);
     if (event.hostId !== userId)
       throw new ForbiddenException('Only host can update');
-    Object.assign(event, dto);
+    if (dto.eventTimezone !== undefined) {
+      event.eventTimezone = resolveEventTimezone(dto.eventTimezone);
+    }
+    if (dto.dateTime !== undefined) {
+      event.dateTime = resolveEventDateTime(
+        dto.dateTime,
+        event.eventTimezone ?? 'UTC',
+      );
+    }
+    if (dto.votingDeadline !== undefined) {
+      event.votingDeadline = new Date(dto.votingDeadline);
+    }
+    Object.assign(event, {
+      ...dto,
+      dateTime: event.dateTime,
+      eventTimezone: event.eventTimezone,
+      votingDeadline: event.votingDeadline,
+    });
     await this.eventsRepo.save(event);
     return this.findById(id);
+  }
+
+  async startSession(eventId: string, userId: string): Promise<Event> {
+    const event = await this.findById(eventId);
+    if (event.hostId !== userId) {
+      throw new ForbiddenException('Only host can start session timer');
+    }
+    if (!event.sessionStartedAt) {
+      event.sessionStartedAt = new Date();
+      event.sessionTimingSource = 'timer';
+    }
+    await this.eventsRepo.save(event);
+    return this.findById(eventId);
+  }
+
+  async endSession(eventId: string, userId: string): Promise<Event> {
+    const event = await this.findById(eventId);
+    if (event.hostId !== userId) {
+      throw new ForbiddenException('Only host can end session timer');
+    }
+    if (!event.sessionStartedAt) {
+      throw new BadRequestException('Session timer has not been started');
+    }
+    if (event.sessionEndedAt) {
+      throw new BadRequestException('Session timer already ended');
+    }
+
+    event.sessionEndedAt = new Date();
+    const diffMs =
+      event.sessionEndedAt.getTime() - event.sessionStartedAt.getTime();
+    event.sessionTotalMinutes = Math.max(0, Math.round(diffMs / 60000));
+    event.sessionTimingSource = 'timer';
+    await this.eventsRepo.save(event);
+    return this.findById(eventId);
+  }
+
+  async setManualSessionTiming(
+    eventId: string,
+    userId: string,
+    dto: ManualSessionTimingDto,
+  ): Promise<Event> {
+    const event = await this.findById(eventId);
+    if (event.hostId !== userId) {
+      throw new ForbiddenException('Only host can edit session timing');
+    }
+
+    const startedAt = resolveEventDateTime(
+      dto.startedAt,
+      event.eventTimezone ?? 'UTC',
+    );
+    const endedAt = resolveEventDateTime(dto.endedAt, event.eventTimezone ?? 'UTC');
+    if (endedAt.getTime() < startedAt.getTime()) {
+      throw new BadRequestException('endedAt must be after startedAt');
+    }
+
+    event.sessionStartedAt = startedAt;
+    event.sessionEndedAt = endedAt;
+    event.sessionTotalMinutes = Math.round(
+      (endedAt.getTime() - startedAt.getTime()) / 60000,
+    );
+    event.sessionTimingSource = 'manual';
+    await this.eventsRepo.save(event);
+    return this.findById(eventId);
   }
 
   async rsvp(

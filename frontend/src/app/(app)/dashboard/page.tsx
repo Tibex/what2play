@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { formatEventDateTime } from '@/lib/datetime';
 import type { GameEvent } from '@/lib/types';
 
 export default function DashboardPage() {
@@ -78,6 +79,8 @@ export default function DashboardPage() {
 
 function EventCard({ event }: { event: GameEvent }) {
   const date = new Date(event.dateTime);
+  const timeZone = event.eventTimezone || 'UTC';
+  const formatted = formatEventDateTime(event.dateTime, timeZone);
   const isPast = date < new Date();
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
 
@@ -108,9 +111,11 @@ function EventCard({ event }: { event: GameEvent }) {
           </span>
         </div>
         <p className="text-sm text-gray-500">
-          {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+          {formatted.date}
           {' · '}
-          {date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          {formatted.time}
+          {' · '}
+          {timeZone}
         </p>
         {event.location && <p className="text-sm text-gray-500 mt-1">{event.location}</p>}
         <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">

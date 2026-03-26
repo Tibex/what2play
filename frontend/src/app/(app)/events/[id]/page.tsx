@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { buildPlayedGamesPayload } from '@/lib/feedback';
+import { formatEventDateTime, toDateTimeLocalInTimeZone } from '@/lib/datetime';
 import GameCard from '@/components/GameCard';
 import type {
   Game,
@@ -34,6 +35,10 @@ export default function EventDetailPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [nowTs] = useState(() => Date.now());
+  const [showTimingFixModal, setShowTimingFixModal] = useState(false);
+  const [manualStartTime, setManualStartTime] = useState('');
+  const [manualEndTime, setManualEndTime] = useState('');
+  const [savingManualTiming, setSavingManualTiming] = useState(false);
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -73,7 +78,8 @@ export default function EventDetailPage() {
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const isPlanning = event.status === 'planning';
   const rsvpLocked = event.status !== 'planning';
-  const date = new Date(event.dateTime);
+  const eventTimeZone = event.eventTimezone || 'UTC';
+  const formattedEventDateTime = formatEventDateTime(event.dateTime, eventTimeZone);
   const eventEndsAt =
     new Date(event.dateTime).getTime() +
     (event.durationMinutes ?? 0) * 60_000;
@@ -155,6 +161,71 @@ export default function EventDetailPage() {
     } catch { /* toast auto-shown */ }
   };
 
+  const handleStartSession = async () => {
+    try {
+      await api.post(`/events/${id}/session/start`);
+      toast.success('Session started');
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const handleEndSession = async () => {
+    try {
+      await api.post(`/events/${id}/session/end`);
+      toast.success('Session ended');
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const handleManualTimingFix = async () => {
+    if (!manualStartTime || !manualEndTime) {
+      toast.error('Please provide both start and end time');
+      return;
+    }
+    if (manualEndTime < manualStartTime) {
+      toast.error('End time must be after start time');
+      return;
+    }
+
+    setSavingManualTiming(true);
+    try {
+      await api.patch(`/events/${id}/session`, {
+        startedAt: manualStartTime,
+        endedAt: manualEndTime,
+      });
+      toast.success('Session timing updated');
+      setShowTimingFixModal(false);
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setSavingManualTiming(false);
+    }
+  };
+
+  const openTimingFixModal = () => {
+    const fallbackStart = toDateTimeLocalInTimeZone(event.dateTime, eventTimeZone);
+    const fallbackEnd = toDateTimeLocalInTimeZone(
+      new Date(eventEndsAt).toISOString(),
+      eventTimeZone,
+    );
+    setManualStartTime(
+      event.sessionStartedAt
+        ? toDateTimeLocalInTimeZone(event.sessionStartedAt, eventTimeZone)
+        : fallbackStart,
+    );
+    setManualEndTime(
+      event.sessionEndedAt
+        ? toDateTimeLocalInTimeZone(event.sessionEndedAt, eventTimeZone)
+        : fallbackEnd,
+    );
+    setShowTimingFixModal(true);
+  };
+
   return (
     <div>
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
@@ -164,9 +235,11 @@ export default function EventDetailPage() {
             <p className="text-gray-500 mt-1">
               Hosted by {event.host?.name || 'Unknown'}
               {' · '}
-              {date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {formattedEventDateTime.date}
               {' at '}
-              {date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              {formattedEventDateTime.time}
+              {' · '}
+              {eventTimeZone}
             </p>
           </div>
           <StatusBadge status={event.status} />
@@ -178,6 +251,9 @@ export default function EventDetailPage() {
           {event.location && <span>📍 {event.location}</span>}
           {event.durationMinutes && (
             <span>⏱ {formatDurationMinutes(event.durationMinutes)}</span>
+          )}
+          {event.sessionTotalMinutes != null && (
+            <span>🕒 Session lasted {formatDurationMinutes(event.sessionTotalMinutes)}</span>
           )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
           <span>{event.type === 'open' ? '🌐 Open' : '🔒 Invite only'}</span>
@@ -235,6 +311,23 @@ export default function EventDetailPage() {
               <button onClick={handleDelete} className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-200 transition">
                 Delete Event
               </button>
+              {event.status === 'confirmed' && !event.sessionStartedAt && (
+                <button onClick={handleStartSession} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+                  Start night
+                </button>
+              )}
+              {event.status === 'confirmed' &&
+                event.sessionStartedAt &&
+                !event.sessionEndedAt && (
+                <button onClick={handleEndSession} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition">
+                  End night
+                </button>
+              )}
+              {event.status === 'confirmed' && (
+                <button onClick={openTimingFixModal} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                  Fix time
+                </button>
+              )}
             </>
           )}
         </div>
@@ -285,6 +378,60 @@ export default function EventDetailPage() {
           />
         )}
       </div>
+
+      {showTimingFixModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Fix session time</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Enter local event times in {eventTimeZone}.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="manual-start-time" className="block text-sm font-medium text-gray-700 mb-1">
+                Start time
+              </label>
+              <input
+                id="manual-start-time"
+                type="datetime-local"
+                value={manualStartTime}
+                onChange={(e) => setManualStartTime(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="manual-end-time" className="block text-sm font-medium text-gray-700 mb-1">
+                End time
+              </label>
+              <input
+                id="manual-end-time"
+                type="datetime-local"
+                value={manualEndTime}
+                onChange={(e) => setManualEndTime(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowTimingFixModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleManualTimingFix}
+                disabled={savingManualTiming}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {savingManualTiming ? 'Saving...' : 'Save time'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

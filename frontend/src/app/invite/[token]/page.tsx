@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PENDING_INVITE_STORAGE_KEY } from '@/lib/auth-flow';
+import { formatEventDateTime } from '@/lib/datetime';
 import type { GameEvent } from '@/lib/types';
 
 export default function InvitePage() {
@@ -60,7 +61,8 @@ export default function InvitePage() {
 
   if (!event) return null;
 
-  const date = new Date(event.dateTime);
+  const timeZone = event.eventTimezone || 'UTC';
+  const formatted = formatEventDateTime(event.dateTime, timeZone);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -69,9 +71,11 @@ export default function InvitePage() {
         <h1 className="text-2xl font-bold mb-2">You&apos;re Invited!</h1>
         <h2 className="text-xl font-semibold text-indigo-700 mb-4">{event.title}</h2>
         <p className="text-gray-600 mb-1">
-          {date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          {formatted.date}
           {' at '}
-          {date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          {formatted.time}
+          {' · '}
+          {timeZone}
         </p>
         {event.location && <p className="text-gray-500 text-sm mb-1">{event.location}</p>}
         {event.description && <p className="text-gray-500 text-sm mt-3">{event.description}</p>}

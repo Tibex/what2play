@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/swagger';
 import { CreateEventDto } from './create-event.dto';
-import { IsOptional, IsDateString, IsString, IsIn } from 'class-validator';
+import { IsOptional, IsISO8601, IsString, IsIn } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateEventDto extends PartialType(CreateEventDto) {
@@ -20,7 +20,7 @@ export class UpdateEventDto extends PartialType(CreateEventDto) {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsDateString()
+  @IsISO8601()
   votingDeadline?: string;
 
   @ApiPropertyOptional()

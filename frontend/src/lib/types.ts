@@ -70,6 +70,7 @@ export interface GameEvent {
   title: string;
   description?: string;
   dateTime: string;
+  eventTimezone: string;
   durationMinutes?: number;
   location?: string;
   capacity?: number;
@@ -78,6 +79,10 @@ export interface GameEvent {
   votingDeadline?: string;
   selectedGameId?: string;
   discoveryMode: boolean;
+  sessionStartedAt?: string;
+  sessionEndedAt?: string;
+  sessionTotalMinutes?: number;
+  sessionTimingSource?: string;
   attendees: EventAttendee[];
   candidates: EventGameCandidate[];
   createdAt: string;

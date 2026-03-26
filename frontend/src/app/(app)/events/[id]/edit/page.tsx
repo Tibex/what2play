@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import EventForm, { type EventFormData } from '@/components/EventForm';
 import type { GameEvent } from '@/lib/types';
+import { toDateTimeLocalInTimeZone } from '@/lib/datetime';
 
 export default function EditEventPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,14 +39,14 @@ export default function EditEventPage() {
     );
   }
 
-  const dt = new Date(event.dateTime);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const localDateTime = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  const eventTimeZone = event.eventTimezone || 'UTC';
+  const localDateTime = toDateTimeLocalInTimeZone(event.dateTime, eventTimeZone);
 
   const initial: EventFormData = {
     title: event.title,
     description: event.description || '',
     dateTime: localDateTime,
+    eventTimezone: eventTimeZone,
     durationMinutes: event.durationMinutes || 180,
     location: event.location || '',
     capacity: event.capacity || 8,

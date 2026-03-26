@@ -1,7 +1,7 @@
 import {
   IsString,
   IsOptional,
-  IsDateString,
+  IsISO8601,
   IsNumber,
   IsBoolean,
   IsIn,
@@ -19,8 +19,16 @@ export class CreateEventDto {
   description?: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsISO8601({ strict: false })
   dateTime: string;
+
+  @ApiPropertyOptional({
+    description: 'IANA timezone used to interpret local dateTime values',
+    example: 'Europe/Budapest',
+  })
+  @IsOptional()
+  @IsString()
+  eventTimezone?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -6,6 +6,7 @@ export interface EventFormData {
   title: string;
   description: string;
   dateTime: string;
+  eventTimezone: string;
   durationMinutes: number;
   location: string;
   capacity: number;
@@ -78,6 +79,20 @@ export default function EventForm({
             className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
           />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Time zone</label>
+          <input
+            type="text"
+            value={form.eventTimezone}
+            onChange={(e) => setForm({ ...form, eventTimezone: e.target.value })}
+            required
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            placeholder="Europe/Budapest"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
           <input

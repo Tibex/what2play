@@ -10,11 +10,15 @@ export default function NewEventPage() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(19, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const localDateTime = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T${pad(tomorrow.getHours())}:${pad(tomorrow.getMinutes())}`;
+  const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
   const initial: EventFormData = {
     title: '',
     description: '',
-    dateTime: tomorrow.toISOString().slice(0, 16),
+    dateTime: localDateTime,
+    eventTimezone: browserTimeZone,
     durationMinutes: 180,
     location: '',
     capacity: 8,

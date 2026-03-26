@@ -35,6 +35,9 @@ export class Event {
   @Column({ type: 'timestamptz' })
   dateTime: Date;
 
+  @Column({ default: 'UTC' })
+  eventTimezone: string;
+
   @Column({ nullable: true })
   durationMinutes: number;
 
@@ -58,6 +61,18 @@ export class Event {
 
   @Column({ default: false })
   discoveryMode: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  sessionStartedAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  sessionEndedAt: Date;
+
+  @Column({ nullable: true })
+  sessionTotalMinutes: number;
+
+  @Column({ nullable: true })
+  sessionTimingSource: string;
 
   @Column({ type: 'simple-json', nullable: true })
   excludedGameIds: string[];

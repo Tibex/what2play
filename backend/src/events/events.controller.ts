@@ -20,6 +20,7 @@ import { FeedbackService } from '../feedback/feedback.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
+import { ManualSessionTimingDto } from './dto/manual-session-timing.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -133,6 +134,34 @@ export class EventsController {
   @ApiOperation({ summary: 'Delete event' })
   delete(@Param('id') id: string, @Request() req) {
     return this.eventsService.delete(id, req.user.id);
+  }
+
+  @Post(':id/session/start')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Start session timer (host only)' })
+  startSession(@Param('id') id: string, @Request() req) {
+    return this.eventsService.startSession(id, req.user.id);
+  }
+
+  @Post(':id/session/end')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'End session timer (host only)' })
+  endSession(@Param('id') id: string, @Request() req) {
+    return this.eventsService.endSession(id, req.user.id);
+  }
+
+  @Patch(':id/session')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set manual session timing (host only)' })
+  setManualSessionTiming(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: ManualSessionTimingDto,
+  ) {
+    return this.eventsService.setManualSessionTiming(id, req.user.id, dto);
   }
 
   @Delete(':id/attendees/:attendeeId')
