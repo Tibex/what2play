@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Event } from '../entities/event.entity';
@@ -12,7 +12,7 @@ import { VotingModule } from '../voting/voting.module';
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([Event, EventVote, NotificationDelivery]),
-    VotingModule,
+    forwardRef(() => VotingModule),
   ],
   providers: [NotificationsService, NotificationDeliveryService],
   exports: [NotificationsService],

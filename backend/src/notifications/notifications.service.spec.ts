@@ -92,4 +92,29 @@ describe('NotificationsService', () => {
       }),
     );
   });
+
+  it('sends all-voted notifications to going attendees', async () => {
+    mockEventsRepo.findOne = jest.fn().mockResolvedValue({
+      id: 'e3',
+      title: 'Sunday session',
+      votingDeadline: new Date(Date.now() + 30 * 60 * 1000),
+      attendees: [
+        {
+          userId: 'u7',
+          rsvpStatus: 'going',
+          user: { email: 'allvoted@example.com', name: 'All Voted' },
+        },
+      ],
+    });
+
+    await service.sendAllVotedNotification('e3');
+
+    expect(mockDeliveryService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'e3',
+        type: 'all_voted',
+        recipientCount: 1,
+      }),
+    );
+  });
 });

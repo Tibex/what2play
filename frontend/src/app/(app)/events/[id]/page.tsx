@@ -326,10 +326,11 @@ function AttendeesSection({
                   <button
                     type="button"
                     onClick={() => onRemove(a.id)}
-                    className="text-xs text-red-600 hover:text-red-700"
+                    className="text-sm font-bold leading-none text-red-600 hover:text-red-700"
                     title="Remove attendee"
+                    aria-label="Remove attendee"
                   >
-                    Remove
+                    ×
                   </button>
                 )}
               </span>
