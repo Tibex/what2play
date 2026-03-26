@@ -33,7 +33,8 @@ function formatInTimeZoneParts(date: Date, timeZone: string) {
     minute: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(date);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value);
   return {
     year: get('year'),
     month: get('month'),
@@ -76,7 +77,10 @@ function localDateTimeToUtc(localDateTime: string, timeZone: string): Date {
   return new Date(utcMillis);
 }
 
-export function resolveEventDateTime(input: string, eventTimezone?: string): Date {
+export function resolveEventDateTime(
+  input: string,
+  eventTimezone?: string,
+): Date {
   if (LOCAL_DATETIME_REGEX.test(input)) {
     if (!eventTimezone) {
       throw new BadRequestException(

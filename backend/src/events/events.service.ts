@@ -13,10 +13,7 @@ import { EventInvite } from '../entities/event-invite.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ManualSessionTimingDto } from './dto/manual-session-timing.dto';
-import {
-  resolveEventDateTime,
-  resolveEventTimezone,
-} from './timezone.utils';
+import { resolveEventDateTime, resolveEventTimezone } from './timezone.utils';
 
 @Injectable()
 export class EventsService {
@@ -163,7 +160,10 @@ export class EventsService {
       dto.startedAt,
       event.eventTimezone ?? 'UTC',
     );
-    const endedAt = resolveEventDateTime(dto.endedAt, event.eventTimezone ?? 'UTC');
+    const endedAt = resolveEventDateTime(
+      dto.endedAt,
+      event.eventTimezone ?? 'UTC',
+    );
     if (endedAt.getTime() < startedAt.getTime()) {
       throw new BadRequestException('endedAt must be after startedAt');
     }
