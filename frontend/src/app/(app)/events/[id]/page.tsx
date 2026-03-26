@@ -357,7 +357,7 @@ export default function EventDetailPage() {
             defaultGameId={event.selectedGameId}
             isHost={isHost}
           />
-        ) : event.status === 'voting' ? (
+        ) : event.status === 'voting' || event.status === 'confirmed' ? (
           <VotingSection
             eventId={id}
             candidates={candidates}
