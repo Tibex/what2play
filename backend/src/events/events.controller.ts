@@ -23,9 +23,9 @@ import { RsvpDto } from './dto/rsvp.dto';
 @Controller('api/events')
 export class EventsController {
   constructor(
-    private eventsService: EventsService,
+    private readonly eventsService: EventsService,
     @Inject(forwardRef(() => RecommendationsService))
-    private recommendationsService: RecommendationsService,
+    private readonly recommendationsService: RecommendationsService,
   ) {}
 
   @Post()
@@ -116,5 +116,27 @@ export class EventsController {
   @ApiOperation({ summary: 'Delete event' })
   delete(@Param('id') id: string, @Request() req) {
     return this.eventsService.delete(id, req.user.id);
+  }
+
+  @Delete(':id/attendees/:attendeeId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove attendee from event (host only)' })
+  async removeAttendee(
+    @Param('id') id: string,
+    @Param('attendeeId') attendeeId: string,
+    @Request() req,
+  ) {
+    const goingBefore = await this.eventsService.getAttendeeUserIds(id);
+    await this.eventsService.removeAttendee(id, req.user.id, attendeeId);
+    const goingAfter = await this.eventsService.getAttendeeUserIds(id);
+
+    if (goingBefore.length !== goingAfter.length) {
+      this.recommendationsService.generateCandidates(id).catch(() => {
+        /* non-critical */
+      });
+    }
+
+    return { ok: true };
   }
 }

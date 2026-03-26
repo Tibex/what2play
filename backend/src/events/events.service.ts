@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,11 +17,11 @@ import { UpdateEventDto } from './dto/update-event.dto';
 export class EventsService {
   constructor(
     @InjectRepository(Event)
-    private eventsRepo: Repository<Event>,
+    private readonly eventsRepo: Repository<Event>,
     @InjectRepository(EventAttendee)
-    private attendeesRepo: Repository<EventAttendee>,
+    private readonly attendeesRepo: Repository<EventAttendee>,
     @InjectRepository(EventInvite)
-    private invitesRepo: Repository<EventInvite>,
+    private readonly invitesRepo: Repository<EventInvite>,
   ) {}
 
   async create(hostId: string, dto: CreateEventDto): Promise<Event> {
@@ -90,6 +91,14 @@ export class EventsService {
     userId: string,
     status: string,
   ): Promise<EventAttendee> {
+    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.status !== 'planning') {
+      throw new BadRequestException(
+        'RSVP cannot be changed after voting has started',
+      );
+    }
+
     let attendee = await this.attendeesRepo.findOne({
       where: { eventId, userId },
     });
@@ -110,6 +119,14 @@ export class EventsService {
     guestName: string,
     status: string,
   ): Promise<EventAttendee> {
+    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.status !== 'planning') {
+      throw new BadRequestException(
+        'RSVP cannot be changed after voting has started',
+      );
+    }
+
     const attendee = this.attendeesRepo.create({
       eventId,
       guestName,
@@ -155,5 +172,27 @@ export class EventsService {
     if (event.hostId !== userId)
       throw new ForbiddenException('Only host can delete');
     await this.eventsRepo.remove(event);
+  }
+
+  async removeAttendee(
+    eventId: string,
+    hostUserId: string,
+    attendeeId: string,
+  ): Promise<void> {
+    const event = await this.findById(eventId);
+    if (event.hostId !== hostUserId) {
+      throw new ForbiddenException('Only host can remove attendees');
+    }
+
+    const attendee = await this.attendeesRepo.findOne({
+      where: { id: attendeeId, eventId },
+    });
+    if (!attendee) throw new NotFoundException('Attendee not found');
+
+    if (attendee.userId === event.hostId) {
+      throw new BadRequestException('Host cannot be removed from event');
+    }
+
+    await this.attendeesRepo.remove(attendee);
   }
 }

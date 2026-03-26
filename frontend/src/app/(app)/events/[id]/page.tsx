@@ -70,6 +70,7 @@ export default function EventDetailPage() {
   const isHost = user?.id === event.hostId;
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
+  const rsvpLocked = event.status !== 'planning';
   const date = new Date(event.dateTime);
   const eventEndsAt =
     new Date(event.dateTime).getTime() +
@@ -84,11 +85,27 @@ export default function EventDetailPage() {
   };
 
   const handleRsvp = async (status: string) => {
+    if (rsvpLocked) {
+      toast.error('RSVP is locked after voting starts');
+      return;
+    }
     try {
       await api.post(`/events/${id}/rsvp`, { status });
       toast.success(`RSVP updated to ${status}`);
       loadEvent();
     } catch { /* toast auto-shown */ }
+  };
+
+  const handleRemoveAttendee = async (attendeeId: string) => {
+    if (!isHost) return;
+    if (!confirm('Remove this attendee from the event?')) return;
+    try {
+      await api.delete(`/events/${id}/attendees/${attendeeId}`);
+      toast.success('Attendee removed');
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
   };
 
   const handleGenerateRecommendations = async () => {
@@ -165,24 +182,34 @@ export default function EventDetailPage() {
         </div>
 
         <div className="mb-4">
-          <AttendeesSection attendees={event.attendees} />
+          <AttendeesSection
+            attendees={event.attendees}
+            isHost={isHost}
+            hostUserId={event.hostId}
+            onRemove={handleRemoveAttendee}
+          />
         </div>
 
         <div className="flex flex-wrap gap-2">
           {!myAttendee && (
-            <button onClick={() => handleRsvp('going')} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition">
+            <button onClick={() => handleRsvp('going')} disabled={rsvpLocked} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
               Join
             </button>
           )}
           {myAttendee && myAttendee.rsvpStatus !== 'going' && (
-            <button onClick={() => handleRsvp('going')} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition">
+            <button onClick={() => handleRsvp('going')} disabled={rsvpLocked} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
               Going
             </button>
           )}
           {myAttendee && myAttendee.rsvpStatus === 'going' && (
-            <button onClick={() => handleRsvp('not_going')} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition">
+            <button onClick={() => handleRsvp('not_going')} disabled={rsvpLocked} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition">
               Can&apos;t make it
             </button>
+          )}
+          {rsvpLocked && (
+            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+              RSVP is locked after voting starts.
+            </span>
           )}
           {isHost && (
             <>
@@ -274,7 +301,17 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`text-xs font-semibold px-3 py-1 rounded-full ${colors[status] || 'bg-gray-100'}`}>{status}</span>;
 }
 
-function AttendeesSection({ attendees }: { attendees: GameEvent['attendees'] }) {
+function AttendeesSection({
+  attendees,
+  isHost,
+  hostUserId,
+  onRemove,
+}: {
+  attendees: GameEvent['attendees'];
+  isHost: boolean;
+  hostUserId: string;
+  onRemove: (attendeeId: string) => void;
+}) {
   const groups = { going: attendees.filter((a) => a.rsvpStatus === 'going'), maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'), not_going: attendees.filter((a) => a.rsvpStatus === 'not_going') };
   const total = groups.going.length + groups.maybe.length + groups.not_going.length;
   if (total === 0) {
@@ -287,8 +324,18 @@ function AttendeesSection({ attendees }: { attendees: GameEvent['attendees'] }) 
           <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">{status.replace('_', ' ')} ({list.length})</h3>
           <div className="flex flex-wrap gap-2">
             {list.map((a) => (
-              <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm">
-                {a.user?.name || a.guestName || 'Guest'}
+              <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm inline-flex items-center gap-2">
+                <span>{a.user?.name || a.guestName || 'Guest'}</span>
+                {isHost && a.userId !== hostUserId && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(a.id)}
+                    className="text-xs text-red-600 hover:text-red-700"
+                    title="Remove attendee"
+                  >
+                    Remove
+                  </button>
+                )}
               </span>
             ))}
           </div>
