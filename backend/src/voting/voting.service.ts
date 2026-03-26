@@ -12,7 +12,7 @@ import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 export interface VoteResult {
   gameId: string;
   totalScore: number;
-  voteCount: number;
+  firstPlaceCount: number;
   averageRank: number;
 }
 
@@ -142,14 +142,21 @@ export class VotingService {
 
     const gameScores = new Map<
       string,
-      { totalScore: number; ranks: number[] }
+      { totalScore: number; ranks: number[]; firstPlaceCount: number }
     >();
 
     for (const vote of validVotes) {
-      const entry = gameScores.get(vote.gameId) || { totalScore: 0, ranks: [] };
+      const entry = gameScores.get(vote.gameId) || {
+        totalScore: 0,
+        ranks: [],
+        firstPlaceCount: 0,
+      };
       const bordaScore = maxRank - vote.rank + 1;
       entry.totalScore += bordaScore;
       entry.ranks.push(vote.rank);
+      if (vote.rank === 1) {
+        entry.firstPlaceCount += 1;
+      }
       gameScores.set(vote.gameId, entry);
     }
 
@@ -158,7 +165,7 @@ export class VotingService {
       results.push({
         gameId,
         totalScore: data.totalScore,
-        voteCount: data.ranks.length,
+        firstPlaceCount: data.firstPlaceCount,
         averageRank: data.ranks.reduce((a, b) => a + b, 0) / data.ranks.length,
       });
     }

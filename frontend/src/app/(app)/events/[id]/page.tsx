@@ -969,7 +969,12 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
                       {game?.title || r.gameId}
                     </span>
                   )}
-                  <span className="text-sm text-gray-500">{r.totalScore} pts · {r.voteCount} votes</span>
+                  <span className="text-sm text-gray-500">
+                    {r.totalScore} pts
+                    {r.firstPlaceCount > 0
+                      ? ` · #1 votes: ${r.firstPlaceCount}`
+                      : ''}
+                  </span>
                   {isHost && (
                     <button onClick={() => onSelectWinner(r.gameId)} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition">
                       Select

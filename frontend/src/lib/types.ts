@@ -126,7 +126,7 @@ export interface EventVote {
 export interface VoteResult {
   gameId: string;
   totalScore: number;
-  voteCount: number;
+  firstPlaceCount: number;
   averageRank: number;
 }
 
