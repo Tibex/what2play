@@ -143,7 +143,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 ## Execution Status Snapshot (Mar 2026)
 
 - Must ship next
-  - Apple social login parity (Google implemented)
   - Live provider expansion beyond webhook-only notifications (email/push channels)
   - Closed-beta validation with real groups and tracked retention metrics
   - Guest vote UX polish (identity continuity and invite-link vote edits)

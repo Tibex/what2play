@@ -17,13 +17,14 @@ import { GoogleAuthGuard } from './google-auth.guard';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { AppleLoginDto } from './dto/apple-login.dto';
 
 @ApiTags('auth')
 @Controller('api/auth')
 export class AuthController {
   constructor(
-    private authService: AuthService,
-    private configService: ConfigService,
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('register')
@@ -45,6 +46,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   refresh(@Body() dto: RefreshDto) {
     return this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Post('apple')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Login/register using Apple identity token' })
+  appleLogin(@Body() dto: AppleLoginDto) {
+    return this.authService.loginWithApple(dto.identityToken, dto.name);
   }
 
   @Get('google')

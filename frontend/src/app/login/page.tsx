@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { redirectPathAfterAuth } from '@/lib/auth-flow';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
+import AppleSignInButton from '@/components/AppleSignInButton';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -16,23 +17,25 @@ export default function LoginPage() {
   const { login } = useAuthStore();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    try {
-      const data = await api.post<{
-        user: { id: string; email: string; name: string; avatarUrl?: string; subscriptionTier: string };
-        accessToken: string;
-        refreshToken: string;
-      }>('/auth/login', { email, password });
-      login(data.user, data.accessToken, data.refreshToken);
-      router.push(redirectPathAfterAuth());
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      setLoading(false);
-    }
+    void (async () => {
+      try {
+        const data = await api.post<{
+          user: { id: string; email: string; name: string; avatarUrl?: string; subscriptionTier: string };
+          accessToken: string;
+          refreshToken: string;
+        }>('/auth/login', { email, password });
+        login(data.user, data.accessToken, data.refreshToken);
+        router.push(redirectPathAfterAuth());
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Login failed');
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   return (
@@ -47,8 +50,9 @@ export default function LoginPage() {
             <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
+              id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -58,8 +62,9 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
+              id="login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -86,6 +91,7 @@ export default function LoginPage() {
           </div>
 
           <GoogleSignInButton />
+          <AppleSignInButton />
 
           <p className="text-center text-sm text-gray-500">
             Don&apos;t have an account?{' '}

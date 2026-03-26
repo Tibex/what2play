@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { redirectPathAfterAuth } from '@/lib/auth-flow';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
+import AppleSignInButton from '@/components/AppleSignInButton';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -17,23 +18,25 @@ export default function RegisterPage() {
   const { login } = useAuthStore();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    try {
-      const data = await api.post<{
-        user: { id: string; email: string; name: string; avatarUrl?: string; subscriptionTier: string };
-        accessToken: string;
-        refreshToken: string;
-      }>('/auth/register', { name, email, password });
-      login(data.user, data.accessToken, data.refreshToken);
-      router.push(redirectPathAfterAuth());
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
+    void (async () => {
+      try {
+        const data = await api.post<{
+          user: { id: string; email: string; name: string; avatarUrl?: string; subscriptionTier: string };
+          accessToken: string;
+          refreshToken: string;
+        }>('/auth/register', { name, email, password });
+        login(data.user, data.accessToken, data.refreshToken);
+        router.push(redirectPathAfterAuth());
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Registration failed');
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   return (
@@ -48,8 +51,9 @@ export default function RegisterPage() {
             <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <input
+              id="register-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -59,8 +63,9 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
+              id="register-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -70,8 +75,9 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
+              id="register-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -99,6 +105,7 @@ export default function RegisterPage() {
           </div>
 
           <GoogleSignInButton label="Sign up with Google" />
+          <AppleSignInButton label="Sign up with Apple" />
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}

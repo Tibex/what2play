@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import appleSigninAuth from 'apple-signin-auth';
 import { User } from '../entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 
@@ -15,9 +16,9 @@ import { RegisterDto } from './dto/register.dto';
 export class AuthService {
   constructor(
     @InjectRepository(User)
-    private usersRepo: Repository<User>,
-    private jwtService: JwtService,
-    private configService: ConfigService,
+    private readonly usersRepo: Repository<User>,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -34,11 +35,7 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersRepo.findOne({ where: { email } });
-    if (
-      user &&
-      user.password &&
-      (await bcrypt.compare(password, user.password))
-    ) {
+    if (user?.password && (await bcrypt.compare(password, user.password))) {
       return user;
     }
     return null;
@@ -75,6 +72,64 @@ export class AuthService {
       avatarUrl: profile.avatarUrl,
     });
     return this.usersRepo.save(user);
+  }
+
+  async loginWithApple(identityToken: string, fallbackName?: string) {
+    const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
+    if (!clientId) {
+      throw new UnauthorizedException('Apple login is not configured');
+    }
+
+    let claims: {
+      sub: string;
+      email?: string;
+      email_verified?: string | boolean;
+    };
+    try {
+      claims = (await appleSigninAuth.verifyIdToken(identityToken, {
+        audience: clientId,
+        ignoreExpiration: false,
+      })) as {
+        sub: string;
+        email?: string;
+        email_verified?: string | boolean;
+      };
+    } catch {
+      throw new UnauthorizedException('Invalid Apple identity token');
+    }
+
+    let user = await this.usersRepo.findOne({
+      where: { socialProvider: 'apple', socialId: claims.sub },
+    });
+
+    if (!user && claims.email) {
+      user = await this.usersRepo.findOne({ where: { email: claims.email } });
+    }
+
+    if (!user && !claims.email) {
+      throw new UnauthorizedException(
+        'Apple did not provide an email for this account',
+      );
+    }
+
+    if (user) {
+      user.socialProvider = 'apple';
+      user.socialId = claims.sub;
+      if (!user.name && fallbackName) {
+        user.name = fallbackName.trim();
+      }
+      await this.usersRepo.save(user);
+      return this.generateTokens(user);
+    }
+
+    const created = this.usersRepo.create({
+      email: claims.email!,
+      name: fallbackName?.trim() || 'Apple User',
+      socialProvider: 'apple',
+      socialId: claims.sub,
+    });
+    await this.usersRepo.save(created);
+    return this.generateTokens(created);
   }
 
   async refreshToken(refreshToken: string) {
