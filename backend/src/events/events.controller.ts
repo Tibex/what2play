@@ -17,10 +17,13 @@ import { EventsService } from './events.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FeedbackService } from '../feedback/feedback.service';
+import { VotingService } from '../voting/voting.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
+import { GuestRsvpDto } from './dto/guest-rsvp.dto';
 import { ManualSessionTimingDto } from './dto/manual-session-timing.dto';
+import { GuestSubmitVotesDto } from '../voting/dto/guest-submit-votes.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -29,6 +32,7 @@ export class EventsController {
     private readonly eventsService: EventsService,
     @Inject(forwardRef(() => RecommendationsService))
     private readonly recommendationsService: RecommendationsService,
+    private readonly votingService: VotingService,
     private readonly notificationsService: NotificationsService,
     private readonly feedbackService: FeedbackService,
   ) {}
@@ -70,6 +74,68 @@ export class EventsController {
     this.recommendationsService.generateCandidates(result.eventId).catch(() => {
       /* non-critical */
     });
+    return result;
+  }
+
+  @Post('invite/:token/guest-rsvp')
+  @ApiOperation({ summary: 'RSVP via invite link without account' })
+  async guestRsvpViaInvite(
+    @Param('token') token: string,
+    @Body() dto: GuestRsvpDto,
+  ) {
+    const inviteEvent = await this.eventsService.getInviteEvent(token);
+    const goingBefore = await this.eventsService.getAttendeeUserIds(
+      inviteEvent.id,
+    );
+    const result = await this.eventsService.guestRsvp(
+      inviteEvent.id,
+      dto.guestName,
+      dto.status,
+    );
+    const goingAfter = await this.eventsService.getAttendeeUserIds(
+      inviteEvent.id,
+    );
+
+    if (goingBefore.length !== goingAfter.length) {
+      this.recommendationsService
+        .generateCandidates(inviteEvent.id)
+        .catch(() => {
+          /* non-critical */
+        });
+    }
+
+    return result;
+  }
+
+  @Get('invite/:token/recommendations')
+  @ApiOperation({ summary: 'Get event recommendations by invite token' })
+  async getInviteRecommendations(@Param('token') token: string) {
+    const inviteEvent = await this.eventsService.getInviteEvent(token);
+    return this.recommendationsService.getCandidates(inviteEvent.id);
+  }
+
+  @Post('invite/:token/guest-voting')
+  @ApiOperation({ summary: 'Submit guest ranked votes via invite token' })
+  async submitGuestVotes(
+    @Param('token') token: string,
+    @Body() dto: GuestSubmitVotesDto,
+  ) {
+    const inviteEvent = await this.eventsService.getInviteEvent(token);
+    await this.eventsService.guestRsvp(inviteEvent.id, dto.guestName, 'going');
+    const result = await this.votingService.submitGuestVotes(
+      inviteEvent.id,
+      dto.guestName,
+      dto.rankings,
+    );
+    const status = await this.votingService.getVotingStatus(inviteEvent.id);
+    if (status.allVoted) {
+      await this.votingService.autoCloseVoting(inviteEvent.id);
+      this.notificationsService
+        .sendAllVotedNotification(inviteEvent.id)
+        .catch(() => {
+          /* non-critical */
+        });
+    }
     return result;
   }
 

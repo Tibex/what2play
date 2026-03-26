@@ -8,11 +8,13 @@ import { EventsController } from './events.controller';
 import { RecommendationsModule } from '../recommendations/recommendations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { FeedbackModule } from '../feedback/feedback.module';
+import { VotingModule } from '../voting/voting.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Event, EventAttendee, EventInvite]),
     forwardRef(() => RecommendationsModule),
+    VotingModule,
     NotificationsModule,
     FeedbackModule,
   ],

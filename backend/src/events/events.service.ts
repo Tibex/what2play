@@ -219,9 +219,25 @@ export class EventsService {
       );
     }
 
+    const normalized = guestName.trim().toLowerCase();
+    const existing = await this.attendeesRepo
+      .createQueryBuilder('attendee')
+      .where('attendee.eventId = :eventId', { eventId })
+      .andWhere('attendee.isGuest = true')
+      .andWhere('LOWER(attendee.guestName) = :guestName', {
+        guestName: normalized,
+      })
+      .getOne();
+
+    if (existing) {
+      existing.guestName = guestName.trim();
+      existing.rsvpStatus = status;
+      return this.attendeesRepo.save(existing);
+    }
+
     const attendee = this.attendeesRepo.create({
       eventId,
-      guestName,
+      guestName: guestName.trim(),
       rsvpStatus: status,
       isGuest: true,
     });

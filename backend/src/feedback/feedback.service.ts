@@ -194,7 +194,9 @@ export class FeedbackService {
       if (item) item.voteCount += 1;
       if (!votedUsersByGame.has(v.gameId))
         votedUsersByGame.set(v.gameId, new Set());
-      votedUsersByGame.get(v.gameId)!.add(v.userId);
+      if (v.userId) {
+        votedUsersByGame.get(v.gameId)!.add(v.userId);
+      }
     }
 
     const enjoymentSums = new Map<string, { sum: number; count: number }>();

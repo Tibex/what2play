@@ -82,8 +82,17 @@ async function tryRefresh(): Promise<boolean> {
 
 export const api = {
   get: <T>(path: string, opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>) =>
-    request<T>(path, opts ?? {}),
-  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
-  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+    request<T>(path, opts),
+  post: <T>(
+    path: string,
+    body?: unknown,
+    opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>,
+  ) => request<T>(path, { method: 'POST', body, ...opts }),
+  patch: <T>(
+    path: string,
+    body?: unknown,
+    opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>,
+  ) => request<T>(path, { method: 'PATCH', body, ...opts }),
+  delete: <T>(path: string, opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>) =>
+    request<T>(path, { method: 'DELETE', ...opts }),
 };

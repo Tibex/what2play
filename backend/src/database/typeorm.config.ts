@@ -60,10 +60,13 @@ export function createTypeOrmOptions(
   config: ConfigService,
 ): TypeOrmModuleOptions {
   const paths = resolveRuntimePaths();
+  const nodeEnv = config.get<string>('NODE_ENV') || 'development';
+  const allowSync = config.get('DB_SYNCHRONIZE') === 'true';
+  const synchronize = nodeEnv !== 'production' && allowSync;
   return {
     ...resolveCoreOptions(config),
     autoLoadEntities: true,
-    synchronize: config.get('DB_SYNCHRONIZE') === 'true',
+    synchronize,
     migrationsRun: config.get('DB_MIGRATIONS_RUN') !== 'false',
     migrations: paths.migrations,
   };

@@ -11,7 +11,7 @@ import { User } from './user.entity';
 import { Game } from './game.entity';
 
 @Entity('event_votes')
-@Unique(['event', 'user', 'game'])
+@Unique(['eventId', 'voterKey', 'gameId'])
 export class EventVote {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -22,11 +22,17 @@ export class EventVote {
   @Column()
   eventId: string;
 
-  @ManyToOne(() => User, (u) => u.votes, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (u) => u.votes, { onDelete: 'CASCADE', nullable: true })
   user: User;
 
+  @Column({ nullable: true })
+  userId: string | null;
+
   @Column()
-  userId: string;
+  voterKey: string;
+
+  @Column({ nullable: true })
+  guestName: string;
 
   @ManyToOne(() => Game, { onDelete: 'CASCADE' })
   game: Game;

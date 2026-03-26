@@ -26,11 +26,11 @@ export interface VotingStatus {
 export class VotingService {
   constructor(
     @InjectRepository(EventVote)
-    private votesRepo: Repository<EventVote>,
+    private readonly votesRepo: Repository<EventVote>,
     @InjectRepository(Event)
-    private eventsRepo: Repository<Event>,
+    private readonly eventsRepo: Repository<Event>,
     @InjectRepository(EventGameCandidate)
-    private candidatesRepo: Repository<EventGameCandidate>,
+    private readonly candidatesRepo: Repository<EventGameCandidate>,
   ) {}
 
   async submitVotes(
@@ -48,8 +48,9 @@ export class VotingService {
       throw new BadRequestException('Voting has closed');
     }
 
+    const voterKey = this.createUserVoterKey(userId);
     const existingVote = await this.votesRepo.findOne({
-      where: { eventId, userId },
+      where: { eventId, voterKey },
       select: ['id'],
     });
     if (existingVote) {
@@ -70,11 +71,59 @@ export class VotingService {
       this.votesRepo.create({
         eventId,
         userId,
+        voterKey,
         gameId: r.gameId,
         rank: r.rank,
       }),
     );
 
+    return this.votesRepo.save(votes);
+  }
+
+  async submitGuestVotes(
+    eventId: string,
+    guestName: string,
+    rankings: { gameId: string; rank: number }[],
+  ): Promise<EventVote[]> {
+    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    if (!event) throw new BadRequestException('Event not found');
+    if (event.status !== 'voting') {
+      throw new BadRequestException('Voting is not open for this event yet');
+    }
+    if (event.votingDeadline && new Date() > new Date(event.votingDeadline)) {
+      throw new BadRequestException('Voting has closed');
+    }
+
+    const voterKey = this.createGuestVoterKey(guestName);
+    const existingVote = await this.votesRepo.findOne({
+      where: { eventId, voterKey },
+      select: ['id'],
+    });
+    if (existingVote) {
+      throw new BadRequestException(
+        'This guest has already submitted votes for this event',
+      );
+    }
+
+    const validGameIds = await this.getValidCandidateGameIds(eventId);
+    const filteredRankings = rankings.filter((r) => validGameIds.has(r.gameId));
+    if (!filteredRankings.length) {
+      throw new BadRequestException(
+        'No valid votes submitted for current candidate list',
+      );
+    }
+
+    const cleanGuestName = guestName.trim();
+    const votes = filteredRankings.map((r) =>
+      this.votesRepo.create({
+        eventId,
+        userId: null,
+        voterKey,
+        guestName: cleanGuestName,
+        gameId: r.gameId,
+        rank: r.rank,
+      }),
+    );
     return this.votesRepo.save(votes);
   }
 
@@ -91,18 +140,21 @@ export class VotingService {
     });
     if (!event) throw new BadRequestException('Event not found');
 
-    const expectedVoterIds = new Set<string>();
-    expectedVoterIds.add(event.hostId);
+    const expectedVoterKeys = new Set<string>();
+    expectedVoterKeys.add(this.createUserVoterKey(event.hostId));
     for (const attendee of event.attendees || []) {
       if (attendee.userId && attendee.rsvpStatus === 'going') {
-        expectedVoterIds.add(attendee.userId);
+        expectedVoterKeys.add(this.createUserVoterKey(attendee.userId));
+      }
+      if (attendee.isGuest && attendee.guestName && attendee.rsvpStatus === 'going') {
+        expectedVoterKeys.add(this.createGuestVoterKey(attendee.guestName));
       }
     }
 
     const validGameIds = await this.getValidCandidateGameIds(eventId);
     if (!validGameIds.size) {
       return {
-        expectedVoters: expectedVoterIds.size,
+        expectedVoters: expectedVoterKeys.size,
         submittedVoters: 0,
         allVoted: false,
       };
@@ -110,13 +162,19 @@ export class VotingService {
 
     const votes = await this.votesRepo.find({ where: { eventId } });
     const submittedVoterIds = new Set(
-      votes.filter((v) => validGameIds.has(v.gameId)).map((v) => v.userId),
+      votes
+        .filter((v) => validGameIds.has(v.gameId))
+        .map(
+          (v) =>
+            v.voterKey ?? (v.userId ? this.createUserVoterKey(v.userId) : null),
+        )
+        .filter((key): key is string => Boolean(key)),
     );
 
-    const expectedVoters = expectedVoterIds.size;
+    const expectedVoters = expectedVoterKeys.size;
     let submittedVoters = 0;
-    for (const userId of expectedVoterIds) {
-      if (submittedVoterIds.has(userId)) submittedVoters++;
+    for (const voterKey of expectedVoterKeys) {
+      if (submittedVoterIds.has(voterKey)) submittedVoters++;
     }
 
     return {
@@ -135,7 +193,14 @@ export class VotingService {
     });
     const validVotes = votes.filter((v) => validGameIds.has(v.gameId));
 
-    const totalVoters = new Set(validVotes.map((v) => v.userId)).size;
+    const totalVoters = new Set(
+      validVotes
+        .map(
+          (v) =>
+            v.voterKey ?? (v.userId ? this.createUserVoterKey(v.userId) : null),
+        )
+        .filter((key): key is string => Boolean(key)),
+    ).size;
     if (totalVoters === 0) return [];
 
     const maxRank = Math.max(...validVotes.map((v) => v.rank), 1);
@@ -211,7 +276,7 @@ export class VotingService {
 
   async autoCloseVoting(eventId: string): Promise<void> {
     const event = await this.eventsRepo.findOne({ where: { id: eventId } });
-    if (!event || event.status !== 'voting') return;
+    if (event?.status !== 'voting') return;
 
     const results = await this.computeResults(eventId);
     if (results.length > 0) {
@@ -229,5 +294,13 @@ export class VotingService {
       select: ['gameId'],
     });
     return new Set(candidates.map((candidate) => candidate.gameId));
+  }
+
+  private createUserVoterKey(userId: string): string {
+    return `user:${userId}`;
+  }
+
+  private createGuestVoterKey(guestName: string): string {
+    return `guest:${guestName.trim().toLowerCase()}`;
   }
 }
