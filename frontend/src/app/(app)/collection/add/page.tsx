@@ -6,17 +6,25 @@ import { api } from '@/lib/api';
 import GameCard from '@/components/GameCard';
 import type { Game, GameOwnership, BggSearchResult } from '@/lib/types';
 
+type SearchResultItem = {
+  key: string;
+  title: string;
+  thumbnailUrl?: string;
+  minPlayers?: number;
+  maxPlayers?: number;
+  playingTime?: number;
+  yearPublished?: number;
+  gameId?: string;
+  bggId?: number;
+  inCollection?: boolean;
+};
+
 export default function CollectionAddPage() {
   const [collection, setCollection] = useState<GameOwnership[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [localResults, setLocalResults] = useState<Game[]>([]);
-  const [bggResults, setBggResults] = useState<BggSearchResult[]>([]);
+  const [results, setResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
-  const [searchingBgg, setSearchingBgg] = useState(false);
-  const [importingBggId, setImportingBggId] = useState<number | null>(null);
-  const [xmlContent, setXmlContent] = useState('');
-  const [xmlImporting, setXmlImporting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [addingKey, setAddingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,98 +42,87 @@ export default function CollectionAddPage() {
     if (!q) return;
 
     setSearching(true);
-    setSearchingBgg(true);
-    setLocalResults([]);
-    setBggResults([]);
+    setResults([]);
+    const collectionGameIds = new Set(collection.map((o) => o.gameId));
+    const collectionBggIds = new Set(collection.map((o) => o.game.bggId).filter(Boolean));
 
-    const localPromise = api
-      .get<Game[]>(`/games/search?q=${encodeURIComponent(q)}`)
-      .then(setLocalResults)
-      .catch(() => {})
-      .finally(() => setSearching(false));
+    try {
+      const [local, bgg] = await Promise.all([
+        api.get<Game[]>(`/games/search?q=${encodeURIComponent(q)}`, {
+          showErrorToast: false,
+        }),
+        api.get<BggSearchResult[]>(`/bgg/search?q=${encodeURIComponent(q)}`, {
+          showErrorToast: false,
+        }),
+      ]);
 
-    const bggPromise = api
-      .get<BggSearchResult[]>(`/bgg/search?q=${encodeURIComponent(q)}`)
-      .then(setBggResults)
-      .catch(() => {})
-      .finally(() => setSearchingBgg(false));
+      const merged = new Map<string, SearchResultItem>();
 
-    await Promise.all([localPromise, bggPromise]);
-  }, [searchQuery]);
+      for (const game of local) {
+        const item: SearchResultItem = {
+          key: `game:${game.id}`,
+          title: game.title,
+          thumbnailUrl: game.thumbnailUrl,
+          minPlayers: game.minPlayers,
+          maxPlayers: game.maxPlayers,
+          playingTime: game.playingTime,
+          yearPublished: game.yearPublished,
+          gameId: game.id,
+          bggId: game.bggId,
+          inCollection: collectionGameIds.has(game.id),
+        };
+        merged.set(item.key, item);
+        if (game.bggId) merged.set(`bgg:${game.bggId}`, item);
+      }
+
+      for (const result of bgg) {
+        const existing = merged.get(`bgg:${result.bggId}`);
+        if (existing) continue;
+        merged.set(`bgg:${result.bggId}`, {
+          key: `bgg:${result.bggId}`,
+          title: result.title,
+          thumbnailUrl: result.thumbnailUrl,
+          minPlayers: result.minPlayers,
+          maxPlayers: result.maxPlayers,
+          playingTime: result.playingTime,
+          yearPublished: result.yearPublished,
+          bggId: result.bggId,
+          inCollection: collectionBggIds.has(result.bggId),
+        });
+      }
+
+      setResults(
+        [...merged.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      );
+    } finally {
+      setSearching(false);
+    }
+  }, [collection, searchQuery]);
 
   const addToCollection = async (gameId: string) => {
     try {
       await api.post(`/games/collection/${gameId}`);
       toast.success('Added to collection');
       loadCollection();
-      setLocalResults((prev) => prev.filter((g) => g.id !== gameId));
+      setResults((prev) => prev.filter((r) => r.gameId !== gameId));
     } catch {
       /* toast auto-shown by api.ts */
     }
   };
 
-  const importAndAdd = async (bggId: number) => {
-    setImportingBggId(bggId);
+  const importAndAdd = async (bggId: number, key: string) => {
+    setAddingKey(key);
     try {
       await api.post<{ game: Game }>('/bgg/import-one', { bggId });
-      toast.success('Imported and added to collection');
-      setBggResults((prev) => prev.filter((r) => r.bggId !== bggId));
+      toast.success('Added to collection');
+      setResults((prev) => prev.filter((r) => r.key !== key));
       await loadCollection();
     } catch {
       /* toast auto-shown by api.ts */
     } finally {
-      setImportingBggId(null);
+      setAddingKey(null);
     }
   };
-
-  const [bggUsername, setBggUsername] = useState('');
-
-  const handleBggLink = async () => {
-    if (!bggUsername.trim()) return;
-    try {
-      await api.post('/bgg/link', { bggUsername });
-      toast.success('BGG account linked!');
-    } catch {
-      /* toast auto-shown by api.ts */
-    }
-  };
-
-  const handleBggSync = async () => {
-    setSyncing(true);
-    try {
-      const result = await api.post<{ imported: number }>('/bgg/sync');
-      toast.success(`Imported ${result.imported} games from BGG`);
-      loadCollection();
-    } catch {
-      /* toast auto-shown by api.ts */
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleXmlImport = async () => {
-    if (!xmlContent.trim()) return;
-    setXmlImporting(true);
-    try {
-      const result = await api.post<{ imported: number; fetched: number }>(
-        '/bgg/import-xml',
-        { xml: xmlContent },
-      );
-      toast.success(`Imported ${result.imported} games from XML`);
-      setXmlContent('');
-      loadCollection();
-    } catch {
-      /* toast auto-shown by api.ts */
-    } finally {
-      setXmlImporting(false);
-    }
-  };
-
-  const collectionBggIds = new Set(collection.map((o) => o.game.bggId).filter(Boolean));
-  const localBggIds = new Set(localResults.map((g) => g.bggId).filter(Boolean));
-  const filteredBggResults = bggResults.filter(
-    (r) => !collectionBggIds.has(r.bggId) && !localBggIds.has(r.bggId),
-  );
 
   if (loading) {
     return (
@@ -147,179 +144,73 @@ export default function CollectionAddPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void handleSearch()}
-            placeholder="Search by title (local + BoardGameGeek)..."
+            placeholder="Search by title..."
             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
           />
           <button
             onClick={() => void handleSearch()}
-            disabled={searching && searchingBgg}
+            disabled={searching}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
           >
-            {searching || searchingBgg ? 'Searching...' : 'Search'}
+            {searching ? 'Searching...' : 'Search'}
           </button>
         </div>
 
-        {localResults.length > 0 && (
-          <div className="mb-4">
-            <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-              Already in database
-            </h3>
-            <div className="space-y-2">
-              {localResults.map((game) => (
-                <GameCard
-                  key={game.id}
-                  game={game}
-                  actions={
+        {results.length > 0 && (
+          <div className="space-y-2">
+            {results.map((result) => (
+              <GameCard
+                key={result.key}
+                game={{
+                  id: result.gameId || result.key,
+                  bggId: result.bggId,
+                  title: result.title,
+                  thumbnailUrl: result.thumbnailUrl,
+                  imageUrl: result.thumbnailUrl,
+                  minPlayers: result.minPlayers ?? 1,
+                  maxPlayers: result.maxPlayers ?? 4,
+                  playingTime: result.playingTime,
+                  yearPublished: result.yearPublished,
+                }}
+                actions={
+                  result.inCollection ? (
+                    <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                      Already in collection
+                    </span>
+                  ) : (
                     <button
-                      onClick={() => void addToCollection(game.id)}
-                      className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 transition"
+                      onClick={() => {
+                        if (result.gameId) {
+                          setAddingKey(result.key);
+                          void addToCollection(result.gameId).finally(() =>
+                            setAddingKey(null),
+                          );
+                          return;
+                        }
+                        if (result.bggId != null) {
+                          void importAndAdd(result.bggId, result.key);
+                        }
+                      }}
+                      disabled={addingKey === result.key}
+                      className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50 transition inline-flex items-center gap-1"
                     >
-                      + Add
+                      {addingKey === result.key && (
+                        <span className="animate-spin inline-block h-3 w-3 border-b-2 border-green-700 rounded-full" />
+                      )}
+                      {addingKey === result.key ? 'Adding...' : '+ Add'}
                     </button>
-                  }
-                />
-              ))}
-            </div>
+                  )
+                }
+              />
+            ))}
           </div>
         )}
 
-        {searchingBgg && (
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600" />
-            Searching BoardGameGeek...
-          </div>
-        )}
-
-        {!searchingBgg && filteredBggResults.length > 0 && (
-          <div>
-            <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
-              From BoardGameGeek
-            </h3>
-            <div className="space-y-2">
-              {filteredBggResults.map((result) => (
-                <BggResultCard
-                  key={result.bggId}
-                  result={result}
-                  importing={importingBggId === result.bggId}
-                  onImport={() => void importAndAdd(result.bggId)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!searching && !searchingBgg && searchQuery && localResults.length === 0 && filteredBggResults.length === 0 && (
+        {!searching && searchQuery && results.length === 0 && (
           <p className="text-sm text-gray-500">
             No results found for &ldquo;{searchQuery}&rdquo;
           </p>
         )}
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-        <h2 className="font-semibold mb-3">Import from BoardGameGeek</h2>
-        <div className="flex gap-2 mb-3">
-          <input
-            type="text"
-            value={bggUsername}
-            onChange={(e) => setBggUsername(e.target.value)}
-            placeholder="BGG username"
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
-          <button
-            onClick={() => void handleBggLink()}
-            className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition"
-          >
-            Link
-          </button>
-          <button
-            onClick={() => void handleBggSync()}
-            disabled={syncing}
-            className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition"
-          >
-            {syncing ? 'Syncing...' : 'Sync'}
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-        <h2 className="font-semibold mb-2">Manual XML Import (no BGG token needed)</h2>
-        <p className="text-sm text-gray-500 mb-3">
-          While logged into BGG in your browser, open your collection XML page and paste the
-          response body here.
-        </p>
-        <textarea
-          value={xmlContent}
-          onChange={(e) => setXmlContent(e.target.value)}
-          rows={8}
-          placeholder="Paste XML from https://boardgamegeek.com/xmlapi2/collection?username=YOUR_NAME&own=1&stats=1"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-        />
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={() => void handleXmlImport()}
-            disabled={xmlImporting || !xmlContent.trim()}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
-          >
-            {xmlImporting ? 'Importing...' : 'Import XML'}
-          </button>
-          <button
-            onClick={() => setXmlContent('')}
-            disabled={xmlImporting || !xmlContent.trim()}
-            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50 transition"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BggResultCard({
-  result,
-  importing,
-  onImport,
-}: {
-  result: BggSearchResult;
-  importing: boolean;
-  onImport: () => void;
-}) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-      <div className="flex">
-        {result.thumbnailUrl && (
-          <img
-            src={result.thumbnailUrl}
-            alt={result.title}
-            className="w-24 h-24 object-cover flex-shrink-0"
-          />
-        )}
-        <div className="p-4 flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="font-semibold text-gray-900 truncate">{result.title}</h3>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {result.minPlayers && result.maxPlayers
-                  ? `${result.minPlayers}-${result.maxPlayers} players`
-                  : ''}
-                {result.playingTime ? ` · ${result.playingTime} min` : ''}
-                {result.yearPublished ? ` · ${result.yearPublished}` : ''}
-              </p>
-            </div>
-          </div>
-          <div className="mt-3">
-            <button
-              onClick={onImport}
-              disabled={importing}
-              className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full hover:bg-indigo-200 disabled:opacity-50 transition inline-flex items-center gap-1"
-            >
-              {importing && (
-                <span className="animate-spin inline-block h-3 w-3 border-b-2 border-indigo-600 rounded-full" />
-              )}
-              {importing ? 'Importing...' : '+ Import & Add'}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

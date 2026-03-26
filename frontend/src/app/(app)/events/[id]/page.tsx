@@ -6,12 +6,14 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
+import { buildPlayedGamesPayload } from '@/lib/feedback';
 import GameCard from '@/components/GameCard';
 import type {
   Game,
   GameEvent,
   EventGameCandidate,
   EventFeedback,
+  EventFeedbackAnalytics,
   VoteResult,
   EventVote,
   VotingStatus,
@@ -229,6 +231,11 @@ export default function EventDetailPage() {
             eventId={id}
             feedbackStatus={feedbackStatus}
             onSubmitted={loadEvent}
+            games={candidates
+              .map((c) => c.game)
+              .filter((g): g is Game => Boolean(g))}
+            defaultGameId={event.selectedGameId}
+            isHost={isHost}
           />
         ) : event.status === 'voting' ? (
           <VotingSection
@@ -721,60 +728,127 @@ function FeedbackSection({
   eventId,
   feedbackStatus,
   onSubmitted,
+  games,
+  defaultGameId,
+  isHost,
 }: {
   eventId: string;
   feedbackStatus: FeedbackStatus | null;
   onSubmitted: () => void;
+  games: Game[];
+  defaultGameId?: string;
+  isHost: boolean;
 }) {
   const [enjoyment, setEnjoyment] = useState(3);
-  const [finished, setFinished] = useState(false);
+  const [finished, setFinished] = useState(true);
   const [durationFeel, setDurationFeel] = useState('just_right');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const alreadySubmitted = feedbackStatus?.alreadySubmitted || submitted;
   const canSubmit = feedbackStatus?.canSubmit ?? false;
-  const canViewFeedback = alreadySubmitted || feedbackStatus?.eventEnded;
+  const canViewFeedback = alreadySubmitted;
 
   const [feedbackEntries, setFeedbackEntries] = useState<EventFeedback[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
+  const [analytics, setAnalytics] = useState<EventFeedbackAnalytics | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   useEffect(() => {
     if (!canViewFeedback) return;
     setLoadingEntries(true);
     api
       .get<EventFeedback[]>(`/events/${eventId}/feedback`, { showErrorToast: false })
-      .then(setFeedbackEntries)
+      .then((entries) => {
+        setFeedbackEntries(entries);
+      })
       .catch(() => {})
       .finally(() => setLoadingEntries(false));
   }, [canViewFeedback, eventId]);
 
-  const noteTextCount = feedbackEntries.filter((f) =>
-    (f.notes ?? '').trim(),
-  ).length;
+  useEffect(() => {
+    if (!canViewFeedback) return;
+    setLoadingAnalytics(true);
+    api
+      .get<EventFeedbackAnalytics>(`/events/${eventId}/feedback/analytics`, {
+        showErrorToast: false,
+      })
+      .then((data) => setAnalytics(data))
+      .catch(() => {})
+      .finally(() => setLoadingAnalytics(false));
+  }, [canViewFeedback, eventId]);
 
+  const noteTextCount = feedbackEntries.filter((f) => (f.notes ?? '').trim()).length;
   const avgEnjoyment =
     feedbackEntries.length > 0
-      ? feedbackEntries.reduce(
-          (sum, f) => sum + Number(f.enjoymentRating),
-          0,
-        ) / feedbackEntries.length
+      ? feedbackEntries.reduce((sum, f) => sum + Number(f.enjoymentRating), 0) /
+        feedbackEntries.length
       : null;
-
   const completionRate =
     feedbackEntries.length > 0
       ? feedbackEntries.filter((f) => f.finishedGame).length / feedbackEntries.length
       : null;
+  const topDurationFeel = (() => {
+    const counts = new Map<string, number>();
+    for (const f of feedbackEntries) {
+      const key = (f.durationFeel ?? '').trim();
+      if (!key) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    let best: { key: string; count: number } | null = null;
+    for (const [key, count] of counts.entries()) {
+      if (!best || count > best.count) best = { key, count };
+    }
+    return best?.key ?? null;
+  })();
+
+  const [selectedGameId, setSelectedGameId] = useState(defaultGameId ?? '');
+  const [playedRows, setPlayedRows] = useState<
+    {
+      gameId: string;
+      enjoymentRating: number;
+      finishedGame: boolean;
+      durationFeel: string;
+      notes: string;
+    }[]
+  >([]);
+
+  const addPlayedRow = () =>
+    setPlayedRows((prev) => [
+      ...prev,
+      {
+        gameId: '',
+        enjoymentRating: 3,
+        finishedGame: true,
+        durationFeel: 'just_right',
+        notes: '',
+      },
+    ]);
+
+  const updatePlayedRow = (
+    idx: number,
+    patch: Partial<(typeof playedRows)[number]>,
+  ) =>
+    setPlayedRows((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)),
+    );
+
+  const removePlayedRow = (idx: number) =>
+    setPlayedRows((prev) => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
+      const sanitizedRows = buildPlayedGamesPayload(playedRows);
+
       await api.post(`/events/${eventId}/feedback`, {
         enjoymentRating: enjoyment,
         finishedGame: finished,
         durationFeel,
         notes: notes || undefined,
+        gameId: selectedGameId || undefined,
+        playedGames: sanitizedRows,
       });
       setSubmitted(true);
       onSubmitted();
@@ -796,6 +870,9 @@ function FeedbackSection({
       {canSubmit && !alreadySubmitted && (
         <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-lg mx-auto space-y-5">
           <h3 className="font-semibold text-lg">How was the game night?</h3>
+          <p className="text-sm text-gray-600">
+            Track what was actually played so future recommendations improve.
+          </p>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Enjoyment (1-5)
@@ -839,9 +916,107 @@ function FeedbackSection({
               <option value="too_long">Too long</option>
             </select>
           </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">
+                Played games
+              </label>
+              <button
+                type="button"
+                onClick={addPlayedRow}
+                className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded hover:bg-indigo-200"
+              >
+                + Add played game
+              </button>
+            </div>
+            {playedRows.length === 0 ? (
+              <p className="text-xs text-gray-500">
+                No played games added. You can still submit general event feedback.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {playedRows.map((row, idx) => (
+                  <div
+                    key={`${idx}-${row.gameId}`}
+                    className="bg-white border border-gray-200 rounded-lg p-3 space-y-2"
+                  >
+                    <div className="flex gap-2 items-center">
+                      <select
+                        value={row.gameId}
+                        onChange={(e) =>
+                          updatePlayedRow(idx, { gameId: e.target.value })
+                        }
+                        className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        <option value="">Select game</option>
+                        {games.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removePlayedRow(idx)}
+                        className="text-xs text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select
+                        value={row.enjoymentRating}
+                        onChange={(e) =>
+                          updatePlayedRow(idx, {
+                            enjoymentRating: Number(e.target.value),
+                          })
+                        }
+                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <option key={n} value={n}>
+                            Rating: {n}/5
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={row.durationFeel}
+                        onChange={(e) =>
+                          updatePlayedRow(idx, { durationFeel: e.target.value })
+                        }
+                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        <option value="too_short">Too short</option>
+                        <option value="just_right">Just right</option>
+                        <option value="too_long">Too long</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm px-2">
+                        <input
+                          type="checkbox"
+                          checked={row.finishedGame}
+                          onChange={(e) =>
+                            updatePlayedRow(idx, { finishedGame: e.target.checked })
+                          }
+                        />
+                        Finished
+                      </label>
+                    </div>
+                    <textarea
+                      value={row.notes}
+                      onChange={(e) => updatePlayedRow(idx, { notes: e.target.value })}
+                      rows={2}
+                      placeholder="Notes (optional)"
+                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes (optional)
+              General notes (optional)
             </label>
             <textarea
               value={notes}
@@ -850,6 +1025,25 @@ function FeedbackSection({
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Which game did you play? (optional)
+            </label>
+            <select
+              value={selectedGameId}
+              onChange={(e) => setSelectedGameId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option value="">General feedback</option>
+              {games.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button
             onClick={handleSubmit}
             disabled={submitting || !canSubmit}
@@ -862,12 +1056,45 @@ function FeedbackSection({
 
       {canViewFeedback && (
         <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-3xl mx-auto space-y-4">
-          {alreadySubmitted && (
-            <p className="text-center text-green-600 font-medium">
-              Thanks for your feedback!
-            </p>
+          {isHost && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-indigo-800 mb-2">
+                Recommendation outcomes
+              </h4>
+              {loadingAnalytics || !analytics ? (
+                <p className="text-sm text-indigo-700">Loading analytics...</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <div className="text-xs text-indigo-700">Winner played rate</div>
+                    <div className="text-xl font-bold text-indigo-900">
+                      {analytics.winnerPlayedRate != null
+                        ? `${Math.round(analytics.winnerPlayedRate * 100)}%`
+                        : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-indigo-700">Recommended / played</div>
+                    <div className="text-xl font-bold text-indigo-900">
+                      {analytics.recommendedGames.length} / {analytics.playedGames.length}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-indigo-700">Feedback entries</div>
+                    <div className="text-xl font-bold text-indigo-900">
+                      {analytics.totalFeedbackEntries}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-indigo-700">Unique players</div>
+                    <div className="text-xl font-bold text-indigo-900">
+                      {analytics.totalUniquePlayers}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
-
           {loadingEntries ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
@@ -878,14 +1105,13 @@ function FeedbackSection({
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
                   <div className="text-xs text-indigo-700 font-medium">
-                    Avg enjoyment
+                    Avg rating
                   </div>
                   <div className="text-2xl font-bold text-indigo-900">
-                    {avgEnjoyment != null ? avgEnjoyment.toFixed(1) : '—'}
-                    /5
+                    {avgEnjoyment != null ? avgEnjoyment.toFixed(1) : '—'}/5
                   </div>
                 </div>
                 <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
@@ -900,7 +1126,15 @@ function FeedbackSection({
                 </div>
                 <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
                   <div className="text-xs text-indigo-700 font-medium">
-                    Entries / Notes
+                    Top duration feel
+                  </div>
+                  <div className="text-lg font-bold text-indigo-900">
+                    {topDurationFeel ?? '—'}
+                  </div>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                  <div className="text-xs text-indigo-700 font-medium">
+                    Feedback entries / notes
                   </div>
                   <div className="text-2xl font-bold text-indigo-900">
                     {feedbackEntries.length} / {noteTextCount}
@@ -911,9 +1145,10 @@ function FeedbackSection({
               <div className="space-y-3">
                 {feedbackEntries.map((f) => {
                   const note = (f.notes ?? '').trim();
+                  const gameForDisplay = f.game ?? games.find((g) => g.id === f.gameId);
                   const bggUrl =
-                    f.game?.bggId != null
-                      ? `https://boardgamegeek.com/boardgame/${f.game.bggId}`
+                    gameForDisplay?.bggId != null
+                      ? `https://boardgamegeek.com/boardgame/${gameForDisplay.bggId}`
                       : undefined;
 
                   return (
@@ -921,10 +1156,10 @@ function FeedbackSection({
                       key={f.id}
                       className="flex gap-3 bg-gray-50 border border-gray-100 rounded-lg p-3"
                     >
-                      {f.game?.thumbnailUrl ? (
+                      {gameForDisplay?.thumbnailUrl ? (
                         <img
-                          src={f.game.thumbnailUrl}
-                          alt={f.game.title}
+                          src={gameForDisplay.thumbnailUrl}
+                          alt={gameForDisplay.title}
                           className="w-14 h-14 object-cover rounded flex-shrink-0"
                         />
                       ) : null}
@@ -935,7 +1170,7 @@ function FeedbackSection({
                             <div className="text-sm font-semibold text-gray-900 truncate">
                               {f.user?.name || 'Guest'}
                             </div>
-                            {f.game?.title ? (
+                            {gameForDisplay?.title ? (
                               bggUrl ? (
                                 <a
                                   href={bggUrl}
@@ -943,11 +1178,11 @@ function FeedbackSection({
                                   rel="noreferrer"
                                   className="text-xs text-indigo-700 hover:underline truncate block mt-0.5"
                                 >
-                                  {f.game.title}
+                                  {gameForDisplay.title}
                                 </a>
                               ) : (
                                 <div className="text-xs text-gray-600 truncate block mt-0.5">
-                                  {f.game.title}
+                                  {gameForDisplay.title}
                                 </div>
                               )
                             ) : (

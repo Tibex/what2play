@@ -42,6 +42,14 @@ export class FeedbackController {
     return this.feedbackService.getEventFeedback(eventId);
   }
 
+  @Get('analytics')
+  @ApiOperation({
+    summary: 'Get recommended vs voted vs played analytics for event',
+  })
+  getEventFeedbackAnalytics(@Param('eventId') eventId: string) {
+    return this.feedbackService.getEventFeedbackAnalytics(eventId);
+  }
+
   @Post('timing')
   @ApiOperation({ summary: 'Submit session timing' })
   submitTiming(

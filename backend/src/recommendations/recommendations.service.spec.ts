@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { RecommendationsService } from './recommendations.service';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
+import { Event } from '../entities/event.entity';
 import { SessionTiming } from '../entities/session-timing.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { GamesService } from '../games/games.service';
@@ -15,6 +16,18 @@ describe('RecommendationsService', () => {
     save: jest.fn((data) => data),
     create: jest.fn((data) => data),
     delete: jest.fn(),
+    createQueryBuilder: jest.fn(() => ({
+      delete: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined),
+    })),
+  };
+
+  const mockEventsRepo = {
+    findOne: jest.fn(),
+    save: jest.fn((data) => data),
   };
 
   const mockTimingsRepo = {
@@ -62,6 +75,10 @@ describe('RecommendationsService', () => {
           useValue: mockTimingsRepo,
         },
         {
+          provide: getRepositoryToken(Event),
+          useValue: mockEventsRepo,
+        },
+        {
           provide: getRepositoryToken(EventFeedback),
           useValue: mockFeedbackRepo,
         },
@@ -72,6 +89,7 @@ describe('RecommendationsService', () => {
 
     service = module.get<RecommendationsService>(RecommendationsService);
     jest.clearAllMocks();
+    mockCandidatesRepo.find.mockResolvedValue([]);
   });
 
   describe('generateCandidates', () => {
@@ -325,6 +343,42 @@ describe('RecommendationsService', () => {
       await expect(service.generateCandidates('e1')).rejects.toThrow(
         'only be generated while event is in planning',
       );
+    });
+
+    it('applies freshness penalty to recently played games', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2']);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        { id: 'g1', title: 'Played recently', minPlayers: 2, maxPlayers: 4 },
+        { id: 'g2', title: 'Fresh pick', minPlayers: 2, maxPlayers: 4 },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set(['g1']));
+      jest
+        .spyOn(service as any, 'getAverageTimings')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+
+      const result = await service.generateCandidates('e1');
+      const g1 = result.find((r) => r.gameId === 'g1');
+      const g2 = result.find((r) => r.gameId === 'g2');
+
+      expect(g1).toBeDefined();
+      expect(g2).toBeDefined();
+      expect(Number(g1!.score)).toBeLessThan(Number(g2!.score));
     });
   });
 });

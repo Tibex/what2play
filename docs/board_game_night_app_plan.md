@@ -22,13 +22,13 @@ todos:
     status: completed
   - id: post-event-feedback
     content: Implement post-event survey and integrate feedback signals into recommendation updates.
-    status: completed
+    status: in_progress
   - id: notifications-analytics
     content: Add reminders, push notifications, core analytics, and moderation/safety tooling.
-    status: completed
+    status: in_progress
   - id: testing-beta
     content: Ship test coverage and run beta with real groups to validate recommendation and voting outcomes.
-    status: completed
+    status: in_progress
 isProject: false
 ---
 
@@ -137,6 +137,19 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 9. Shelf-scan rollout: assisted import MVP, confidence scoring, and model tuning
 10. Session intelligence rollout: timer UX, duration-learning model, and time-fit recommendation tuning
 11. Native expansion gate: evaluate iOS/Android app build after web retention and conversion targets are sustained
+
+## Execution Status Snapshot (Mar 2026)
+
+- Must ship next
+  - Production-safe schema migration flow (replace `synchronize` reliance)
+  - End-to-end event lifecycle coverage (RSVP -> recommendations -> voting -> feedback)
+  - Real notification provider wiring (webhook/email/push) with idempotency and delivery metrics
+  - Host analytics visibility for recommended vs voted vs actually played outcomes
+- Next bets after stability
+  - Monetization experiments (soft limits, trial prompts, affiliate link placement)
+  - Go-to-market pilots with beta cohorts and referral loops
+  - Shelf-scan assisted import MVP and model quality tuning
+  - Session intelligence iteration (timer UX + learned duration fit)
 
 ## UX Simplification and Retention Priorities
 

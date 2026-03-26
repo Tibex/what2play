@@ -134,6 +134,26 @@ export interface EventFeedback {
   notes?: string;
 }
 
+export interface EventFeedbackAnalyticsGame {
+  game: Game;
+  recommendedCount: number;
+  voteCount: number;
+  playedCount: number;
+  avgEnjoyment: number | null;
+  playedByVotersCount: number;
+  playedByNonVotersCount: number;
+}
+
+export interface EventFeedbackAnalytics {
+  selectedGameId?: string;
+  recommendedGames: EventFeedbackAnalyticsGame[];
+  votedGames: EventFeedbackAnalyticsGame[];
+  playedGames: EventFeedbackAnalyticsGame[];
+  winnerPlayedRate: number | null;
+  totalFeedbackEntries: number;
+  totalUniquePlayers: number;
+}
+
 export interface FeedbackStatus {
   canSubmit: boolean;
   alreadySubmitted: boolean;

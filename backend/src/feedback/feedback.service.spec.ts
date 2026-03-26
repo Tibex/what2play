@@ -4,6 +4,8 @@ import { FeedbackService } from './feedback.service';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { SessionTiming } from '../entities/session-timing.entity';
 import { Event } from '../entities/event.entity';
+import { EventVote } from '../entities/event-vote.entity';
+import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 
 describe('FeedbackService', () => {
   let service: FeedbackService;
@@ -25,6 +27,14 @@ describe('FeedbackService', () => {
     findOne: jest.fn(),
   };
 
+  const mockVotesRepo = {
+    find: jest.fn(),
+  };
+
+  const mockCandidatesRepo = {
+    find: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +48,11 @@ describe('FeedbackService', () => {
           useValue: mockTimingRepo,
         },
         { provide: getRepositoryToken(Event), useValue: mockEventsRepo },
+        { provide: getRepositoryToken(EventVote), useValue: mockVotesRepo },
+        {
+          provide: getRepositoryToken(EventGameCandidate),
+          useValue: mockCandidatesRepo,
+        },
       ],
     }).compile();
 
@@ -73,5 +88,39 @@ describe('FeedbackService', () => {
         finishedGame: true,
       }),
     ).rejects.toThrow('already submitted');
+  });
+
+  it('returns aggregated analytics metadata', async () => {
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e1',
+      selectedGameId: 'g1',
+    });
+    mockCandidatesRepo.find.mockResolvedValue([
+      { gameId: 'g1', game: { id: 'g1', title: 'Game 1' } },
+    ]);
+    mockVotesRepo.find.mockResolvedValue([
+      { gameId: 'g1', userId: 'u1', game: { id: 'g1', title: 'Game 1' } },
+    ]);
+    mockFeedbackRepo.find.mockResolvedValue([
+      {
+        id: 'f1',
+        gameId: 'g1',
+        userId: 'u1',
+        enjoymentRating: 5,
+        game: { id: 'g1', title: 'Game 1' },
+      },
+      {
+        id: 'f2',
+        gameId: 'g1',
+        userId: 'u2',
+        enjoymentRating: 4,
+        game: { id: 'g1', title: 'Game 1' },
+      },
+    ]);
+
+    const analytics = await service.getEventFeedbackAnalytics('e1');
+    expect(analytics.totalFeedbackEntries).toBe(2);
+    expect(analytics.totalUniquePlayers).toBe(2);
+    expect(analytics.winnerPlayedRate).toBe(1);
   });
 });

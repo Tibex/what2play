@@ -4,14 +4,12 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
-  Unique,
 } from 'typeorm';
 import { Event } from './event.entity';
 import { User } from './user.entity';
 import { Game } from './game.entity';
 
 @Entity('event_feedback')
-@Unique(['event', 'user'])
 export class EventFeedback {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,10 +27,10 @@ export class EventFeedback {
   userId: string;
 
   @ManyToOne(() => Game, { nullable: true })
-  game: Game;
+  game?: Game;
 
   @Column({ nullable: true })
-  gameId: string;
+  gameId?: string;
 
   @Column({ type: 'int' })
   enjoymentRating: number;
@@ -41,10 +39,10 @@ export class EventFeedback {
   finishedGame: boolean;
 
   @Column({ nullable: true })
-  durationFeel: string;
+  durationFeel?: string;
 
   @Column({ type: 'text', nullable: true })
-  notes: string;
+  notes?: string;
 
   @CreateDateColumn()
   createdAt: Date;

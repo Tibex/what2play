@@ -65,6 +65,10 @@ export class RecommendationsService {
       playerCount,
     );
     const historicalFeedback = await this.getAverageFeedback(gameIds);
+    const attendeeHistoricalFeedback = await this.getAttendeeFeedbackSignals(
+      attendeeIds,
+      gameIds,
+    );
     const recentlyPlayed = await this.getRecentlyPlayedGameIds(attendeeIds);
 
     const scored: ScoredCandidate[] = [];
@@ -110,6 +114,14 @@ export class RecommendationsService {
         score += feedback.completionRate * 10;
         explanation['history'] =
           `${(feedback.completionRate * 100).toFixed(0)}% completion, ${feedback.avgEnjoyment.toFixed(1)}/5 enjoyment`;
+      }
+
+      const attendeeFeedback = attendeeHistoricalFeedback.get(game.id);
+      if (attendeeFeedback) {
+        score += (attendeeFeedback.avgEnjoyment - 3) * 8;
+        score += attendeeFeedback.playRate * 6;
+        explanation['attendee_history'] =
+          `Attendees played ${Math.round(attendeeFeedback.playRate * 100)}% and rated ${attendeeFeedback.avgEnjoyment.toFixed(1)}/5`;
       }
 
       if (recentlyPlayed.has(game.id)) {
@@ -266,6 +278,32 @@ export class RecommendationsService {
       map.set(f.gameId, {
         avgEnjoyment: parseFloat(f.avgEnjoyment),
         completionRate: parseFloat(f.completionRate),
+      }),
+    );
+    return map;
+  }
+
+  private async getAttendeeFeedbackSignals(
+    userIds: string[],
+    gameIds: string[],
+  ): Promise<Map<string, { avgEnjoyment: number; playRate: number }>> {
+    if (!userIds.length || !gameIds.length) return new Map();
+    const rows = await this.feedbackRepo
+      .createQueryBuilder('f')
+      .select('f.gameId', 'gameId')
+      .addSelect('AVG(f.enjoymentRating)', 'avgEnjoyment')
+      .addSelect('COUNT(*)', 'playCount')
+      .where('f.userId IN (:...userIds)', { userIds })
+      .andWhere('f.gameId IN (:...gameIds)', { gameIds })
+      .groupBy('f.gameId')
+      .getRawMany();
+
+    const denominator = Math.max(userIds.length, 1);
+    const map = new Map<string, { avgEnjoyment: number; playRate: number }>();
+    rows.forEach((r) =>
+      map.set(r.gameId, {
+        avgEnjoyment: parseFloat(r.avgEnjoyment),
+        playRate: Math.min(1, Number(r.playCount) / denominator),
       }),
     );
     return map;

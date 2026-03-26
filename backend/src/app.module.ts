@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService): TypeOrmModuleOptions => {
         const databaseUrl = config.get<string>('DATABASE_URL');
+        const synchronize = config.get('DB_SYNCHRONIZE') === 'true';
 
         if (databaseUrl) {
           const url = new URL(databaseUrl);
@@ -37,7 +38,7 @@ import { NotificationsModule } from './notifications/notifications.module';
             database: url.pathname.replace(/^\//, ''),
             ssl: useSsl ? { rejectUnauthorized: false } : false,
             autoLoadEntities: true,
-            synchronize: true,
+            synchronize,
           };
         }
 
@@ -49,7 +50,7 @@ import { NotificationsModule } from './notifications/notifications.module';
           password: config.getOrThrow<string>('DATABASE_PASSWORD'),
           database: config.getOrThrow<string>('DATABASE_NAME'),
           autoLoadEntities: true,
-          synchronize: true,
+          synchronize,
         };
       },
     }),

@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual, MoreThan } from 'typeorm';
+import { Repository, Between, LessThanOrEqual, MoreThan } from 'typeorm';
 import { Event } from '../entities/event.entity';
 import { VotingService } from '../voting/voting.service';
+import { NotificationDeliveryService } from './notification-delivery.service';
 
 @Injectable()
 export class NotificationsService {
@@ -11,9 +12,34 @@ export class NotificationsService {
 
   constructor(
     @InjectRepository(Event)
-    private eventsRepo: Repository<Event>,
-    private votingService: VotingService,
+    private readonly eventsRepo: Repository<Event>,
+    private readonly votingService: VotingService,
+    private readonly deliveryService: NotificationDeliveryService,
   ) {}
+
+  private getEventUrls(eventId: string): { eventUrl: string; feedbackUrl: string } {
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(
+      /\/$/,
+      '',
+    );
+    const eventUrl = `${frontendUrl}/events/${eventId}`;
+    return {
+      eventUrl,
+      feedbackUrl: `${eventUrl}#feedback`,
+    };
+  }
+
+  private getEmailRecipients(
+    attendees: Event['attendees'],
+  ): Array<{ email: string; name?: string; userId?: string }> {
+    return attendees
+      .filter((a) => a.rsvpStatus === 'going' && !!a.user?.email)
+      .map((a) => ({
+        email: a.user?.email || '',
+        name: a.user?.name || undefined,
+        userId: a.userId || undefined,
+      }));
+  }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async autoCloseExpiredVoting() {
@@ -40,20 +66,36 @@ export class NotificationsService {
 
     const upcomingEvents = await this.eventsRepo.find({
       where: {
-        dateTime: LessThanOrEqual(in24h),
+        dateTime: Between(now, in24h),
         status: 'confirmed',
       },
       relations: ['attendees', 'attendees.user'],
     });
 
     for (const event of upcomingEvents) {
-      const goingAttendees = event.attendees.filter(
-        (a) => a.rsvpStatus === 'going',
-      );
+      const recipients = this.getEmailRecipients(event.attendees);
+      const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
+      const reminderPayload = {
+        eventId: event.id,
+        type: 'event_reminder' as const,
+        idempotencyKey: `event_reminder:${event.id}:${event.dateTime.toISOString().slice(0, 16)}`,
+        title: `Reminder: ${event.title}`,
+        body: `Your event starts within 24 hours.`,
+        recipientCount: recipients.length,
+        recipients,
+        eventUrl,
+        feedbackUrl,
+        metadata: {
+          dateTime: event.dateTime,
+          attendeeIds: recipients
+            .map((a) => a.userId)
+            .filter((id): id is string => Boolean(id)),
+        },
+      };
+      await this.deliveryService.send(reminderPayload);
       this.logger.log(
-        `Reminder: Event "${event.title}" in <24h — ${goingAttendees.length} attendees going`,
+        `Reminder dispatched for "${event.title}" to ${recipients.length} attendees`,
       );
-      // In production: send push notifications / emails to attendees
     }
   }
 
@@ -67,21 +109,51 @@ export class NotificationsService {
         status: 'completed',
         dateTime: MoreThan(past6h),
       },
-      relations: ['attendees', 'feedbacks'],
+      relations: ['attendees', 'attendees.user', 'feedbacks'],
     });
 
     for (const event of recentlyCompleted) {
+      const endTime = new Date(
+        new Date(event.dateTime).getTime() +
+          (event.durationMinutes ?? 0) * 60_000,
+      );
+      if (endTime > now) continue;
+
       const attendeesWithoutFeedback = event.attendees.filter(
         (a) =>
           a.rsvpStatus === 'going' &&
           !event.feedbacks.some((f) => f.userId === a.userId),
       );
+      const recipients = attendeesWithoutFeedback
+        .filter((a) => !!a.user?.email)
+        .map((a) => ({
+          email: a.user?.email || '',
+          name: a.user?.name || undefined,
+          userId: a.userId || undefined,
+        }));
+      const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
 
-      if (attendeesWithoutFeedback.length > 0) {
+      if (recipients.length > 0) {
+        await this.deliveryService.send({
+          eventId: event.id,
+          type: 'feedback_prompt',
+          idempotencyKey: `feedback_prompt:${event.id}:${endTime.toISOString().slice(0, 13)}`,
+          title: `How was ${event.title}?`,
+          body: 'Share quick post-event feedback to improve next recommendations.',
+          recipientCount: recipients.length,
+          recipients,
+          eventUrl,
+          feedbackUrl,
+          metadata: {
+            attendeeIds: recipients
+              .map((a) => a.userId)
+              .filter((id): id is string => Boolean(id)),
+            eventEndedAt: endTime.toISOString(),
+          },
+        });
         this.logger.log(
-          `Feedback prompt: ${attendeesWithoutFeedback.length} attendees haven't submitted feedback for "${event.title}"`,
+          `Feedback prompt dispatched for "${event.title}" (${recipients.length} recipients)`,
         );
-        // In production: send push notification / email prompts
       }
     }
   }

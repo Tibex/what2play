@@ -25,6 +25,11 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Project Notes
+
+- Database migrations: the app currently uses TypeORM `synchronize: true` in `app.module.ts` for local speed. For production, disable synchronize and run explicit migrations before deploys.
+- Notification delivery: cron jobs now dispatch reminder/feedback payloads through `NOTIFICATIONS_WEBHOOK_URL` with idempotency tracking in `notification_deliveries`.
+
 ## Project setup
 
 ```bash
