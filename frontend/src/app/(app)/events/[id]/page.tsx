@@ -202,15 +202,10 @@ export default function EventDetailPage() {
               Going
             </button>
           )}
-          {myAttendee && myAttendee.rsvpStatus === 'going' && (
+          {myAttendee && myAttendee.rsvpStatus === 'going' && !rsvpLocked && (
             <button onClick={() => handleRsvp('not_going')} disabled={rsvpLocked} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition">
               Can&apos;t make it
             </button>
-          )}
-          {rsvpLocked && (
-            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
-              RSVP is locked after voting starts.
-            </span>
           )}
           {isHost && (
             <>
