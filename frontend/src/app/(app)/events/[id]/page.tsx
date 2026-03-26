@@ -71,6 +71,7 @@ export default function EventDetailPage() {
   const isHost = user?.id === event.hostId;
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
+  const isPlanning = event.status === 'planning';
   const rsvpLocked = event.status !== 'planning';
   const date = new Date(event.dateTime);
   const eventEndsAt =
@@ -186,6 +187,7 @@ export default function EventDetailPage() {
           <AttendeesSection
             attendees={event.attendees}
             isHost={isHost}
+            isPlanning={isPlanning}
             hostUserId={event.hostId}
             onRemove={handleRemoveAttendee}
           />
@@ -212,9 +214,11 @@ export default function EventDetailPage() {
               <Link href={`/events/${id}/edit`} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
                 Edit Event
               </Link>
-              <button onClick={handleCreateInvite} className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200 transition">
-                Create Invite Link
-              </button>
+              {isPlanning && (
+                <button onClick={handleCreateInvite} className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200 transition">
+                  Create Invite Link
+                </button>
+              )}
               {event.status === 'planning' && (
                 <button
                   onClick={handleGenerateRecommendations}
@@ -300,11 +304,13 @@ function StatusBadge({ status }: { status: string }) {
 function AttendeesSection({
   attendees,
   isHost,
+  isPlanning,
   hostUserId,
   onRemove,
 }: {
   attendees: GameEvent['attendees'];
   isHost: boolean;
+  isPlanning: boolean;
   hostUserId: string;
   onRemove: (attendeeId: string) => void;
 }) {
@@ -322,7 +328,7 @@ function AttendeesSection({
             {list.map((a) => (
               <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm inline-flex items-center gap-2">
                 <span>{a.user?.name || a.guestName || 'Guest'}</span>
-                {isHost && a.userId !== hostUserId && (
+                {isHost && isPlanning && a.userId !== hostUserId && (
                   <button
                     type="button"
                     onClick={() => onRemove(a.id)}

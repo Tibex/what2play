@@ -143,6 +143,11 @@ export class EventsService {
     const event = await this.findById(eventId);
     if (event.hostId !== userId)
       throw new ForbiddenException('Only host can create invite links');
+    if (event.status !== 'planning') {
+      throw new BadRequestException(
+        'Invite links can only be created while event is in planning',
+      );
+    }
     const token = uuid();
     const invite = this.invitesRepo.create({ eventId, token });
     return this.invitesRepo.save(invite);
@@ -182,6 +187,11 @@ export class EventsService {
     const event = await this.findById(eventId);
     if (event.hostId !== hostUserId) {
       throw new ForbiddenException('Only host can remove attendees');
+    }
+    if (event.status !== 'planning') {
+      throw new BadRequestException(
+        'Attendees can only be removed while event is in planning',
+      );
     }
 
     const attendee = await this.attendeesRepo.findOne({

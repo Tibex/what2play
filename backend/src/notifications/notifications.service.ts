@@ -17,11 +17,13 @@ export class NotificationsService {
     private readonly deliveryService: NotificationDeliveryService,
   ) {}
 
-  private getEventUrls(eventId: string): { eventUrl: string; feedbackUrl: string } {
-    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(
-      /\/$/,
-      '',
-    );
+  private getEventUrls(eventId: string): {
+    eventUrl: string;
+    feedbackUrl: string;
+  } {
+    const frontendUrl = (
+      process.env.FRONTEND_URL || 'http://localhost:3000'
+    ).replace(/\/$/, '');
     const eventUrl = `${frontendUrl}/events/${eventId}`;
     return {
       eventUrl,
