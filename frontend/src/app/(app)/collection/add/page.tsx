@@ -27,6 +27,16 @@ export default function CollectionAddPage() {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const dedupeKeyFor = (item: {
+    title: string;
+    bggId?: number;
+    yearPublished?: number;
+  }) => {
+    if (item.bggId != null) return `bgg:${item.bggId}`;
+    const normalizedTitle = item.title.trim().toLowerCase().replace(/\s+/g, ' ');
+    return `title:${normalizedTitle}:${item.yearPublished ?? 'na'}`;
+  };
+
   useEffect(() => {
     void loadCollection();
   }, []);
@@ -71,14 +81,13 @@ export default function CollectionAddPage() {
           bggId: game.bggId,
           inCollection: collectionGameIds.has(game.id),
         };
-        merged.set(item.key, item);
-        if (game.bggId) merged.set(`bgg:${game.bggId}`, item);
+        merged.set(dedupeKeyFor(item), item);
       }
 
       for (const result of bgg) {
-        const existing = merged.get(`bgg:${result.bggId}`);
+        const existing = merged.get(dedupeKeyFor(result));
         if (existing) continue;
-        merged.set(`bgg:${result.bggId}`, {
+        merged.set(dedupeKeyFor(result), {
           key: `bgg:${result.bggId}`,
           title: result.title,
           thumbnailUrl: result.thumbnailUrl,

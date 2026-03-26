@@ -383,6 +383,16 @@ function RecommendationsSection({
     safeCandidates.map((c) => c.game?.bggId).filter((id): id is number => id != null),
   );
 
+  const dedupeKeyFor = (item: {
+    title: string;
+    bggId?: number;
+    yearPublished?: number;
+  }) => {
+    if (item.bggId != null) return `bgg:${item.bggId}`;
+    const normalizedTitle = item.title.trim().toLowerCase().replace(/\s+/g, ' ');
+    return `title:${normalizedTitle}:${item.yearPublished ?? 'na'}`;
+  };
+
   const handleSearch = async () => {
     const q = searchQuery.trim();
     if (!q) return;
@@ -411,14 +421,14 @@ function RecommendationsSection({
           gameId: game.id,
           bggId: game.bggId,
         };
-        merged.set(item.key, item);
-        if (game.bggId != null) merged.set(`bgg:${game.bggId}`, item);
+        merged.set(dedupeKeyFor(item), item);
       }
 
       for (const item of bgg) {
         if (candidateBggIds.has(item.bggId)) continue;
-        if (merged.has(`bgg:${item.bggId}`)) continue;
-        merged.set(`bgg:${item.bggId}`, {
+        const dedupeKey = dedupeKeyFor(item);
+        if (merged.has(dedupeKey)) continue;
+        merged.set(dedupeKey, {
           key: `bgg:${item.bggId}`,
           title: item.title,
           thumbnailUrl: item.thumbnailUrl,
@@ -505,7 +515,6 @@ function RecommendationsSection({
                     <p className="text-xs text-gray-500">
                       {result.minPlayers}-{result.maxPlayers} players
                       {result.playingTime ? ` · ${result.playingTime} min` : ''}
-                      {result.gameId ? '' : ' · BGG'}
                     </p>
                   </div>
                   <button
