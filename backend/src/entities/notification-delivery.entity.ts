@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Unique,
 } from 'typeorm';
 
@@ -38,4 +39,13 @@ export class NotificationDelivery {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastAttemptAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deliveredAt: Date | null;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

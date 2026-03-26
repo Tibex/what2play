@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +14,8 @@ import { GamesService } from '../games/games.service';
 
 @Injectable()
 export class BggService {
+  private readonly logger = new Logger(BggService.name);
+
   constructor(
     @InjectRepository(SyncAccount)
     private syncRepo: Repository<SyncAccount>,
@@ -26,18 +29,34 @@ export class BggService {
     const existing = await this.syncRepo.findOne({
       where: { userId, provider: 'bgg' },
     });
+    let account: SyncAccount;
+
     if (existing) {
       existing.externalUsername = bggUsername;
       existing.status = 'linked';
-      return this.syncRepo.save(existing);
+      account = await this.syncRepo.save(existing);
+    } else {
+      account = this.syncRepo.create({
+        userId,
+        provider: 'bgg',
+        externalUsername: bggUsername,
+        status: 'linked',
+      });
+      account = await this.syncRepo.save(account);
     }
-    const account = this.syncRepo.create({
-      userId,
-      provider: 'bgg',
-      externalUsername: bggUsername,
-      status: 'linked',
-    });
-    return this.syncRepo.save(account);
+
+    // Best effort auto-sync right after linking.
+    try {
+      await this.syncCollection(userId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown sync failure';
+      this.logger.warn(
+        `Auto-sync after linking failed for user ${userId}: ${message}`,
+      );
+    }
+
+    return account;
   }
 
   async unlinkAccount(userId: string): Promise<void> {

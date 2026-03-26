@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EventsService } from './events.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FeedbackService } from '../feedback/feedback.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
@@ -28,6 +29,7 @@ export class EventsController {
     @Inject(forwardRef(() => RecommendationsService))
     private readonly recommendationsService: RecommendationsService,
     private readonly notificationsService: NotificationsService,
+    private readonly feedbackService: FeedbackService,
   ) {}
 
   @Post()
@@ -153,5 +155,29 @@ export class EventsController {
     }
 
     return { ok: true };
+  }
+
+  @Get(':id/outcome-analytics')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Host analytics for recommended vs voted vs actually played outcomes',
+  })
+  async getOutcomeAnalytics(@Param('id') id: string, @Request() req) {
+    await this.eventsService.assertHostAccess(id, req.user.id);
+    const [feedbackAnalytics, deliveryMetrics, event] = await Promise.all([
+      this.feedbackService.getEventFeedbackAnalytics(id),
+      this.notificationsService.getDeliveryMetrics(id),
+      this.eventsService.findById(id),
+    ]);
+
+    return {
+      eventId: id,
+      eventStatus: event.status,
+      selectedGameId: event.selectedGameId || null,
+      outcomes: feedbackAnalytics,
+      notificationDelivery: deliveryMetrics,
+    };
   }
 }

@@ -7,6 +7,7 @@ import { NotificationDelivery } from '../entities/notification-delivery.entity';
 import { NotificationsService } from './notifications.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { VotingModule } from '../voting/voting.module';
+import { NotificationsController } from './notifications.controller';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { VotingModule } from '../voting/voting.module';
     forwardRef(() => VotingModule),
   ],
   providers: [NotificationsService, NotificationDeliveryService],
+  controllers: [NotificationsController],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

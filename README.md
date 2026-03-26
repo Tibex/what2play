@@ -49,7 +49,7 @@ docker compose up -d
 
 ```bash
 cd backend
-cp .env .env  # edit if needed
+npm run db:migration:run
 npm run start:dev
 ```
 
@@ -63,6 +63,17 @@ npm run dev
 ```
 
 The app runs at `http://localhost:3000`.
+
+### Database migrations
+
+Use migrations for all schema changes (do not rely on `synchronize` in production):
+
+```bash
+cd backend
+npm run db:migration:run
+npm run db:migration:generate
+npm run db:migration:revert
+```
 
 ## Project Structure
 
@@ -112,7 +123,9 @@ board-game-night/
 | POST | `/api/events/:id/voting` | Submit ranked votes |
 | GET | `/api/events/:id/voting/results` | Get voting results |
 | POST | `/api/events/:id/voting/select-winner` | Host selects game |
+| GET | `/api/events/:id/outcome-analytics` | Host view of recommended vs voted vs played outcomes |
 | POST | `/api/events/:id/feedback` | Submit feedback |
 | POST | `/api/events/:id/feedback/timing` | Submit session timing |
+| GET | `/api/notifications/metrics` | Notification delivery metrics |
 | GET/POST | `/api/friends` | Friends list / send request |
 | POST | `/api/friends/:id/accept` | Accept friend request |

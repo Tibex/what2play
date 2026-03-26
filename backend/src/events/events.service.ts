@@ -205,4 +205,15 @@ export class EventsService {
 
     await this.attendeesRepo.remove(attendee);
   }
+
+  async assertHostAccess(eventId: string, userId: string): Promise<void> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      select: ['id', 'hostId'],
+    });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.hostId !== userId) {
+      throw new ForbiddenException('Only host can access analytics');
+    }
+  }
 }

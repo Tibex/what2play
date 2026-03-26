@@ -12,6 +12,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { BggModule } from './bgg/bgg.module';
 import { FriendsModule } from './friends/friends.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { createTypeOrmOptions } from './database/typeorm.config';
 
 @Module({
   imports: [
@@ -19,40 +20,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
-        const databaseUrl = config.get<string>('DATABASE_URL');
-        const synchronize = config.get('DB_SYNCHRONIZE') === 'true';
-
-        if (databaseUrl) {
-          const url = new URL(databaseUrl);
-          const sslMode = url.searchParams.get('sslmode');
-          const useSsl =
-            sslMode === 'require' || config.get('DATABASE_SSL') === 'true';
-
-          return {
-            type: 'postgres' as const,
-            host: url.hostname,
-            port: Number(url.port || 5432),
-            username: decodeURIComponent(url.username),
-            password: decodeURIComponent(url.password),
-            database: url.pathname.replace(/^\//, ''),
-            ssl: useSsl ? { rejectUnauthorized: false } : false,
-            autoLoadEntities: true,
-            synchronize,
-          };
-        }
-
-        return {
-          type: 'postgres',
-          host: config.getOrThrow<string>('DATABASE_HOST'),
-          port: Number(config.getOrThrow<string>('DATABASE_PORT')),
-          username: config.getOrThrow<string>('DATABASE_USER'),
-          password: config.getOrThrow<string>('DATABASE_PASSWORD'),
-          database: config.getOrThrow<string>('DATABASE_NAME'),
-          autoLoadEntities: true,
-          synchronize,
-        };
-      },
+      useFactory: (config: ConfigService): TypeOrmModuleOptions =>
+        createTypeOrmOptions(config),
     }),
     ScheduleModule.forRoot(),
     AuthModule,

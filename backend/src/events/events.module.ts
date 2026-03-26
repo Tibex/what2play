@@ -7,12 +7,14 @@ import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
 import { RecommendationsModule } from '../recommendations/recommendations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { FeedbackModule } from '../feedback/feedback.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Event, EventAttendee, EventInvite]),
     forwardRef(() => RecommendationsModule),
     NotificationsModule,
+    FeedbackModule,
   ],
   providers: [EventsService],
   controllers: [EventsController],

@@ -37,6 +37,16 @@ export interface BggSearchResult {
   playingTime?: number;
 }
 
+export interface SyncAccount {
+  id: string;
+  userId: string;
+  provider: string;
+  externalUsername: string;
+  lastSyncedAt?: string;
+  status: string;
+  verified: boolean;
+}
+
 export interface GameOwnership {
   id: string;
   userId: string;

@@ -131,6 +131,14 @@ export class NotificationsService {
     }
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async retryFailedDeliveries() {
+    const retried = await this.deliveryService.retryFailedDeliveries();
+    if (retried > 0) {
+      this.logger.log(`Retried ${retried} failed notification deliveries`);
+    }
+  }
+
   @Cron(CronExpression.EVERY_HOUR)
   async sendUpcomingEventReminders() {
     const now = new Date();
@@ -228,5 +236,9 @@ export class NotificationsService {
         );
       }
     }
+  }
+
+  getDeliveryMetrics(eventId?: string) {
+    return this.deliveryService.getDeliveryMetrics(eventId);
   }
 }

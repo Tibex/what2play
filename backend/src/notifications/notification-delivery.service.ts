@@ -18,9 +18,18 @@ interface NotificationPayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface NotificationDeliveryMetrics {
+  total: number;
+  delivered: number;
+  failed: number;
+  pendingRetry: number;
+  avgAttempts: number;
+}
+
 @Injectable()
 export class NotificationDeliveryService {
   private readonly logger = new Logger(NotificationDeliveryService.name);
+  private readonly maxAttempts = 5;
 
   constructor(
     private readonly config: ConfigService,
@@ -46,6 +55,7 @@ export class NotificationDeliveryService {
           payload,
         });
     row.attempts += 1;
+    row.lastAttemptAt = new Date();
     row.payload = payload;
 
     if (!endpoint) {
@@ -68,6 +78,7 @@ export class NotificationDeliveryService {
         throw new Error(`HTTP ${res.status} ${res.statusText}`);
       }
       row.delivered = true;
+      row.deliveredAt = new Date();
       row.lastError = null;
       row.endpoint = endpoint;
       await this.deliveryRepo.save(row);
@@ -81,5 +92,58 @@ export class NotificationDeliveryService {
         `Notification delivery failed (${payload.idempotencyKey}): ${msg}`,
       );
     }
+  }
+
+  async retryFailedDeliveries(): Promise<number> {
+    const rows = await this.deliveryRepo.find({
+      where: { delivered: false },
+      order: { createdAt: 'ASC' },
+      take: 100,
+    });
+
+    let retried = 0;
+    for (const row of rows) {
+      if (row.attempts >= this.maxAttempts) continue;
+
+      const shouldRetry =
+        !row.lastAttemptAt ||
+        Date.now() - new Date(row.lastAttemptAt).getTime() >=
+          Math.min(60_000, Math.pow(2, Math.max(0, row.attempts - 1)) * 5_000);
+      if (!shouldRetry) continue;
+
+      const payload = row.payload as NotificationPayload | null;
+      if (!payload) continue;
+      await this.send(payload);
+      retried += 1;
+    }
+
+    return retried;
+  }
+
+  async getDeliveryMetrics(
+    eventId?: string,
+  ): Promise<NotificationDeliveryMetrics> {
+    const qb = this.deliveryRepo.createQueryBuilder('delivery');
+    if (eventId) qb.where('delivery.eventId = :eventId', { eventId });
+
+    const rows = await qb.getMany();
+    const delivered = rows.filter((r) => r.delivered).length;
+    const failed = rows.filter(
+      (r) => !r.delivered && r.attempts >= this.maxAttempts,
+    ).length;
+    const pendingRetry = rows.filter(
+      (r) => !r.delivered && r.attempts < this.maxAttempts,
+    ).length;
+    const avgAttempts = rows.length
+      ? rows.reduce((sum, r) => sum + r.attempts, 0) / rows.length
+      : 0;
+
+    return {
+      total: rows.length,
+      delivered,
+      failed,
+      pendingRetry,
+      avgAttempts,
+    };
   }
 }
