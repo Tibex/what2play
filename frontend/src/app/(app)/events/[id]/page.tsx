@@ -14,6 +14,7 @@ import type {
   EventGameCandidate,
   EventFeedback,
   EventFeedbackAnalytics,
+  BggSearchResult,
   VoteResult,
   EventVote,
   VotingStatus,
@@ -356,32 +357,103 @@ function RecommendationsSection({
   isPlanning: boolean;
   onChanged: () => void;
 }) {
+  type SearchResultItem = {
+    key: string;
+    title: string;
+    thumbnailUrl?: string;
+    minPlayers?: number;
+    maxPlayers?: number;
+    playingTime?: number;
+    yearPublished?: number;
+    gameId?: string;
+    bggId?: number;
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Game[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
   const safeCandidates = candidates.filter((c) => c?.game);
   const candidateGameIds = new Set(safeCandidates.map((c) => c.gameId));
+  const candidateBggIds = new Set(
+    safeCandidates.map((c) => c.game?.bggId).filter((id): id is number => id != null),
+  );
 
   const handleSearch = async () => {
     const q = searchQuery.trim();
     if (!q) return;
     setSearching(true);
     try {
-      const results = await api.get<Game[]>(`/games/search?q=${encodeURIComponent(q)}`);
-      setSearchResults(results.filter((g) => !candidateGameIds.has(g.id)));
+      const [local, bgg] = await Promise.all([
+        api.get<Game[]>(`/games/search?q=${encodeURIComponent(q)}`, {
+          showErrorToast: false,
+        }),
+        api.get<BggSearchResult[]>(`/bgg/search?q=${encodeURIComponent(q)}`, {
+          showErrorToast: false,
+        }),
+      ]);
+
+      const merged = new Map<string, SearchResultItem>();
+      for (const game of local) {
+        if (candidateGameIds.has(game.id)) continue;
+        const item: SearchResultItem = {
+          key: `game:${game.id}`,
+          title: game.title,
+          thumbnailUrl: game.thumbnailUrl,
+          minPlayers: game.minPlayers,
+          maxPlayers: game.maxPlayers,
+          playingTime: game.playingTime,
+          yearPublished: game.yearPublished,
+          gameId: game.id,
+          bggId: game.bggId,
+        };
+        merged.set(item.key, item);
+        if (game.bggId != null) merged.set(`bgg:${game.bggId}`, item);
+      }
+
+      for (const item of bgg) {
+        if (candidateBggIds.has(item.bggId)) continue;
+        if (merged.has(`bgg:${item.bggId}`)) continue;
+        merged.set(`bgg:${item.bggId}`, {
+          key: `bgg:${item.bggId}`,
+          title: item.title,
+          thumbnailUrl: item.thumbnailUrl,
+          minPlayers: item.minPlayers,
+          maxPlayers: item.maxPlayers,
+          playingTime: item.playingTime,
+          yearPublished: item.yearPublished,
+          bggId: item.bggId,
+        });
+      }
+
+      setSearchResults(
+        [...merged.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      );
     } catch { /* toast auto-shown */ }
     finally { setSearching(false); }
   };
 
-  const handleAdd = async (gameId: string) => {
-    setAdding(gameId);
+  const handleAdd = async (result: SearchResultItem) => {
+    setAdding(result.key);
     try {
+      let gameId = result.gameId;
+      if (!gameId && result.bggId != null) {
+        const imported = await api.post<{ game: Game }>('/bgg/import-one', {
+          bggId: result.bggId,
+        });
+        gameId = imported.game.id;
+      }
+      if (!gameId) return;
+
       await api.post(`/events/${eventId}/recommendations/add`, { gameId });
       toast.success('Game added to recommendations');
-      setSearchResults((prev) => prev.filter((g) => g.id !== gameId));
+      setSearchResults((prev) =>
+        prev.filter(
+          (r) => r.key !== result.key && (r.gameId ? r.gameId !== gameId : true),
+        ),
+      );
       onChanged();
     } catch { /* toast auto-shown */ }
     finally { setAdding(null); }
@@ -421,24 +493,25 @@ function RecommendationsSection({
           </div>
           {searchResults.length > 0 && (
             <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
-              {searchResults.map((game) => (
-                <div key={game.id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
-                  {game.thumbnailUrl && (
-                    <img src={game.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover" />
+              {searchResults.map((result) => (
+                <div key={result.key} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
+                  {result.thumbnailUrl && (
+                    <img src={result.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{game.title}</p>
+                    <p className="text-sm font-medium truncate">{result.title}</p>
                     <p className="text-xs text-gray-500">
-                      {game.minPlayers}-{game.maxPlayers} players
-                      {game.playingTime ? ` · ${game.playingTime} min` : ''}
+                      {result.minPlayers}-{result.maxPlayers} players
+                      {result.playingTime ? ` · ${result.playingTime} min` : ''}
+                      {result.gameId ? '' : ' · BGG'}
                     </p>
                   </div>
                   <button
-                    onClick={() => handleAdd(game.id)}
-                    disabled={adding === game.id}
+                    onClick={() => handleAdd(result)}
+                    disabled={adding === result.key}
                     className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50 transition"
                   >
-                    {adding === game.id ? 'Adding...' : '+ Add'}
+                    {adding === result.key ? 'Adding...' : '+ Add'}
                   </button>
                 </div>
               ))}

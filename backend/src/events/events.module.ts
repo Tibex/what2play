@@ -6,11 +6,13 @@ import { EventInvite } from '../entities/event-invite.entity';
 import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
 import { RecommendationsModule } from '../recommendations/recommendations.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Event, EventAttendee, EventInvite]),
     forwardRef(() => RecommendationsModule),
+    NotificationsModule,
   ],
   providers: [EventsService],
   controllers: [EventsController],

@@ -66,4 +66,30 @@ describe('NotificationsService', () => {
       }),
     );
   });
+
+  it('sends voting-started notifications to going attendees', async () => {
+    mockEventsRepo.findOne = jest.fn().mockResolvedValue({
+      id: 'e2',
+      title: 'Saturday session',
+      votingDeadline: new Date(Date.now() + 60 * 60 * 1000),
+      attendees: [
+        {
+          userId: 'u9',
+          rsvpStatus: 'going',
+          user: { email: 'voter@example.com', name: 'Voter' },
+        },
+      ],
+    });
+
+    await service.sendVotingStartedNotification('e2');
+
+    expect(mockDeliveryService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'e2',
+        type: 'voting_started',
+        recipientCount: 1,
+        recipients: [expect.objectContaining({ email: 'voter@example.com' })],
+      }),
+    );
+  });
 });

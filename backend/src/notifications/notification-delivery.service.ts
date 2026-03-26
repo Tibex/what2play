@@ -7,7 +7,7 @@ import { NotificationDelivery } from '../entities/notification-delivery.entity';
 interface NotificationPayload {
   [key: string]: unknown;
   eventId: string;
-  type: 'event_reminder' | 'feedback_prompt';
+  type: 'event_reminder' | 'feedback_prompt' | 'voting_started';
   idempotencyKey: string;
   title: string;
   body: string;

@@ -41,6 +41,41 @@ export class NotificationsService {
       }));
   }
 
+  async sendVotingStartedNotification(eventId: string): Promise<void> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees', 'attendees.user'],
+    });
+    if (!event) return;
+
+    const recipients = this.getEmailRecipients(event.attendees || []);
+    if (!recipients.length) return;
+
+    const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
+    await this.deliveryService.send({
+      eventId: event.id,
+      type: 'voting_started',
+      idempotencyKey: `voting_started:${event.id}`,
+      title: `Voting started: ${event.title}`,
+      body: 'Voting is now open. Rank your game preferences before the deadline.',
+      recipientCount: recipients.length,
+      recipients,
+      eventUrl,
+      feedbackUrl,
+      metadata: {
+        votingDeadline: event.votingDeadline
+          ? new Date(event.votingDeadline).toISOString()
+          : undefined,
+        attendeeIds: recipients
+          .map((a) => a.userId)
+          .filter((id): id is string => Boolean(id)),
+      },
+    });
+    this.logger.log(
+      `Voting-started notification dispatched for "${event.title}" (${recipients.length} recipients)`,
+    );
+  }
+
   @Cron(CronExpression.EVERY_5_MINUTES)
   async autoCloseExpiredVoting() {
     const now = new Date();

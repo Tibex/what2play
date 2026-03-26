@@ -15,6 +15,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EventsService } from './events.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
@@ -26,6 +27,7 @@ export class EventsController {
     private readonly eventsService: EventsService,
     @Inject(forwardRef(() => RecommendationsService))
     private readonly recommendationsService: RecommendationsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Post()
@@ -80,8 +82,21 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update event' })
-  update(@Param('id') id: string, @Request() req, @Body() dto: UpdateEventDto) {
-    return this.eventsService.update(id, req.user.id, dto);
+  async update(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: UpdateEventDto,
+  ) {
+    const before = await this.eventsService.findById(id);
+    const updated = await this.eventsService.update(id, req.user.id, dto);
+
+    if (before.status !== 'voting' && updated.status === 'voting') {
+      this.notificationsService.sendVotingStartedNotification(id).catch(() => {
+        /* non-critical */
+      });
+    }
+
+    return updated;
   }
 
   @Post(':id/rsvp')
