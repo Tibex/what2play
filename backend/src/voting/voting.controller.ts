@@ -40,6 +40,7 @@ export class VotingController {
     );
     const status = await this.votingService.getVotingStatus(eventId);
     if (status.allVoted) {
+      await this.votingService.autoCloseVoting(eventId);
       this.notificationsService.sendAllVotedNotification(eventId).catch(() => {
         /* non-critical */
       });
