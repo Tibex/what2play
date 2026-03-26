@@ -38,7 +38,16 @@ export class EventAttendee {
   isGuest: boolean;
 
   @Column({ nullable: true })
-  guestName: string;
+  guestName: string | null;
+
+  @Column({ nullable: true })
+  cancellationReason: string | null;
+
+  @Column({ nullable: true })
+  waitlistPriority: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastStatusChangeAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

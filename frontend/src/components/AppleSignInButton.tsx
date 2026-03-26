@@ -24,16 +24,13 @@ declare global {
 export default function AppleSignInButton({
   label = 'Sign in with Apple',
 }: Readonly<{ label?: string }>) {
+  const clientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID;
   const [loading, setLoading] = useState(false);
   const { login } = useAuthStore();
 
-  const handleAppleSignIn = async () => {
-    const clientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID;
-    if (!clientId) {
-      alert('Apple sign-in is not configured');
-      return;
-    }
+  if (!clientId) return null;
 
+  const handleAppleSignIn = async () => {
     try {
       setLoading(true);
 

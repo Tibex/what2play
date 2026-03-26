@@ -78,7 +78,12 @@ export interface GameEvent {
   status: string;
   votingDeadline?: string;
   selectedGameId?: string;
+  fallbackGameId?: string;
   discoveryMode: boolean;
+  autoPromoteWaitlist?: boolean;
+  lastAttendanceChangeAt?: string;
+  attendanceChangeAfterDecision?: boolean;
+  lateCancellationCount?: number;
   sessionStartedAt?: string;
   sessionEndedAt?: string;
   sessionTotalMinutes?: number;
@@ -96,6 +101,9 @@ export interface EventAttendee {
   rsvpStatus: string;
   isGuest: boolean;
   guestName?: string;
+  cancellationReason?: string;
+  waitlistPriority?: number;
+  lastStatusChangeAt?: string;
 }
 
 export interface EventInvite {

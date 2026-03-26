@@ -39,6 +39,7 @@ export default function EventDetailPage() {
   const [manualStartTime, setManualStartTime] = useState('');
   const [manualEndTime, setManualEndTime] = useState('');
   const [savingManualTiming, setSavingManualTiming] = useState(false);
+  const [savingFallback, setSavingFallback] = useState(false);
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -98,10 +99,77 @@ export default function EventDetailPage() {
       return;
     }
     try {
-      await api.post(`/events/${id}/rsvp`, { status });
+      const cancellationReason =
+        status === 'not_going'
+          ? window.prompt(
+              'Optional: why are you cancelling? (transport, sick, conflict...)',
+            ) || undefined
+          : undefined;
+      await api.post(`/events/${id}/rsvp`, { status, cancellationReason });
       toast.success(`RSVP updated to ${status}`);
       loadEvent();
     } catch { /* toast auto-shown */ }
+  };
+
+  const handlePromoteStandby = async () => {
+    try {
+      await api.post(`/events/${id}/standby/promote`);
+      toast.success('Promoted next standby attendee');
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const handleSetFallbackGame = async (gameId: string) => {
+    setSavingFallback(true);
+    try {
+      await api.patch(`/events/${id}`, { fallbackGameId: gameId });
+      toast.success('Fallback game saved');
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setSavingFallback(false);
+    }
+  };
+
+  const handleUseFallbackNow = async () => {
+    if (!event.fallbackGameId) return;
+    try {
+      await api.post(`/events/${id}/voting/select-winner`, {
+        gameId: event.fallbackGameId,
+      });
+      toast.success('Fallback game selected');
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const clearDecisionAlert = async () => {
+    try {
+      await api.post(`/events/${id}/attendance/decision-reviewed`);
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const toggleAutoPromoteWaitlist = async () => {
+    try {
+      await api.patch(`/events/${id}`, {
+        autoPromoteWaitlist: !event.autoPromoteWaitlist,
+      });
+      toast.success(
+        !event.autoPromoteWaitlist
+          ? 'Auto-promote waitlist enabled'
+          : 'Auto-promote waitlist disabled',
+      );
+      loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
   };
 
   const handleRemoveAttendee = async (attendeeId: string) => {
@@ -257,7 +325,24 @@ export default function EventDetailPage() {
           )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
           <span>{event.type === 'open' ? '🌐 Open' : '🔒 Invite only'}</span>
+          {event.lateCancellationCount ? (
+            <span>⚠ {event.lateCancellationCount} late cancellations</span>
+          ) : null}
         </div>
+
+        {isHost && event.attendanceChangeAfterDecision && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-center justify-between gap-3">
+            <span>
+              Attendance changed after the decision stage. Consider regenerating recommendations or using a fallback game.
+            </span>
+            <button
+              onClick={clearDecisionAlert}
+              className="px-3 py-1.5 rounded bg-amber-100 text-amber-900 hover:bg-amber-200 transition"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <div className="mb-4">
           <AttendeesSection
@@ -278,6 +363,15 @@ export default function EventDetailPage() {
           {myAttendee && myAttendee.rsvpStatus !== 'going' && (
             <button onClick={() => handleRsvp('going')} disabled={rsvpLocked} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
               Going
+            </button>
+          )}
+          {myAttendee && myAttendee.rsvpStatus !== 'standby' && !rsvpLocked && (
+            <button
+              onClick={() => handleRsvp('standby')}
+              disabled={rsvpLocked}
+              className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 disabled:opacity-50 transition"
+            >
+              Join standby
             </button>
           )}
           {myAttendee && myAttendee.rsvpStatus === 'going' && !rsvpLocked && (
@@ -301,6 +395,24 @@ export default function EventDetailPage() {
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
                 >
                   Generate Recommendations
+                </button>
+              )}
+              {event.status === 'planning' && (
+                <button
+                  onClick={handlePromoteStandby}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition"
+                >
+                  Promote standby
+                </button>
+              )}
+              {event.status === 'planning' && (
+                <button
+                  onClick={toggleAutoPromoteWaitlist}
+                  className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 transition"
+                >
+                  {event.autoPromoteWaitlist
+                    ? 'Disable auto-promote'
+                    : 'Enable auto-promote'}
                 </button>
               )}
               {candidates.length > 0 && event.status === 'planning' && (
@@ -328,9 +440,39 @@ export default function EventDetailPage() {
                   Fix time
                 </button>
               )}
+              {event.status === 'confirmed' && event.fallbackGameId && (
+                <button
+                  onClick={handleUseFallbackNow}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition"
+                >
+                  Use fallback now
+                </button>
+              )}
             </>
           )}
         </div>
+
+        {isHost && candidates.length > 0 && (
+          <div className="mt-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
+            <p className="text-sm font-medium text-gray-700 mb-2">Fallback game</p>
+            <div className="flex flex-wrap gap-2">
+              {candidates.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => handleSetFallbackGame(c.gameId)}
+                  disabled={savingFallback}
+                  className={`px-3 py-1.5 rounded text-sm border transition ${
+                    event.fallbackGameId === c.gameId
+                      ? 'bg-orange-100 border-orange-300 text-orange-800'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {c.game.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {inviteLink && (
           <div className="mt-4 p-3 bg-indigo-50 rounded-lg">
@@ -461,8 +603,17 @@ function AttendeesSection({
   hostUserId: string;
   onRemove: (attendeeId: string) => void;
 }) {
-  const groups = { going: attendees.filter((a) => a.rsvpStatus === 'going'), maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'), not_going: attendees.filter((a) => a.rsvpStatus === 'not_going') };
-  const total = groups.going.length + groups.maybe.length + groups.not_going.length;
+  const groups = {
+    going: attendees.filter((a) => a.rsvpStatus === 'going'),
+    standby: attendees.filter((a) => a.rsvpStatus === 'standby'),
+    maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'),
+    not_going: attendees.filter((a) => a.rsvpStatus === 'not_going'),
+  };
+  const total =
+    groups.going.length +
+    groups.standby.length +
+    groups.maybe.length +
+    groups.not_going.length;
   if (total === 0) {
     return <div className="text-sm text-gray-500">No attendees yet.</div>;
   }
@@ -475,6 +626,11 @@ function AttendeesSection({
             {list.map((a) => (
               <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm inline-flex items-center gap-2">
                 <span>{a.user?.name || a.guestName || 'Guest'}</span>
+                {a.cancellationReason ? (
+                  <span className="text-xs text-gray-500" title={a.cancellationReason}>
+                    ({a.cancellationReason})
+                  </span>
+                ) : null}
                 {isHost && isPlanning && a.userId !== hostUserId && (
                   <button
                     type="button"

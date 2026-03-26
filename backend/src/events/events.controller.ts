@@ -91,6 +91,7 @@ export class EventsController {
       inviteEvent.id,
       dto.guestName,
       dto.status,
+      dto.cancellationReason,
     );
     const goingAfter = await this.eventsService.getAttendeeUserIds(
       inviteEvent.id,
@@ -174,16 +175,54 @@ export class EventsController {
   @ApiOperation({ summary: 'RSVP to an event' })
   async rsvp(@Param('id') id: string, @Request() req, @Body() dto: RsvpDto) {
     const goingBefore = await this.eventsService.getAttendeeUserIds(id);
-    const result = await this.eventsService.rsvp(id, req.user.id, dto.status);
+    const result = await this.eventsService.rsvp(
+      id,
+      req.user.id,
+      dto.status,
+      dto.cancellationReason,
+    );
     const goingAfter = await this.eventsService.getAttendeeUserIds(id);
 
     if (goingBefore.length !== goingAfter.length) {
       this.recommendationsService.generateCandidates(id).catch(() => {
         /* non-critical */
       });
+      this.notificationsService
+        .sendCancellationOrSpotUpdate(id, req.user.id, dto.status, dto.cancellationReason)
+        .catch(() => {
+          /* non-critical */
+        });
     }
 
     return result;
+  }
+
+  @Get(':id/standby')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get standby attendees in promotion order' })
+  getStandby(@Param('id') id: string) {
+    return this.eventsService.getStandbyAttendees(id);
+  }
+
+  @Post(':id/standby/promote')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Promote next standby attendee (host only)' })
+  async promoteStandby(@Param('id') id: string, @Request() req) {
+    const promoted = await this.eventsService.promoteStandby(id, req.user.id);
+    this.recommendationsService.generateCandidates(id).catch(() => {
+      /* non-critical */
+    });
+    return promoted;
+  }
+
+  @Post(':id/attendance/decision-reviewed')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Clear attendance-change decision warning (host only)' })
+  clearAttendanceDecision(@Param('id') id: string, @Request() req) {
+    return this.eventsService.clearAttendanceDecisionFlag(id, req.user.id);
   }
 
   @Post(':id/invite-link')
@@ -261,18 +300,31 @@ export class EventsController {
   })
   async getOutcomeAnalytics(@Param('id') id: string, @Request() req) {
     await this.eventsService.assertHostAccess(id, req.user.id);
-    const [feedbackAnalytics, deliveryMetrics, event] = await Promise.all([
+    const [feedbackAnalytics, deliveryMetrics, event, cancellation] =
+      await Promise.all([
       this.feedbackService.getEventFeedbackAnalytics(id),
       this.notificationsService.getDeliveryMetrics(id),
       this.eventsService.findById(id),
+      this.eventsService.getCancellationAnalytics(id),
     ]);
 
     return {
       eventId: id,
       eventStatus: event.status,
       selectedGameId: event.selectedGameId || null,
+      fallbackGameId: event.fallbackGameId || null,
       outcomes: feedbackAnalytics,
       notificationDelivery: deliveryMetrics,
+      cancellation,
     };
+  }
+
+  @Get(':id/cancellation-analytics')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Host cancellation and standby analytics' })
+  async getCancellationAnalytics(@Param('id') id: string, @Request() req) {
+    await this.eventsService.assertHostAccess(id, req.user.id);
+    return this.eventsService.getCancellationAnalytics(id);
   }
 }

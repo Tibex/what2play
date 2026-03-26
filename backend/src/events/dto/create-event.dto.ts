@@ -54,4 +54,12 @@ export class CreateEventDto {
   @IsOptional()
   @IsBoolean()
   discoveryMode?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'When enabled, first standby attendee is auto-promoted when a going attendee cancels.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoPromoteWaitlist?: boolean;
 }

@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual, MoreThan } from 'typeorm';
 import { Event } from '../entities/event.entity';
+import { EventAttendee } from '../entities/event-attendee.entity';
 import { VotingService } from '../voting/voting.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 
@@ -111,6 +112,95 @@ export class NotificationsService {
     this.logger.log(
       `All-voted notification dispatched for "${event.title}" (${recipients.length} recipients)`,
     );
+  }
+
+  async sendCancellationOrSpotUpdate(
+    eventId: string,
+    actorUserId: string,
+    newStatus: string,
+    cancellationReason?: string,
+  ): Promise<void> {
+    if (newStatus !== 'not_going') return;
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees', 'attendees.user', 'host'],
+    });
+    if (!event) return;
+
+    const actor = event.attendees.find((a) => a.userId === actorUserId);
+    const actorName = actor?.user?.name || 'An attendee';
+    const reason = cancellationReason?.trim();
+
+    const hostRecipients = event.host?.email
+      ? [
+          {
+            email: event.host.email,
+            name: event.host.name || undefined,
+            userId: event.hostId || undefined,
+          },
+        ]
+      : [];
+    const standbyRecipients = this.getRecipientsByStatuses(event.attendees, [
+      'standby',
+    ]);
+    const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
+
+    if (hostRecipients.length > 0) {
+      const hourBucket = new Date().toISOString().slice(0, 13);
+      await this.deliveryService.send({
+        eventId: event.id,
+        type: 'attendance_change',
+        idempotencyKey: `attendance_change:host:${event.id}:${actorUserId}:${hourBucket}`,
+        title: `Last-minute cancellation in ${event.title}`,
+        body: reason
+          ? `${actorName} can no longer attend (${reason}).`
+          : `${actorName} can no longer attend.`,
+        recipientCount: hostRecipients.length,
+        recipients: hostRecipients,
+        eventUrl,
+        feedbackUrl,
+        metadata: {
+          actorUserId,
+          actorName,
+          reason: reason || null,
+          currentGoingCount: event.attendees.filter((a) => a.rsvpStatus === 'going')
+            .length,
+        },
+      });
+    }
+
+    if (standbyRecipients.length > 0) {
+      const hourBucket = new Date().toISOString().slice(0, 13);
+      await this.deliveryService.send({
+        eventId: event.id,
+        type: 'spot_opened',
+        idempotencyKey: `spot_opened:${event.id}:${hourBucket}`,
+        title: `Spot opened for ${event.title}`,
+        body: 'A spot just opened up. Update your RSVP if you can join.',
+        recipientCount: standbyRecipients.length,
+        recipients: standbyRecipients,
+        eventUrl,
+        feedbackUrl,
+        metadata: {
+          actorUserId,
+          reason: reason || null,
+        },
+      });
+    }
+  }
+
+  private getRecipientsByStatuses(
+    attendees: EventAttendee[],
+    statuses: string[],
+  ): Array<{ email: string; name?: string; userId?: string }> {
+    const statusSet = new Set(statuses);
+    return attendees
+      .filter((a) => statusSet.has(a.rsvpStatus) && !!a.user?.email)
+      .map((a) => ({
+        email: a.user?.email || '',
+        name: a.user?.name || undefined,
+        userId: a.userId || undefined,
+      }));
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)

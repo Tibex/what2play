@@ -59,8 +59,23 @@ export class Event {
   @Column({ nullable: true })
   selectedGameId: string;
 
+  @Column({ nullable: true })
+  fallbackGameId: string;
+
   @Column({ default: false })
   discoveryMode: boolean;
+
+  @Column({ default: false })
+  autoPromoteWaitlist: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastAttendanceChangeAt: Date;
+
+  @Column({ default: false })
+  attendanceChangeAfterDecision: boolean;
+
+  @Column({ default: 0 })
+  lateCancellationCount: number;
 
   @Column({ type: 'timestamptz', nullable: true })
   sessionStartedAt: Date;
