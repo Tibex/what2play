@@ -6,15 +6,13 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
-import { buildPlayedGamesPayload } from '@/lib/feedback';
-import { formatEventDateTime, toDateTimeLocalInTimeZone } from '@/lib/datetime';
+import { formatEventDateTime } from '@/lib/datetime';
 import GameCard from '@/components/GameCard';
+import FeedbackSection from './feedback-section';
 import type {
   Game,
   GameEvent,
   EventGameCandidate,
-  EventFeedback,
-  EventFeedbackAnalytics,
   BggSearchResult,
   VoteResult,
   EventVote,
@@ -35,11 +33,9 @@ export default function EventDetailPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [loading, setLoading] = useState(true);
   const [nowTs] = useState(() => Date.now());
-  const [showTimingFixModal, setShowTimingFixModal] = useState(false);
-  const [manualStartTime, setManualStartTime] = useState('');
-  const [manualEndTime, setManualEndTime] = useState('');
-  const [savingManualTiming, setSavingManualTiming] = useState(false);
   const [savingFallback, setSavingFallback] = useState(false);
+  const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
+  const [eventTab, setEventTab] = useState<'results' | 'fallback'>('results');
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -76,9 +72,15 @@ export default function EventDetailPage() {
 
   const isHost = user?.id === event.hostId;
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
+  const votingStartAttendeeCount = event.votingStartedAttendeeCount ?? attendeeCount;
+  const showFallbackControls =
+    isHost &&
+    event.status === 'confirmed' &&
+    votingStartAttendeeCount > 0 &&
+    attendeeCount < votingStartAttendeeCount;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const isPlanning = event.status === 'planning';
-  const rsvpLocked = event.status !== 'planning';
+  const canRsvp = event.status !== 'completed' && event.status !== 'cancelled';
   const eventTimeZone = event.eventTimezone || 'UTC';
   const formattedEventDateTime = formatEventDateTime(event.dateTime, eventTimeZone);
   const eventEndsAt =
@@ -94,8 +96,8 @@ export default function EventDetailPage() {
   };
 
   const handleRsvp = async (status: string) => {
-    if (rsvpLocked) {
-      toast.error('RSVP is locked after voting starts');
+    if (!canRsvp) {
+      toast.error('RSVP is closed for this event');
       return;
     }
     try {
@@ -111,16 +113,6 @@ export default function EventDetailPage() {
     } catch { /* toast auto-shown */ }
   };
 
-  const handlePromoteStandby = async () => {
-    try {
-      await api.post(`/events/${id}/standby/promote`);
-      toast.success('Promoted next standby attendee');
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
-    }
-  };
-
   const handleSetFallbackGame = async (gameId: string) => {
     setSavingFallback(true);
     try {
@@ -131,44 +123,6 @@ export default function EventDetailPage() {
       /* toast auto-shown */
     } finally {
       setSavingFallback(false);
-    }
-  };
-
-  const handleUseFallbackNow = async () => {
-    if (!event.fallbackGameId) return;
-    try {
-      await api.post(`/events/${id}/voting/select-winner`, {
-        gameId: event.fallbackGameId,
-      });
-      toast.success('Fallback game selected');
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
-    }
-  };
-
-  const clearDecisionAlert = async () => {
-    try {
-      await api.post(`/events/${id}/attendance/decision-reviewed`);
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
-    }
-  };
-
-  const toggleAutoPromoteWaitlist = async () => {
-    try {
-      await api.patch(`/events/${id}`, {
-        autoPromoteWaitlist: !event.autoPromoteWaitlist,
-      });
-      toast.success(
-        !event.autoPromoteWaitlist
-          ? 'Auto-promote waitlist enabled'
-          : 'Auto-promote waitlist disabled',
-      );
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
     }
   };
 
@@ -185,12 +139,23 @@ export default function EventDetailPage() {
   };
 
   const handleGenerateRecommendations = async () => {
+    setGeneratingRecommendations(true);
     try {
       await api.post<EventGameCandidate[]>(`/events/${id}/recommendations/generate`);
       const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
       setCandidates(c);
-      toast.success('Recommendations generated');
-    } catch { /* toast auto-shown */ }
+      if (c.length === 0) {
+        toast('No recommendations found for the current attendees');
+      } else {
+        toast.success('Recommendations generated');
+      }
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to generate recommendations',
+      );
+    } finally {
+      setGeneratingRecommendations(false);
+    }
   };
 
   const handleCreateInvite = async () => {
@@ -208,14 +173,6 @@ export default function EventDetailPage() {
       setEvent((prev) => (prev ? { ...prev, status: 'voting', votingDeadline: deadline } : prev));
       await api.patch(`/events/${id}`, { status: 'voting', votingDeadline: deadline });
       toast.success('Voting started!');
-      loadEvent();
-    } catch { /* toast auto-shown */ }
-  };
-
-  const handleSelectWinner = async (gameId?: string) => {
-    try {
-      await api.post(`/events/${id}/voting/select-winner`, { gameId });
-      toast.success('Winner selected!');
       loadEvent();
     } catch { /* toast auto-shown */ }
   };
@@ -247,51 +204,6 @@ export default function EventDetailPage() {
     } catch {
       /* toast auto-shown */
     }
-  };
-
-  const handleManualTimingFix = async () => {
-    if (!manualStartTime || !manualEndTime) {
-      toast.error('Please provide both start and end time');
-      return;
-    }
-    if (manualEndTime < manualStartTime) {
-      toast.error('End time must be after start time');
-      return;
-    }
-
-    setSavingManualTiming(true);
-    try {
-      await api.patch(`/events/${id}/session`, {
-        startedAt: manualStartTime,
-        endedAt: manualEndTime,
-      });
-      toast.success('Session timing updated');
-      setShowTimingFixModal(false);
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
-    } finally {
-      setSavingManualTiming(false);
-    }
-  };
-
-  const openTimingFixModal = () => {
-    const fallbackStart = toDateTimeLocalInTimeZone(event.dateTime, eventTimeZone);
-    const fallbackEnd = toDateTimeLocalInTimeZone(
-      new Date(eventEndsAt).toISOString(),
-      eventTimeZone,
-    );
-    setManualStartTime(
-      event.sessionStartedAt
-        ? toDateTimeLocalInTimeZone(event.sessionStartedAt, eventTimeZone)
-        : fallbackStart,
-    );
-    setManualEndTime(
-      event.sessionEndedAt
-        ? toDateTimeLocalInTimeZone(event.sessionEndedAt, eventTimeZone)
-        : fallbackEnd,
-    );
-    setShowTimingFixModal(true);
   };
 
   return (
@@ -330,20 +242,6 @@ export default function EventDetailPage() {
           ) : null}
         </div>
 
-        {isHost && event.attendanceChangeAfterDecision && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-center justify-between gap-3">
-            <span>
-              Attendance changed after the decision stage. Consider regenerating recommendations or using a fallback game.
-            </span>
-            <button
-              onClick={clearDecisionAlert}
-              className="px-3 py-1.5 rounded bg-amber-100 text-amber-900 hover:bg-amber-200 transition"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
         <div className="mb-4">
           <AttendeesSection
             attendees={event.attendees}
@@ -356,26 +254,17 @@ export default function EventDetailPage() {
 
         <div className="flex flex-wrap gap-2">
           {!myAttendee && (
-            <button onClick={() => handleRsvp('going')} disabled={rsvpLocked} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
+            <button onClick={() => handleRsvp('going')} disabled={!canRsvp} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
               Join
             </button>
           )}
           {myAttendee && myAttendee.rsvpStatus !== 'going' && (
-            <button onClick={() => handleRsvp('going')} disabled={rsvpLocked} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
+            <button onClick={() => handleRsvp('going')} disabled={!canRsvp} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
               Going
             </button>
           )}
-          {myAttendee && myAttendee.rsvpStatus !== 'standby' && !rsvpLocked && (
-            <button
-              onClick={() => handleRsvp('standby')}
-              disabled={rsvpLocked}
-              className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 disabled:opacity-50 transition"
-            >
-              Join standby
-            </button>
-          )}
-          {myAttendee && myAttendee.rsvpStatus === 'going' && !rsvpLocked && (
-            <button onClick={() => handleRsvp('not_going')} disabled={rsvpLocked} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition">
+          {myAttendee && myAttendee.rsvpStatus === 'going' && canRsvp && (
+            <button onClick={() => handleRsvp('not_going')} disabled={!canRsvp} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition">
               Can&apos;t make it
             </button>
           )}
@@ -392,27 +281,12 @@ export default function EventDetailPage() {
               {event.status === 'planning' && (
                 <button
                   onClick={handleGenerateRecommendations}
+                  disabled={generatingRecommendations}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
                 >
-                  Generate Recommendations
-                </button>
-              )}
-              {event.status === 'planning' && (
-                <button
-                  onClick={handlePromoteStandby}
-                  className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition"
-                >
-                  Promote standby
-                </button>
-              )}
-              {event.status === 'planning' && (
-                <button
-                  onClick={toggleAutoPromoteWaitlist}
-                  className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 transition"
-                >
-                  {event.autoPromoteWaitlist
-                    ? 'Disable auto-promote'
-                    : 'Enable auto-promote'}
+                  {generatingRecommendations
+                    ? 'Generating...'
+                    : 'Generate Recommendations'}
                 </button>
               )}
               {candidates.length > 0 && event.status === 'planning' && (
@@ -435,44 +309,9 @@ export default function EventDetailPage() {
                   End night
                 </button>
               )}
-              {event.status === 'confirmed' && (
-                <button onClick={openTimingFixModal} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
-                  Fix time
-                </button>
-              )}
-              {event.status === 'confirmed' && event.fallbackGameId && (
-                <button
-                  onClick={handleUseFallbackNow}
-                  className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition"
-                >
-                  Use fallback now
-                </button>
-              )}
             </>
           )}
         </div>
-
-        {isHost && candidates.length > 0 && (
-          <div className="mt-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
-            <p className="text-sm font-medium text-gray-700 mb-2">Fallback game</p>
-            <div className="flex flex-wrap gap-2">
-              {candidates.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleSetFallbackGame(c.gameId)}
-                  disabled={savingFallback}
-                  className={`px-3 py-1.5 rounded text-sm border transition ${
-                    event.fallbackGameId === c.gameId
-                      ? 'bg-orange-100 border-orange-300 text-orange-800'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {c.game.title}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {inviteLink && (
           <div className="mt-4 p-3 bg-indigo-50 rounded-lg">
@@ -489,28 +328,69 @@ export default function EventDetailPage() {
 
       <div className="mt-6">
         {hasPassed ? (
-          <FeedbackSection
-            eventId={id}
-            feedbackStatus={feedbackStatus}
-            onSubmitted={loadEvent}
-            games={candidates
-              .map((c) => c.game)
-              .filter((g): g is Game => Boolean(g))}
-            defaultGameId={event.selectedGameId}
-            isHost={isHost}
-          />
+          <div id="feedback">
+            <FeedbackSection
+              eventId={id}
+              feedbackStatus={feedbackStatus}
+              onSubmitted={loadEvent}
+              games={candidates
+                .map((c) => c.game)
+                .filter((g): g is Game => Boolean(g))}
+              isHost={isHost}
+              eventDateTime={event.dateTime}
+              eventTimezone={eventTimeZone}
+              eventDurationMinutes={event.durationMinutes}
+            />
+          </div>
         ) : event.status === 'voting' || event.status === 'confirmed' ? (
-          <VotingSection
-            eventId={id}
-            candidates={candidates}
-            results={results}
-            myVotes={myVotes}
-            votingStatus={votingStatus}
-            isHost={isHost}
-            status={event.status}
-            onVoted={loadEvent}
-            onSelectWinner={handleSelectWinner}
-          />
+          <>
+            {event.status === 'confirmed' && showFallbackControls && (
+              <div className="mb-4 flex items-center gap-2 border-b border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setEventTab('results')}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+                    eventTab === 'results'
+                      ? 'border-indigo-600 text-indigo-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Results
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEventTab('fallback')}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+                    eventTab === 'fallback'
+                      ? 'border-indigo-600 text-indigo-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Fallback options
+                </button>
+              </div>
+            )}
+            {event.status === 'confirmed' && showFallbackControls && eventTab === 'fallback' ? (
+              <FallbackOptionsSection
+                candidates={candidates}
+                attendeeCount={attendeeCount}
+                votingStartAttendeeCount={votingStartAttendeeCount}
+                savingFallback={savingFallback}
+                selectedFallbackGameId={event.fallbackGameId}
+                onSetFallback={handleSetFallbackGame}
+              />
+            ) : (
+              <VotingSection
+                eventId={id}
+                candidates={candidates}
+                results={results}
+                myVotes={myVotes}
+                votingStatus={votingStatus}
+                status={event.status}
+                onVoted={loadEvent}
+              />
+            )}
+          </>
         ) : (
           <RecommendationsSection
             eventId={id}
@@ -521,59 +401,6 @@ export default function EventDetailPage() {
         )}
       </div>
 
-      {showTimingFixModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold">Fix session time</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Enter local event times in {eventTimeZone}.
-              </p>
-            </div>
-            <div>
-              <label htmlFor="manual-start-time" className="block text-sm font-medium text-gray-700 mb-1">
-                Start time
-              </label>
-              <input
-                id="manual-start-time"
-                type="datetime-local"
-                value={manualStartTime}
-                onChange={(e) => setManualStartTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="manual-end-time" className="block text-sm font-medium text-gray-700 mb-1">
-                End time
-              </label>
-              <input
-                id="manual-end-time"
-                type="datetime-local"
-                value={manualEndTime}
-                onChange={(e) => setManualEndTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowTimingFixModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleManualTimingFix}
-                disabled={savingManualTiming}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition"
-              >
-                {savingManualTiming ? 'Saving...' : 'Save time'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -605,13 +432,11 @@ function AttendeesSection({
 }) {
   const groups = {
     going: attendees.filter((a) => a.rsvpStatus === 'going'),
-    standby: attendees.filter((a) => a.rsvpStatus === 'standby'),
     maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'),
     not_going: attendees.filter((a) => a.rsvpStatus === 'not_going'),
   };
   const total =
     groups.going.length +
-    groups.standby.length +
     groups.maybe.length +
     groups.not_going.length;
   if (total === 0) {
@@ -864,16 +689,14 @@ function RecommendationsSection({
   );
 }
 
-function VotingSection({ eventId, candidates, results, myVotes, votingStatus, isHost, status, onVoted, onSelectWinner }: {
+function VotingSection({ eventId, candidates, results, myVotes, votingStatus, status, onVoted }: {
   eventId: string;
   candidates: EventGameCandidate[];
   results: VoteResult[];
   myVotes: EventVote[];
   votingStatus: VotingStatus | null;
-  isHost: boolean;
   status: string;
   onVoted: () => void;
-  onSelectWinner: (gameId?: string) => void;
 }) {
   const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -946,7 +769,6 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
     ...candidates.map((c) => [c.gameId, c.game] as const),
     ...myVotes.filter((v) => v.game).map((v) => [v.gameId, v.game] as const),
   ]);
-
   const myVotesSorted = myVotes.slice().sort((a, b) => a.rank - b.rank);
   const displayedRankings = hasSubmittedVotes
     ? myVotesSorted.map((v) => ({ gameId: v.gameId, rank: v.rank }))
@@ -1131,11 +953,6 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
                       ? ` · #1 votes: ${r.firstPlaceCount}`
                       : ''}
                   </span>
-                  {isHost && (
-                    <button onClick={() => onSelectWinner(r.gameId)} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition">
-                      Select
-                    </button>
-                  )}
                 </div>
               );
             })}
@@ -1163,494 +980,62 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, is
   );
 }
 
-function FeedbackSection({
-  eventId,
-  feedbackStatus,
-  onSubmitted,
-  games,
-  defaultGameId,
-  isHost,
+function FallbackOptionsSection({
+  candidates,
+  attendeeCount,
+  votingStartAttendeeCount,
+  savingFallback,
+  selectedFallbackGameId,
+  onSetFallback,
 }: {
-  eventId: string;
-  feedbackStatus: FeedbackStatus | null;
-  onSubmitted: () => void;
-  games: Game[];
-  defaultGameId?: string;
-  isHost: boolean;
+  candidates: EventGameCandidate[];
+  attendeeCount: number;
+  votingStartAttendeeCount: number;
+  savingFallback: boolean;
+  selectedFallbackGameId?: string;
+  onSetFallback: (gameId: string) => void;
 }) {
-  const [enjoyment, setEnjoyment] = useState(3);
-  const [finished, setFinished] = useState(true);
-  const [durationFeel, setDurationFeel] = useState('just_right');
-  const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const alreadySubmitted = feedbackStatus?.alreadySubmitted || submitted;
-  const canSubmit = feedbackStatus?.canSubmit ?? false;
-  const canViewFeedback = alreadySubmitted;
-
-  const [feedbackEntries, setFeedbackEntries] = useState<EventFeedback[]>([]);
-  const [loadingEntries, setLoadingEntries] = useState(false);
-  const [analytics, setAnalytics] = useState<EventFeedbackAnalytics | null>(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-
-  useEffect(() => {
-    if (!canViewFeedback) return;
-    setLoadingEntries(true);
-    api
-      .get<EventFeedback[]>(`/events/${eventId}/feedback`, { showErrorToast: false })
-      .then((entries) => {
-        setFeedbackEntries(entries);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingEntries(false));
-  }, [canViewFeedback, eventId]);
-
-  useEffect(() => {
-    if (!canViewFeedback) return;
-    setLoadingAnalytics(true);
-    api
-      .get<EventFeedbackAnalytics>(`/events/${eventId}/feedback/analytics`, {
-        showErrorToast: false,
-      })
-      .then((data) => setAnalytics(data))
-      .catch(() => {})
-      .finally(() => setLoadingAnalytics(false));
-  }, [canViewFeedback, eventId]);
-
-  const noteTextCount = feedbackEntries.filter((f) => (f.notes ?? '').trim()).length;
-  const avgEnjoyment =
-    feedbackEntries.length > 0
-      ? feedbackEntries.reduce((sum, f) => sum + Number(f.enjoymentRating), 0) /
-        feedbackEntries.length
-      : null;
-  const completionRate =
-    feedbackEntries.length > 0
-      ? feedbackEntries.filter((f) => f.finishedGame).length / feedbackEntries.length
-      : null;
-  const topDurationFeel = (() => {
-    const counts = new Map<string, number>();
-    for (const f of feedbackEntries) {
-      const key = (f.durationFeel ?? '').trim();
-      if (!key) continue;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    let best: { key: string; count: number } | null = null;
-    for (const [key, count] of counts.entries()) {
-      if (!best || count > best.count) best = { key, count };
-    }
-    return best?.key ?? null;
-  })();
-
-  const [selectedGameId, setSelectedGameId] = useState(defaultGameId ?? '');
-  const [playedRows, setPlayedRows] = useState<
-    {
-      gameId: string;
-      enjoymentRating: number;
-      finishedGame: boolean;
-      durationFeel: string;
-      notes: string;
-    }[]
-  >([]);
-
-  const addPlayedRow = () =>
-    setPlayedRows((prev) => [
-      ...prev,
-      {
-        gameId: '',
-        enjoymentRating: 3,
-        finishedGame: true,
-        durationFeel: 'just_right',
-        notes: '',
-      },
-    ]);
-
-  const updatePlayedRow = (
-    idx: number,
-    patch: Partial<(typeof playedRows)[number]>,
-  ) =>
-    setPlayedRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)),
-    );
-
-  const removePlayedRow = (idx: number) =>
-    setPlayedRows((prev) => prev.filter((_, i) => i !== idx));
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    try {
-      const sanitizedRows = buildPlayedGamesPayload(playedRows);
-
-      await api.post(`/events/${eventId}/feedback`, {
-        enjoymentRating: enjoyment,
-        finishedGame: finished,
-        durationFeel,
-        notes: notes || undefined,
-        gameId: selectedGameId || undefined,
-        playedGames: sanitizedRows,
-      });
-      setSubmitted(true);
-      onSubmitted();
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (!canViewFeedback && feedbackStatus && !feedbackStatus.eventEnded) {
-    return (
-      <p className="text-center text-gray-500 py-10">
-        Feedback opens after the event date.
-      </p>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      {canSubmit && !alreadySubmitted && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-lg mx-auto space-y-5">
-          <h3 className="font-semibold text-lg">How was the game night?</h3>
-          <p className="text-sm text-gray-600">
-            Track what was actually played so future recommendations improve.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enjoyment (1-5)
-            </label>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setEnjoyment(n)}
-                  className={`w-10 h-10 rounded-full text-lg font-bold transition ${
-                    enjoyment >= n
-                      ? 'bg-yellow-400 text-white'
-                      : 'bg-gray-100 text-gray-400'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={finished}
-              onChange={(e) => setFinished(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600"
-            />
-            We finished at least one game
-          </label>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              How did the duration feel?
-            </label>
-            <select
-              value={durationFeel}
-              onChange={(e) => setDurationFeel(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="too_short">Too short</option>
-              <option value="just_right">Just right</option>
-              <option value="too_long">Too long</option>
-            </select>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">
-                Played games
-              </label>
-              <button
-                type="button"
-                onClick={addPlayedRow}
-                className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded hover:bg-indigo-200"
-              >
-                + Add played game
-              </button>
-            </div>
-            {playedRows.length === 0 ? (
-              <p className="text-xs text-gray-500">
-                No played games added. You can still submit general event feedback.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {playedRows.map((row, idx) => (
-                  <div
-                    key={`${idx}-${row.gameId}`}
-                    className="bg-white border border-gray-200 rounded-lg p-3 space-y-2"
+    <div className="space-y-4">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <p className="text-sm text-gray-700">
+          Sorry to hear some people could not make it. Here are games you might
+          still enjoy with the current group size ({attendeeCount}, down from{' '}
+          {votingStartAttendeeCount} when voting started).
+        </p>
+      </div>
+      {!candidates.length ? (
+        <p className="text-gray-500 text-center py-8">
+          No fallback options available yet.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {candidates
+            .filter((c) => c?.game)
+            .map((c) => (
+              <GameCard
+                key={c.id}
+                game={c.game}
+                explanation={c.explanation}
+                showScore={Number(c.score)}
+                bggUrl={c.game.bggId ? `https://boardgamegeek.com/boardgame/${c.game.bggId}` : undefined}
+                actions={
+                  <button
+                    onClick={() => onSetFallback(c.gameId)}
+                    disabled={savingFallback}
+                    className={`text-xs px-3 py-1 rounded-full transition ${
+                      selectedFallbackGameId === c.gameId
+                        ? 'bg-orange-100 text-orange-800'
+                        : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    }`}
                   >
-                    <div className="flex gap-2 items-center">
-                      <select
-                        value={row.gameId}
-                        onChange={(e) =>
-                          updatePlayedRow(idx, { gameId: e.target.value })
-                        }
-                        className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                      >
-                        <option value="">Select game</option>
-                        {games.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.title}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => removePlayedRow(idx)}
-                        className="text-xs text-red-600 hover:text-red-700"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <select
-                        value={row.enjoymentRating}
-                        onChange={(e) =>
-                          updatePlayedRow(idx, {
-                            enjoymentRating: Number(e.target.value),
-                          })
-                        }
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                      >
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <option key={n} value={n}>
-                            Rating: {n}/5
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={row.durationFeel}
-                        onChange={(e) =>
-                          updatePlayedRow(idx, { durationFeel: e.target.value })
-                        }
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                      >
-                        <option value="too_short">Too short</option>
-                        <option value="just_right">Just right</option>
-                        <option value="too_long">Too long</option>
-                      </select>
-                      <label className="flex items-center gap-2 text-sm px-2">
-                        <input
-                          type="checkbox"
-                          checked={row.finishedGame}
-                          onChange={(e) =>
-                            updatePlayedRow(idx, { finishedGame: e.target.checked })
-                          }
-                        />
-                        Finished
-                      </label>
-                    </div>
-                    <textarea
-                      value={row.notes}
-                      onChange={(e) => updatePlayedRow(idx, { notes: e.target.value })}
-                      rows={2}
-                      placeholder="Notes (optional)"
-                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              General notes (optional)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Which game did you play? (optional)
-            </label>
-            <select
-              value={selectedGameId}
-              onChange={(e) => setSelectedGameId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">General feedback</option>
-              {games.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !canSubmit}
-            className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
-          >
-            {submitting ? 'Submitting...' : 'Submit Feedback'}
-          </button>
-        </div>
-      )}
-
-      {canViewFeedback && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-3xl mx-auto space-y-4">
-          {isHost && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-indigo-800 mb-2">
-                Recommendation outcomes
-              </h4>
-              {loadingAnalytics || !analytics ? (
-                <p className="text-sm text-indigo-700">Loading analytics...</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div>
-                    <div className="text-xs text-indigo-700">Winner played rate</div>
-                    <div className="text-xl font-bold text-indigo-900">
-                      {analytics.winnerPlayedRate != null
-                        ? `${Math.round(analytics.winnerPlayedRate * 100)}%`
-                        : '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-indigo-700">Recommended / played</div>
-                    <div className="text-xl font-bold text-indigo-900">
-                      {analytics.recommendedGames.length} / {analytics.playedGames.length}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-indigo-700">Feedback entries</div>
-                    <div className="text-xl font-bold text-indigo-900">
-                      {analytics.totalFeedbackEntries}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-indigo-700">Unique players</div>
-                    <div className="text-xl font-bold text-indigo-900">
-                      {analytics.totalUniquePlayers}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {loadingEntries ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
-            </div>
-          ) : feedbackEntries.length === 0 ? (
-            <p className="text-center text-gray-500 py-6">
-              No feedback entries yet.
-            </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
-                  <div className="text-xs text-indigo-700 font-medium">
-                    Avg rating
-                  </div>
-                  <div className="text-2xl font-bold text-indigo-900">
-                    {avgEnjoyment != null ? avgEnjoyment.toFixed(1) : '—'}/5
-                  </div>
-                </div>
-                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
-                  <div className="text-xs text-indigo-700 font-medium">
-                    Completion rate
-                  </div>
-                  <div className="text-2xl font-bold text-indigo-900">
-                    {completionRate != null
-                      ? `${Math.round(completionRate * 100)}%`
-                      : '—'}
-                  </div>
-                </div>
-                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
-                  <div className="text-xs text-indigo-700 font-medium">
-                    Top duration feel
-                  </div>
-                  <div className="text-lg font-bold text-indigo-900">
-                    {topDurationFeel ?? '—'}
-                  </div>
-                </div>
-                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
-                  <div className="text-xs text-indigo-700 font-medium">
-                    Feedback entries / notes
-                  </div>
-                  <div className="text-2xl font-bold text-indigo-900">
-                    {feedbackEntries.length} / {noteTextCount}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {feedbackEntries.map((f) => {
-                  const note = (f.notes ?? '').trim();
-                  const gameForDisplay = f.game ?? games.find((g) => g.id === f.gameId);
-                  const bggUrl =
-                    gameForDisplay?.bggId != null
-                      ? `https://boardgamegeek.com/boardgame/${gameForDisplay.bggId}`
-                      : undefined;
-
-                  return (
-                    <div
-                      key={f.id}
-                      className="flex gap-3 bg-gray-50 border border-gray-100 rounded-lg p-3"
-                    >
-                      {gameForDisplay?.thumbnailUrl ? (
-                        <img
-                          src={gameForDisplay.thumbnailUrl}
-                          alt={gameForDisplay.title}
-                          className="w-14 h-14 object-cover rounded flex-shrink-0"
-                        />
-                      ) : null}
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-gray-900 truncate">
-                              {f.user?.name || 'Guest'}
-                            </div>
-                            {gameForDisplay?.title ? (
-                              bggUrl ? (
-                                <a
-                                  href={bggUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs text-indigo-700 hover:underline truncate block mt-0.5"
-                                >
-                                  {gameForDisplay.title}
-                                </a>
-                              ) : (
-                                <div className="text-xs text-gray-600 truncate block mt-0.5">
-                                  {gameForDisplay.title}
-                                </div>
-                              )
-                            ) : (
-                              <div className="text-xs text-gray-500 truncate block mt-0.5">
-                                General feedback
-                              </div>
-                            )}
-                          </div>
-
-                          <span className="flex-shrink-0 bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-lg">
-                            {f.enjoymentRating}/5
-                          </span>
-                        </div>
-
-                        <div className="text-xs text-gray-600 mt-1">
-                          {f.finishedGame ? 'Finished game' : 'Did not finish'}
-                          {f.durationFeel ? ` · ${f.durationFeel}` : ''}
-                        </div>
-
-                        <div className="text-sm text-gray-800 mt-2">
-                          {note ? note : <span className="text-gray-400">No comments</span>}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
+                    {selectedFallbackGameId === c.gameId
+                      ? 'Selected fallback'
+                      : 'Use as fallback'}
+                  </button>
+                }
+              />
+            ))}
         </div>
       )}
     </div>
