@@ -10,9 +10,12 @@ import {
   Request,
   Inject,
   forwardRef,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { EventsService } from './events.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -22,6 +25,7 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
 import { InviteFriendsDto } from './dto/invite-friends.dto';
+import { AdminListEventsQueryDto } from './dto/admin-list-events-query.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -55,6 +59,15 @@ export class EventsController {
   @ApiOperation({ summary: 'Get public open events' })
   getOpenEvents() {
     return this.eventsService.findOpenEvents();
+  }
+
+  @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin list all events' })
+  listAllEvents(@Query() query: AdminListEventsQueryDto) {
+    return this.eventsService.listAllForAdmin(query);
   }
 
   @Get('invite/:token')

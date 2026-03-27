@@ -14,6 +14,7 @@ import { EventInvite } from '../entities/event-invite.entity';
 import { User } from '../entities/user.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { AdminListEventsQueryDto } from './dto/admin-list-events-query.dto';
 import { resolveEventDateTime, resolveEventTimezone } from './timezone.utils';
 import { FriendsService } from '../friends/friends.service';
 
@@ -448,5 +449,37 @@ export class EventsService {
     }
 
     return updated;
+  }
+
+  async listAllForAdmin(query: AdminListEventsQueryDto) {
+    const page = query.page || 1;
+    const pageSize = query.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    const qb = this.eventsRepo
+      .createQueryBuilder('event')
+      .leftJoinAndSelect('event.host', 'host')
+      .orderBy('event.dateTime', 'DESC')
+      .skip(skip)
+      .take(pageSize);
+
+    if (query.status) {
+      qb.andWhere('event.status = :status', { status: query.status });
+    }
+
+    if (query.hostId) {
+      qb.andWhere('event.hostId = :hostId', { hostId: query.hostId });
+    }
+
+    const [items, total] = await qb.getManyAndCount();
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasNext: page * pageSize < total,
+      },
+    };
   }
 }

@@ -5,11 +5,15 @@ import {
   Body,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AdminListUsersQueryDto } from './dto/admin-list-users-query.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -28,5 +32,13 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user profile' })
   updateProfile(@Request() req, @Body() dto: UpdateProfileDto) {
     return this.usersService.updateProfile(req.user.id, dto);
+  }
+
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin list users' })
+  listUsers(@Query() query: AdminListUsersQueryDto) {
+    return this.usersService.listForAdmin(query);
   }
 }

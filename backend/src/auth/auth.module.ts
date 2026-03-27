@@ -9,6 +9,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { LocalStrategy } from './local.strategy';
 import { GoogleStrategy } from './google.strategy';
+import { RolesGuard } from './roles.guard';
 
 @Module({
   imports: [
@@ -23,8 +24,14 @@ import { GoogleStrategy } from './google.strategy';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, LocalStrategy, GoogleStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    LocalStrategy,
+    GoogleStrategy,
+    RolesGuard,
+  ],
   controllers: [AuthController],
-  exports: [AuthService],
+  exports: [AuthService, RolesGuard],
 })
 export class AuthModule {}

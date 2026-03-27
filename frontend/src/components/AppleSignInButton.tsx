@@ -67,6 +67,7 @@ export default function AppleSignInButton({
           name: string;
           avatarUrl?: string;
           subscriptionTier: string;
+          role: 'user' | 'admin';
         };
         accessToken: string;
         refreshToken: string;

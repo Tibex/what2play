@@ -11,6 +11,7 @@ import { FeedbackModule } from '../feedback/feedback.module';
 import { VotingModule } from '../voting/voting.module';
 import { FriendsModule } from '../friends/friends.module';
 import { EventsLifecycleService } from './events-lifecycle.service';
+import { RolesGuard } from '../auth/roles.guard';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { EventsLifecycleService } from './events-lifecycle.service';
     FeedbackModule,
     FriendsModule,
   ],
-  providers: [EventsService, EventsLifecycleService],
+  providers: [EventsService, EventsLifecycleService, RolesGuard],
   controllers: [EventsController],
   exports: [EventsService],
 })

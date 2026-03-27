@@ -13,6 +13,9 @@ import { EventVote } from './event-vote.entity';
 import { EventFeedback } from './event-feedback.entity';
 import { SyncAccount } from './sync-account.entity';
 
+export const USER_ROLES = ['user', 'admin'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -47,6 +50,9 @@ export class User {
 
   @Column({ default: 'free' })
   subscriptionTier: string;
+
+  @Column({ default: 'user' })
+  role: UserRole;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -7,6 +7,7 @@ export interface User {
   preferredDuration?: number;
   preferredWeight?: number;
   subscriptionTier: string;
+  role: 'user' | 'admin';
 }
 
 export interface Game {
@@ -88,6 +89,18 @@ export interface GameEvent {
   attendees: EventAttendee[];
   candidates: EventGameCandidate[];
   createdAt: string;
+}
+
+export interface PaginatedMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  hasNext: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  meta: PaginatedMeta;
 }
 
 export interface EventAttendee {

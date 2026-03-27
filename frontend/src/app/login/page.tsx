@@ -24,7 +24,14 @@ export default function LoginPage() {
     void (async () => {
       try {
         const data = await api.post<{
-          user: { id: string; email: string; name: string; avatarUrl?: string; subscriptionTier: string };
+          user: {
+            id: string;
+            email: string;
+            name: string;
+            avatarUrl?: string;
+            subscriptionTier: string;
+            role: 'user' | 'admin';
+          };
           accessToken: string;
           refreshToken: string;
         }>('/auth/login', { email, password });

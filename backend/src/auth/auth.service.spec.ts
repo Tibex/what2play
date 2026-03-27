@@ -14,7 +14,7 @@ describe('AuthService', () => {
 
   const mockUsersRepo = {
     findOne: jest.fn(),
-    create: jest.fn((data) => ({ id: 'user-1', ...data })),
+    create: jest.fn((data) => ({ id: 'user-1', role: 'user', ...data })),
     save: jest.fn((user) => Promise.resolve(user)),
   };
 
@@ -55,6 +55,13 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
       expect(result.user.email).toBe('test@example.com');
+      expect(result.user.role).toBe('user');
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'test@example.com',
+          role: 'user',
+        }),
+      );
     });
 
     it('should throw ConflictException if email exists', async () => {

@@ -32,6 +32,11 @@ export default function Navbar() {
             <Link href="/friends" className="hover:text-indigo-200 transition-colors text-sm font-medium">
               Friends
             </Link>
+            {user?.role === 'admin' && (
+              <Link href="/admin" className="hover:text-indigo-200 transition-colors text-sm font-medium">
+                Admin
+              </Link>
+            )}
             <Link href="/profile" className="hover:text-indigo-200 transition-colors text-sm font-medium">
               Profile
             </Link>

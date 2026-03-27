@@ -6,6 +6,7 @@ interface User {
   name: string;
   avatarUrl?: string;
   subscriptionTier: string;
+  role: 'user' | 'admin';
 }
 
 interface AuthState {
