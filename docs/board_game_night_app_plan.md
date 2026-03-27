@@ -126,6 +126,35 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
   - host preference boost (optional)
 - Return top N with explanation labels ("fits 5 players", "high group rating", "not owned by attendees")
 
+## Recommendation Backbone (Updated)
+
+- Recommender architecture (hybrid)
+  - Stage 1: deterministic candidate retrieval + weighted ranking with hard constraints
+  - Stage 2: ML reranker on top-N candidates after enough historical data is available
+  - Keep deterministic fallback and explainability as first-class requirements
+
+- Signal checklist coverage
+  - Included now: number of players, BGG score, preferred complexity, personal rating, duration (BGG + actual), event time window, historical enjoyment/completion
+  - Partially included: BGG best/recommended player count fit, similar-groups signal
+  - Planned additions: official external discovery sources and approved third-party board-game datasets
+
+- Phase 1 implementation requirements (now)
+  - Configurable weighted scoring (replace hardcoded constants with centralized weight config)
+  - Normalized feature contributions with score breakdown persisted per candidate
+  - Add explicit complexity-fit and best-player-fit factors
+  - Add recommendation confidence label based on signal coverage
+  - Preserve existing explainability chips and source labels
+
+- Phase 2-4 rollout
+  - Phase 2: fully enable `discoveryMode` with source guardrails and provenance labels
+  - Phase 3: online learning loop from `recommended -> voted -> selected -> played -> liked`
+  - Phase 4: train and feature-flag an ML reranker (`P(selected)`, `P(enjoyed)`, `P(finished)`)
+
+- Data source policy
+  - Prefer official/licensed APIs and structured feeds
+  - Avoid unsanctioned scraping for core recommendation ranking
+  - Cache, rate-limit, and store attribution for all external signals
+
 ## Delivery Phases
 
 1. Foundation: auth, profiles, schema, web navigation, CI/CD, 60-second host onboarding

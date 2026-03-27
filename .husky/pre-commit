@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+set -e
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+
+echo "Running backend lint..."
+npm --prefix "$ROOT_DIR/backend" run lint
+
+echo "Running frontend lint..."
+npm --prefix "$ROOT_DIR/frontend" run lint
+
+echo "Running Prettier checks..."
+npm --prefix "$ROOT_DIR/backend" exec prettier --check \
+  "$ROOT_DIR/backend/src/**/*.{ts,js,json,md,yml,yaml}" \
+  "$ROOT_DIR/backend/test/**/*.{ts,js,json,md,yml,yaml}" \
+  "$ROOT_DIR/frontend/src/**/*.{ts,tsx,js,jsx,json,md,css,yml,yaml}" \
+  "$ROOT_DIR/frontend/*.{md,json,yml,yaml}"
+
+echo "Pre-commit checks passed."

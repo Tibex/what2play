@@ -55,6 +55,7 @@ describe('RecommendationsService', () => {
   const mockGamesService = {
     getGamesOwnedByUsers: jest.fn(),
     getRatingsForGames: jest.fn(),
+    getDiscoveryGames: jest.fn(),
   };
 
   const mockEventsService = {
@@ -90,6 +91,7 @@ describe('RecommendationsService', () => {
     service = module.get<RecommendationsService>(RecommendationsService);
     jest.clearAllMocks();
     mockCandidatesRepo.find.mockResolvedValue([]);
+    mockGamesService.getDiscoveryGames.mockResolvedValue([]);
   });
 
   describe('generateCandidates', () => {
@@ -379,6 +381,202 @@ describe('RecommendationsService', () => {
       expect(g1).toBeDefined();
       expect(g2).toBeDefined();
       expect(Number(g1!.score)).toBeLessThan(Number(g2!.score));
+    });
+
+    it('boosts games that match attendee preferred complexity', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'planning',
+        attendees: [
+          { rsvpStatus: 'going', user: { preferredWeight: 3 } },
+          { rsvpStatus: 'going', user: { preferredWeight: 3 } },
+        ],
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2']);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'g1',
+          title: 'Closer match',
+          minPlayers: 2,
+          maxPlayers: 4,
+          weight: 3.1,
+        },
+        {
+          id: 'g2',
+          title: 'Farther match',
+          minPlayers: 2,
+          maxPlayers: 4,
+          weight: 4.8,
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'getAverageTimings')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      const g1 = result.find((r) => r.gameId === 'g1');
+      const g2 = result.find((r) => r.gameId === 'g2');
+
+      expect(g1).toBeDefined();
+      expect(g2).toBeDefined();
+      expect(Number(g1!.score)).toBeGreaterThan(Number(g2!.score));
+      expect(g1!.explanation).toHaveProperty('complexity');
+      expect(g1!.explanation).toHaveProperty('confidence');
+      expect(g1!.explanation).toHaveProperty('score_breakdown');
+    });
+
+    it('boosts games with stronger best-player-count fit', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+        'u4',
+      ]);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        { id: 'g1', title: 'Perfect at 4', minPlayers: 4, maxPlayers: 4 },
+        { id: 'g2', title: 'Best around 5', minPlayers: 2, maxPlayers: 8 },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'getAverageTimings')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      const g1 = result.find((r) => r.gameId === 'g1');
+      const g2 = result.find((r) => r.gameId === 'g2');
+
+      expect(g1).toBeDefined();
+      expect(g2).toBeDefined();
+      expect(Number(g1!.score)).toBeGreaterThan(Number(g2!.score));
+      expect(g1!.explanation).toHaveProperty('best_players');
+    });
+
+    it('adds external discovery candidates when discovery mode is enabled', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: true,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+      ]);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+      mockGamesService.getDiscoveryGames.mockResolvedValue([
+        {
+          id: 'x1',
+          title: 'External Pick',
+          minPlayers: 2,
+          maxPlayers: 4,
+          bggRating: 8.2,
+        },
+      ]);
+      jest
+        .spyOn(service as any, 'getAverageTimings')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      expect(result).toHaveLength(1);
+      expect(result[0].gameId).toBe('x1');
+      expect(result[0].source).toBe('external_catalog');
+      expect(result[0].explanation).toHaveProperty('source');
+      expect(result[0].explanation).toHaveProperty('source_detail');
+    });
+
+    it('keeps fallback discovery below strongest owned candidate', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 180,
+        discoveryMode: false,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+      ]);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'g1',
+          title: 'Owned Strong Pick',
+          minPlayers: 2,
+          maxPlayers: 4,
+          bggRating: 8.4,
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([
+        { gameId: 'g1', rating: 9 },
+        { gameId: 'g1', rating: 8.5 },
+      ]);
+      mockGamesService.getDiscoveryGames.mockResolvedValue([
+        {
+          id: 'x1',
+          title: 'External Very Strong',
+          minPlayers: 2,
+          maxPlayers: 4,
+          bggRating: 9.5,
+        },
+      ]);
+      jest
+        .spyOn(service as any, 'getAverageTimings')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      const owned = result.find((r) => r.gameId === 'g1');
+      const external = result.find((r) => r.gameId === 'x1');
+
+      expect(owned).toBeDefined();
+      expect(external).toBeDefined();
+      expect(Number(owned!.score)).toBeGreaterThan(Number(external!.score));
+      expect(external!.source).toBe('external_catalog');
     });
   });
 });

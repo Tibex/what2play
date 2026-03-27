@@ -113,4 +113,24 @@ export class GamesService {
       where: { userId: In(userIds), gameId: In(gameIds) },
     });
   }
+
+  async getDiscoveryGames(
+    playerCount: number,
+    excludeGameIds: string[],
+    limit: number,
+  ): Promise<Game[]> {
+    const qb = this.gamesRepo
+      .createQueryBuilder('game')
+      .where('game.minPlayers <= :playerCount', { playerCount })
+      .andWhere('game.maxPlayers >= :playerCount', { playerCount })
+      .orderBy('game.bggRating', 'DESC', 'NULLS LAST')
+      .addOrderBy('game.updatedAt', 'DESC')
+      .limit(limit);
+
+    if (excludeGameIds.length > 0) {
+      qb.andWhere('game.id NOT IN (:...excludeGameIds)', { excludeGameIds });
+    }
+
+    return qb.getMany();
+  }
 }

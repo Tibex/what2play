@@ -60,9 +60,7 @@ describeIfDb('Friends (e2e)', () => {
       .set('Authorization', `Bearer ${userA.accessToken}`)
       .expect(200);
     expect(friendsForA.body).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: userB.user.id }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ id: userB.user.id })]),
     );
 
     const friendsForB = await request(app.getHttpServer())
@@ -70,9 +68,7 @@ describeIfDb('Friends (e2e)', () => {
       .set('Authorization', `Bearer ${userB.accessToken}`)
       .expect(200);
     expect(friendsForB.body).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: userA.user.id }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ id: userA.user.id })]),
     );
   });
 
