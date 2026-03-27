@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { FeedbackService } from './feedback.service';
 import { EventFeedback } from '../entities/event-feedback.entity';
-import { SessionTiming } from '../entities/session-timing.entity';
 import { Event } from '../entities/event.entity';
 import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
@@ -12,12 +11,6 @@ describe('FeedbackService', () => {
 
   const mockFeedbackRepo = {
     findOne: jest.fn(),
-    create: jest.fn((data) => data),
-    save: jest.fn((data) => data),
-    find: jest.fn(),
-  };
-
-  const mockTimingRepo = {
     create: jest.fn((data) => data),
     save: jest.fn((data) => data),
     find: jest.fn(),
@@ -42,10 +35,6 @@ describe('FeedbackService', () => {
         {
           provide: getRepositoryToken(EventFeedback),
           useValue: mockFeedbackRepo,
-        },
-        {
-          provide: getRepositoryToken(SessionTiming),
-          useValue: mockTimingRepo,
         },
         { provide: getRepositoryToken(Event), useValue: mockEventsRepo },
         { provide: getRepositoryToken(EventVote), useValue: mockVotesRepo },

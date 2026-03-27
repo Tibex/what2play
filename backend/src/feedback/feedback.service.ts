@@ -2,10 +2,8 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventFeedback } from '../entities/event-feedback.entity';
-import { SessionTiming } from '../entities/session-timing.entity';
 import { Event } from '../entities/event.entity';
 import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
-import { SubmitTimingDto } from './dto/submit-timing.dto';
 import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { Game } from '../entities/game.entity';
@@ -41,8 +39,6 @@ export class FeedbackService {
   constructor(
     @InjectRepository(EventFeedback)
     private readonly feedbackRepo: Repository<EventFeedback>,
-    @InjectRepository(SessionTiming)
-    private readonly timingRepo: Repository<SessionTiming>,
     @InjectRepository(Event)
     private readonly eventsRepo: Repository<Event>,
     @InjectRepository(EventVote)
@@ -244,24 +240,8 @@ export class FeedbackService {
     };
   }
 
-  async submitTiming(
-    eventId: string,
-    dto: SubmitTimingDto,
-  ): Promise<SessionTiming> {
-    const timing = this.timingRepo.create({ eventId, ...dto });
-    return this.timingRepo.save(timing);
-  }
-
-  async getEventTimings(eventId: string): Promise<SessionTiming[]> {
-    return this.timingRepo.find({
-      where: { eventId },
-      relations: ['game'],
-    });
-  }
-
   async getGameStats(gameId: string) {
     const feedbacks = await this.feedbackRepo.find({ where: { gameId } });
-    const timings = await this.timingRepo.find({ where: { gameId } });
 
     const avgEnjoyment = feedbacks.length
       ? feedbacks.reduce((sum, f) => sum + f.enjoymentRating, 0) /
@@ -272,17 +252,10 @@ export class FeedbackService {
       ? feedbacks.filter((f) => f.finishedGame).length / feedbacks.length
       : null;
 
-    const avgDuration = timings.length
-      ? timings.reduce((sum, t) => sum + (t.totalMinutes || 0), 0) /
-        timings.length
-      : null;
-
     return {
       totalPlays: feedbacks.length,
       avgEnjoyment,
       completionRate,
-      avgDuration,
-      timingSamples: timings.length,
     };
   }
 }

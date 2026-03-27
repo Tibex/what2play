@@ -7,7 +7,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { Event } from '../entities/event.entity';
-import { SessionTiming } from '../entities/session-timing.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { Game } from '../entities/game.entity';
 import { GamesService } from '../games/games.service';
@@ -49,8 +48,6 @@ export class RecommendationsService {
     private candidatesRepo: Repository<EventGameCandidate>,
     @InjectRepository(Event)
     private eventsRepo: Repository<Event>,
-    @InjectRepository(SessionTiming)
-    private timingsRepo: Repository<SessionTiming>,
     @InjectRepository(EventFeedback)
     private feedbackRepo: Repository<EventFeedback>,
     private gamesService: GamesService,
@@ -84,10 +81,6 @@ export class RecommendationsService {
       ratingsByGame.set(r.gameId, arr);
     });
 
-    const historicalTimings = await this.getAverageTimings(
-      gameIds,
-      playerCount,
-    );
     const historicalFeedback = await this.getAverageFeedback(gameIds);
     const attendeeHistoricalFeedback = await this.getAttendeeFeedbackSignals(
       attendeeIds,
@@ -127,14 +120,7 @@ export class RecommendationsService {
         explanation['bgg'] = `BGG rating: ${Number(game.bggRating).toFixed(1)}`;
       }
 
-      const timing = historicalTimings.get(game.id);
-      if (timing && event.durationMinutes) {
-        const timeFit = this.getTimeFitScore(timing, event.durationMinutes);
-        const contribution = timeFit * RECOMMENDATION_WEIGHTS.timeFit;
-        score += contribution;
-        scoreBreakdown['time_fit'] = contribution;
-        explanation['time'] = `~${timing} min playtime`;
-      } else if (game.playingTime && event.durationMinutes) {
+      if (game.playingTime && event.durationMinutes) {
         const timeFit = this.getTimeFitScore(
           game.playingTime,
           event.durationMinutes,
@@ -412,31 +398,6 @@ export class RecommendationsService {
     }
 
     await this.candidatesRepo.remove(candidate);
-  }
-
-  private async getAverageTimings(
-    gameIds: string[],
-    playerCount: number,
-  ): Promise<Map<string, number>> {
-    if (!gameIds.length) return new Map();
-    const timings = await this.timingsRepo
-      .createQueryBuilder('t')
-      .select('t.gameId', 'gameId')
-      .addSelect('AVG(t.totalMinutes)', 'avg')
-      .where('t.gameId IN (:...gameIds)', { gameIds })
-      .andWhere('t.playerCount BETWEEN :min AND :max', {
-        min: Math.max(1, playerCount - 1),
-        max: playerCount + 1,
-      })
-      .andWhere('t.totalMinutes IS NOT NULL')
-      .groupBy('t.gameId')
-      .getRawMany();
-
-    const map = new Map<string, number>();
-    timings.forEach((t) =>
-      map.set(t.gameId, Math.round(Number.parseFloat(t.avg))),
-    );
-    return map;
   }
 
   private async getAverageFeedback(

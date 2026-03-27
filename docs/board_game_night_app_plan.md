@@ -70,8 +70,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - Post-event feedback loop
   - Quick survey for attendees: enjoyment rating + did you finish at least one game?
   - Persist outcomes and feed recommendation weights for future events
-  - V1 session timer logging with two taps (`Start night` / `End night`) to capture total duration
-  - Optional manual time fix fallback when host forgets to start/end
 
 ## Suggested Additional Features (High Value)
 
@@ -88,7 +86,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - Bring/acquire planning for non-owned recommendations (who can borrow, buy, or bring)
 - Group memory cards before each event (recently loved games, completion stats)
 - Camera-assisted physical collection import with box/title detection and quick review
-- In-session timer with phase tracking and post-session duration quality feedback
 
 ## Technical Architecture
 
@@ -109,7 +106,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - `events` stores canonical UTC start time plus `event_timezone` for consistent local rendering
 - `event_game_candidates`, `event_votes`, `event_selected_game`
 - `event_feedback` (enjoyment, finished_game, notes)
-- `session_timings` (historical game-level timing samples) + event-level V1 timer fields (started_at, ended_at, total_minutes, source)
 - `sync_accounts` (BoardGameGeek linkage and sync metadata)
 - `bgg_verification_challenges` (challenge token, status, expiry, verified_at)
 
@@ -166,8 +162,7 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 7. Monetization rollout: subscriptions, paywall experiments, affiliate integration
 8. Go-to-market rollout: beta cohorts, community launch, partnership scaling
 9. Shelf-scan rollout: assisted import MVP, confidence scoring, and model tuning
-10. Session intelligence rollout: timer UX, duration-learning model, and time-fit recommendation tuning
-11. Native expansion gate: evaluate iOS/Android app build after web retention and conversion targets are sustained
+10. Native expansion gate: evaluate iOS/Android app build after web retention and conversion targets are sustained
 
 ## Execution Status Snapshot (Mar 2026)
 
@@ -178,7 +173,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
   - Monetization experiments (soft limits, trial prompts, affiliate link placement)
   - Go-to-market pilots with beta cohorts and referral loops
   - Shelf-scan assisted import MVP and model quality tuning
-  - Session intelligence iteration (timer UX + learned duration fit)
 
 ## UX Simplification and Retention Priorities
 
@@ -193,7 +187,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
   - Host event templates and one-tap repeat event creation
   - Group memory cards showing what worked in recent sessions
   - 2-tap post-event feedback prompt for higher completion
-  - One-tap in-session timer start/stop with optional phase markers
 - Reliability UX
   - Notification delivery guarantees and reminder retries
   - Deep links for calendar/map to reduce context switching

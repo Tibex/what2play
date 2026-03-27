@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { Event } from '../entities/event.entity';
-import { SessionTiming } from '../entities/session-timing.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { GamesModule } from '../games/games.module';
 import { EventsModule } from '../events/events.module';
@@ -11,12 +10,7 @@ import { RecommendationsController } from './recommendations.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      EventGameCandidate,
-      Event,
-      SessionTiming,
-      EventFeedback,
-    ]),
+    TypeOrmModule.forFeature([EventGameCandidate, Event, EventFeedback]),
     GamesModule,
     forwardRef(() => EventsModule),
   ],

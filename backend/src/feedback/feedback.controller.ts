@@ -11,7 +11,6 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeedbackService } from './feedback.service';
 import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
-import { SubmitTimingDto } from './dto/submit-timing.dto';
 
 @ApiTags('feedback')
 @ApiBearerAuth()
@@ -48,20 +47,5 @@ export class FeedbackController {
   })
   getEventFeedbackAnalytics(@Param('eventId') eventId: string) {
     return this.feedbackService.getEventFeedbackAnalytics(eventId);
-  }
-
-  @Post('timing')
-  @ApiOperation({ summary: 'Submit session timing' })
-  submitTiming(
-    @Param('eventId') eventId: string,
-    @Body() dto: SubmitTimingDto,
-  ) {
-    return this.feedbackService.submitTiming(eventId, dto);
-  }
-
-  @Get('timing')
-  @ApiOperation({ summary: 'Get session timings' })
-  getTimings(@Param('eventId') eventId: string) {
-    return this.feedbackService.getEventTimings(eventId);
   }
 }

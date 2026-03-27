@@ -8,7 +8,6 @@ export { EventInvite } from './event-invite.entity';
 export { EventGameCandidate } from './event-game-candidate.entity';
 export { EventVote } from './event-vote.entity';
 export { EventFeedback } from './event-feedback.entity';
-export { SessionTiming } from './session-timing.entity';
 export { SyncAccount } from './sync-account.entity';
 export { BggVerificationChallenge } from './bgg-verification-challenge.entity';
 export { Friendship } from './friendship.entity';

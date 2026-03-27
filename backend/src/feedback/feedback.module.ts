@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventFeedback } from '../entities/event-feedback.entity';
-import { SessionTiming } from '../entities/session-timing.entity';
 import { Event } from '../entities/event.entity';
 import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
@@ -12,7 +11,6 @@ import { FeedbackController } from './feedback.controller';
   imports: [
     TypeOrmModule.forFeature([
       EventFeedback,
-      SessionTiming,
       Event,
       EventVote,
       EventGameCandidate,

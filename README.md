@@ -13,7 +13,6 @@ A web-first, mobile-responsive app for organizing board game nights with friends
 - **Ranked Voting** — attendees rank games; Borda count aggregation with tie-breaks and host override
 - **Real-time Updates** — WebSocket-powered live voting results
 - **Post-Event Feedback** — enjoyment rating, completion tracking, and duration feel for improving future suggestions
-- **Session Timer** — track setup and gameplay duration for time-fit predictions
 - **Friends** — add friends, accept requests, build your gaming group
 
 ## Tech Stack
@@ -88,7 +87,7 @@ board-game-night/
 │       ├── events/         # Event CRUD, RSVP, invites
 │       ├── recommendations/ # Game recommendation engine
 │       ├── voting/         # Ranked voting, Borda count, WebSocket gateway
-│       ├── feedback/       # Post-event feedback and session timing
+│       ├── feedback/       # Post-event feedback
 │       ├── friends/        # Friend requests and management
 │       └── entities/       # TypeORM database entities
 ├── frontend/
@@ -125,7 +124,6 @@ board-game-night/
 | POST | `/api/events/:id/use-fallback` | Host selects configured fallback game |
 | GET | `/api/events/:id/outcome-analytics` | Host view of recommended vs voted vs played outcomes |
 | POST | `/api/events/:id/feedback` | Submit feedback |
-| POST | `/api/events/:id/feedback/timing` | Submit session timing |
 | GET | `/api/notifications/metrics` | Notification delivery metrics |
 | GET/POST | `/api/friends` | Friends list / send request |
 | POST | `/api/friends/:id/accept` | Accept friend request |

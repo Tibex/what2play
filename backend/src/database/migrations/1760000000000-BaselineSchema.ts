@@ -186,22 +186,6 @@ export class BaselineSchema1760000000000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE TABLE IF NOT EXISTS "session_timings" (
-        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "eventId" uuid NOT NULL,
-        "gameId" uuid NOT NULL,
-        "playerCount" integer NOT NULL,
-        "setupMinutes" integer,
-        "gameplayMinutes" integer,
-        "totalMinutes" integer,
-        "completed" boolean NOT NULL DEFAULT false,
-        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
-        CONSTRAINT "FK_session_timings_event" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE CASCADE,
-        CONSTRAINT "FK_session_timings_game" FOREIGN KEY ("gameId") REFERENCES "games"("id") ON DELETE CASCADE
-      )
-    `);
-
-    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "sync_accounts" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "userId" uuid NOT NULL,
@@ -278,7 +262,6 @@ export class BaselineSchema1760000000000 implements MigrationInterface {
       `DROP TABLE IF EXISTS "bgg_verification_challenges"`,
     );
     await queryRunner.query(`DROP TABLE IF EXISTS "sync_accounts"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "session_timings"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "event_feedback"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "event_votes"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "event_game_candidates"`);

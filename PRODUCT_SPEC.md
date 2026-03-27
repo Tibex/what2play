@@ -57,19 +57,13 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 5. Voting auto-closes at deadline; winner announced
 6. Host can override/lock final selection
 
-### 7. Game Night Session
-
-1. Host starts session timer (optional)
-2. Timer tracks: setup phase → gameplay phase → total
-3. Players can see elapsed time
-
-### 8. Post-Event Feedback
+### 7. Post-Event Feedback
 
 1. After event ends, attendees receive feedback prompt
 2. Quick survey: enjoyment (1-5 stars), did you finish?, felt too long/just right/too short
 3. Data feeds into recommendation weights for future events
 
-### 9. Friends & Groups
+### 8. Friends & Groups
 
 1. Add friends by username or invite link
 2. Create persistent groups for recurring game nights
@@ -91,7 +85,6 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 | EventVote                | event_id, user_id, game_id, rank                                                                          |
 | EventSelectedGame        | event_id, game_id, selected_by, selected_at                                                               |
 | EventFeedback            | event_id, user_id, enjoyment_rating, finished_game, duration_feel, notes                                  |
-| SessionTiming            | event_id, game_id, player_count, setup_minutes, gameplay_minutes, total_minutes, completed                |
 | SyncAccount              | user_id, provider (bgg), external_username, last_synced_at, status                                        |
 | BggVerificationChallenge | user_id, token, status, expires_at, verified_at                                                           |
 

@@ -3,7 +3,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { RecommendationsService } from './recommendations.service';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { Event } from '../entities/event.entity';
-import { SessionTiming } from '../entities/session-timing.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { GamesService } from '../games/games.service';
 import { EventsService } from '../events/events.service';
@@ -28,17 +27,6 @@ describe('RecommendationsService', () => {
   const mockEventsRepo = {
     findOne: jest.fn(),
     save: jest.fn((data) => data),
-  };
-
-  const mockTimingsRepo = {
-    createQueryBuilder: jest.fn(() => ({
-      select: jest.fn().mockReturnThis(),
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      groupBy: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([]),
-    })),
   };
 
   const mockFeedbackRepo = {
@@ -70,10 +58,6 @@ describe('RecommendationsService', () => {
         {
           provide: getRepositoryToken(EventGameCandidate),
           useValue: mockCandidatesRepo,
-        },
-        {
-          provide: getRepositoryToken(SessionTiming),
-          useValue: mockTimingsRepo,
         },
         {
           provide: getRepositoryToken(Event),
@@ -365,9 +349,6 @@ describe('RecommendationsService', () => {
         .spyOn(service as any, 'getRecentlyPlayedGameIds')
         .mockResolvedValue(new Set(['g1']));
       jest
-        .spyOn(service as any, 'getAverageTimings')
-        .mockResolvedValue(new Map());
-      jest
         .spyOn(service as any, 'getAverageFeedback')
         .mockResolvedValue(new Map());
       jest
@@ -413,9 +394,6 @@ describe('RecommendationsService', () => {
       ]);
       mockGamesService.getRatingsForGames.mockResolvedValue([]);
       jest
-        .spyOn(service as any, 'getAverageTimings')
-        .mockResolvedValue(new Map());
-      jest
         .spyOn(service as any, 'getAverageFeedback')
         .mockResolvedValue(new Map());
       jest
@@ -454,9 +432,6 @@ describe('RecommendationsService', () => {
         { id: 'g2', title: 'Best around 5', minPlayers: 2, maxPlayers: 8 },
       ]);
       mockGamesService.getRatingsForGames.mockResolvedValue([]);
-      jest
-        .spyOn(service as any, 'getAverageTimings')
-        .mockResolvedValue(new Map());
       jest
         .spyOn(service as any, 'getAverageFeedback')
         .mockResolvedValue(new Map());
@@ -521,9 +496,6 @@ describe('RecommendationsService', () => {
       ]);
       mockGamesService.getRatingsForGames.mockResolvedValue([]);
       jest
-        .spyOn(service as any, 'getAverageTimings')
-        .mockResolvedValue(new Map());
-      jest
         .spyOn(service as any, 'getAverageFeedback')
         .mockResolvedValue(new Map());
       jest
@@ -566,9 +538,6 @@ describe('RecommendationsService', () => {
           bggRating: 8.2,
         },
       ]);
-      jest
-        .spyOn(service as any, 'getAverageTimings')
-        .mockResolvedValue(new Map());
       jest
         .spyOn(service as any, 'getAverageFeedback')
         .mockResolvedValue(new Map());
@@ -621,9 +590,6 @@ describe('RecommendationsService', () => {
           bggRating: 9.5,
         },
       ]);
-      jest
-        .spyOn(service as any, 'getAverageTimings')
-        .mockResolvedValue(new Map());
       jest
         .spyOn(service as any, 'getAverageFeedback')
         .mockResolvedValue(new Map());
