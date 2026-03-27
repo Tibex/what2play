@@ -53,10 +53,10 @@ export default function InvitePage() {
     }
   }, []);
 
-  const alreadyJoinedWithAccount =
-    Boolean(currentUserId) &&
-    Boolean(event) &&
-    event.attendees.some((attendee) => attendee.userId === currentUserId);
+  const alreadyJoinedWithAccount = Boolean(
+    currentUserId &&
+      event?.attendees?.some((attendee) => attendee.userId === currentUserId),
+  );
 
   useEffect(() => {
     if (!event?.id || !alreadyJoinedWithAccount) return;

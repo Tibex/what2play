@@ -9,6 +9,7 @@ import { RecommendationsModule } from '../recommendations/recommendations.module
 import { NotificationsModule } from '../notifications/notifications.module';
 import { FeedbackModule } from '../feedback/feedback.module';
 import { VotingModule } from '../voting/voting.module';
+import { FriendsModule } from '../friends/friends.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { VotingModule } from '../voting/voting.module';
     VotingModule,
     NotificationsModule,
     FeedbackModule,
+    FriendsModule,
   ],
   providers: [EventsService],
   controllers: [EventsController],

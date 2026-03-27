@@ -24,6 +24,7 @@ import { RsvpDto } from './dto/rsvp.dto';
 import { GuestRsvpDto } from './dto/guest-rsvp.dto';
 import { ManualSessionTimingDto } from './dto/manual-session-timing.dto';
 import { GuestSubmitVotesDto } from '../voting/dto/guest-submit-votes.dto';
+import { InviteFriendsDto } from './dto/invite-friends.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -218,6 +219,38 @@ export class EventsController {
   @ApiOperation({ summary: 'Create invite link for event' })
   createInviteLink(@Param('id') id: string, @Request() req) {
     return this.eventsService.createInviteLink(id, req.user.id);
+  }
+
+  @Get(':id/inviteable-friends')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get friends who can be invited to event' })
+  getInviteableFriends(@Param('id') id: string, @Request() req) {
+    return this.eventsService.getInviteableFriends(id, req.user.id);
+  }
+
+  @Post(':id/invite-friends')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite existing friends directly to event' })
+  async inviteFriends(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: InviteFriendsDto,
+  ) {
+    const result = await this.eventsService.inviteFriends(
+      id,
+      req.user.id,
+      dto.userIds,
+    );
+    if (result.invitedUserIds.length > 0) {
+      this.notificationsService
+        .sendFriendAddedToEventNotification(id, req.user.id, result.invitedUserIds)
+        .catch(() => {
+          /* non-critical */
+        });
+    }
+    return result;
   }
 
   @Delete(':id')

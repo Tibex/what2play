@@ -10,10 +10,12 @@ import { v4 as uuid } from 'uuid';
 import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
 import { EventInvite } from '../entities/event-invite.entity';
+import { User } from '../entities/user.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ManualSessionTimingDto } from './dto/manual-session-timing.dto';
 import { resolveEventDateTime, resolveEventTimezone } from './timezone.utils';
+import { FriendsService } from '../friends/friends.service';
 
 @Injectable()
 export class EventsService {
@@ -24,6 +26,7 @@ export class EventsService {
     private readonly attendeesRepo: Repository<EventAttendee>,
     @InjectRepository(EventInvite)
     private readonly invitesRepo: Repository<EventInvite>,
+    private readonly friendsService: FriendsService,
   ) {}
 
   async create(hostId: string, dto: CreateEventDto): Promise<Event> {
@@ -431,6 +434,100 @@ export class EventsService {
     }
 
     await this.attendeesRepo.remove(attendee);
+  }
+
+  async getInviteableFriends(eventId: string, hostUserId: string): Promise<User[]> {
+    const event = await this.findById(eventId);
+    if (event.hostId !== hostUserId) {
+      throw new ForbiddenException('Only host can invite friends');
+    }
+
+    const friendIds = await this.friendsService.getFriendIds(hostUserId);
+    if (friendIds.length === 0) {
+      return [];
+    }
+
+    const attendeeUserIds = new Set(
+      (event.attendees || [])
+        .map((attendee) => attendee.userId)
+        .filter((userId): userId is string => Boolean(userId)),
+    );
+
+    const inviteableUserIds = friendIds.filter(
+      (friendId) => !attendeeUserIds.has(friendId),
+    );
+    if (inviteableUserIds.length === 0) {
+      return [];
+    }
+
+    return this.attendeesRepo.manager.getRepository(User).find({
+      where: inviteableUserIds.map((id) => ({ id })),
+      order: { name: 'ASC' },
+    });
+  }
+
+  async inviteFriends(
+    eventId: string,
+    hostUserId: string,
+    userIds: string[],
+  ): Promise<{
+    invitedUserIds: string[];
+    alreadyAttendingUserIds: string[];
+    notFriendsUserIds: string[];
+  }> {
+    const event = await this.findById(eventId);
+    if (event.hostId !== hostUserId) {
+      throw new ForbiddenException('Only host can invite friends');
+    }
+
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length === 0) {
+      return {
+        invitedUserIds: [],
+        alreadyAttendingUserIds: [],
+        notFriendsUserIds: [],
+      };
+    }
+
+    const friendIds = new Set(await this.friendsService.getFriendIds(hostUserId));
+    const attendeeByUserId = new Set(
+      (event.attendees || [])
+        .map((attendee) => attendee.userId)
+        .filter((userId): userId is string => Boolean(userId)),
+    );
+
+    const invitedUserIds: string[] = [];
+    const alreadyAttendingUserIds: string[] = [];
+    const notFriendsUserIds: string[] = [];
+
+    for (const userId of uniqueUserIds) {
+      if (!friendIds.has(userId)) {
+        notFriendsUserIds.push(userId);
+        continue;
+      }
+      if (attendeeByUserId.has(userId)) {
+        alreadyAttendingUserIds.push(userId);
+        continue;
+      }
+
+      const attendee = this.attendeesRepo.create({
+        eventId,
+        userId,
+        rsvpStatus: 'going',
+        waitlistPriority: null,
+        lastStatusChangeAt: new Date(),
+        cancellationReason: null,
+      });
+      await this.attendeesRepo.save(attendee);
+      invitedUserIds.push(userId);
+      attendeeByUserId.add(userId);
+    }
+
+    return {
+      invitedUserIds,
+      alreadyAttendingUserIds,
+      notFriendsUserIds,
+    };
   }
 
   async assertHostAccess(eventId: string, userId: string): Promise<void> {

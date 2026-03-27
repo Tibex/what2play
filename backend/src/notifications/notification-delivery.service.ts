@@ -13,7 +13,8 @@ interface NotificationPayload {
     | 'voting_started'
     | 'all_voted'
     | 'attendance_change'
-    | 'spot_opened';
+    | 'spot_opened'
+    | 'event_friend_invited';
   idempotencyKey: string;
   title: string;
   body: string;

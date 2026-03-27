@@ -190,6 +190,48 @@ export class NotificationsService {
     }
   }
 
+  async sendFriendAddedToEventNotification(
+    eventId: string,
+    hostUserId: string,
+    invitedUserIds: string[],
+  ): Promise<void> {
+    if (!invitedUserIds.length) return;
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['host', 'attendees', 'attendees.user'],
+    });
+    if (!event) return;
+
+    const hostName = event.host?.name || 'Your host';
+    const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
+    for (const userId of invitedUserIds) {
+      const attendee = event.attendees.find((a) => a.userId === userId);
+      if (!attendee?.user?.email) continue;
+      await this.deliveryService.send({
+        eventId: event.id,
+        type: 'event_friend_invited',
+        idempotencyKey: `event_friend_invited:${event.id}:${userId}`,
+        title: `You're invited: ${event.title}`,
+        body: `${hostName} added you to this event. Open the event to check details and RSVP.`,
+        recipientCount: 1,
+        recipients: [
+          {
+            email: attendee.user.email,
+            name: attendee.user.name || undefined,
+            userId,
+          },
+        ],
+        eventUrl,
+        feedbackUrl,
+        metadata: {
+          hostUserId,
+          hostName,
+          invitedUserId: userId,
+        },
+      });
+    }
+  }
+
   private getRecipientsByStatuses(
     attendees: EventAttendee[],
     statuses: string[],

@@ -8,13 +8,18 @@ import { Repository } from 'typeorm';
 import { Friendship } from '../entities/friendship.entity';
 import { User } from '../entities/user.entity';
 
+export type FriendRequestByUserIdResultStatus =
+  | 'sent'
+  | 'already_friends'
+  | 'request_pending';
+
 @Injectable()
 export class FriendsService {
   constructor(
     @InjectRepository(Friendship)
-    private friendsRepo: Repository<Friendship>,
+    private readonly friendsRepo: Repository<Friendship>,
     @InjectRepository(User)
-    private usersRepo: Repository<User>,
+    private readonly usersRepo: Repository<User>,
   ) {}
 
   async sendRequest(
@@ -87,5 +92,67 @@ export class FriendsService {
       { requesterId: userId, addresseeId: friendId },
       { requesterId: friendId, addresseeId: userId },
     ]);
+  }
+
+  async getFriendIds(userId: string): Promise<string[]> {
+    const friendships = await this.friendsRepo.find({
+      where: [
+        { requesterId: userId, status: 'accepted' },
+        { addresseeId: userId, status: 'accepted' },
+      ],
+      select: ['requesterId', 'addresseeId'],
+    });
+
+    return friendships.map((f) =>
+      f.requesterId === userId ? f.addresseeId : f.requesterId,
+    );
+  }
+
+  async sendRequestByUserId(
+    requesterId: string,
+    addresseeId: string,
+  ): Promise<{ status: FriendRequestByUserIdResultStatus }> {
+    if (requesterId === addresseeId) {
+      throw new BadRequestException('Cannot friend yourself');
+    }
+
+    const addressee = await this.usersRepo.findOne({
+      where: { id: addresseeId },
+      select: ['id'],
+    });
+    if (!addressee) {
+      throw new NotFoundException('User not found');
+    }
+
+    const existing = await this.friendsRepo.findOne({
+      where: [
+        { requesterId, addresseeId },
+        { requesterId: addresseeId, addresseeId: requesterId },
+      ],
+    });
+
+    if (!existing) {
+      const friendship = this.friendsRepo.create({
+        requesterId,
+        addresseeId,
+        status: 'pending',
+      });
+      await this.friendsRepo.save(friendship);
+      return { status: 'sent' };
+    }
+
+    if (existing.status === 'accepted') {
+      return { status: 'already_friends' };
+    }
+
+    if (existing.status === 'pending') {
+      return { status: 'request_pending' };
+    }
+
+    existing.requesterId = requesterId;
+    existing.addresseeId = addresseeId;
+    existing.status = 'pending';
+    await this.friendsRepo.save(existing);
+    return { status: 'sent' };
   }
 }

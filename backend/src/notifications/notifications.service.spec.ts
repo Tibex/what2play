@@ -117,4 +117,29 @@ describe('NotificationsService', () => {
       }),
     );
   });
+
+  it('sends event invite notification to newly added friend attendee', async () => {
+    mockEventsRepo.findOne = jest.fn().mockResolvedValue({
+      id: 'e4',
+      title: 'Monday session',
+      host: { id: 'host-1', name: 'Host Name' },
+      attendees: [
+        {
+          userId: 'u10',
+          user: { email: 'friend@example.com', name: 'Friend User' },
+        },
+      ],
+    });
+
+    await service.sendFriendAddedToEventNotification('e4', 'host-1', ['u10']);
+
+    expect(mockDeliveryService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'e4',
+        type: 'event_friend_invited',
+        recipientCount: 1,
+        recipients: [expect.objectContaining({ email: 'friend@example.com' })],
+      }),
+    );
+  });
 });

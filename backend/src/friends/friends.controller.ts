@@ -12,13 +12,14 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FriendsService } from './friends.service';
 import { SendFriendRequestDto } from './dto/send-friend-request.dto';
+import { SendFriendRequestByUserIdDto } from './dto/send-friend-request-by-user-id.dto';
 
 @ApiTags('friends')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api/friends')
 export class FriendsController {
-  constructor(private friendsService: FriendsService) {}
+  constructor(private readonly friendsService: FriendsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get friends list' })
@@ -36,6 +37,15 @@ export class FriendsController {
   @ApiOperation({ summary: 'Send friend request' })
   sendRequest(@Request() req, @Body() dto: SendFriendRequestDto) {
     return this.friendsService.sendRequest(req.user.id, dto.email);
+  }
+
+  @Post('request-by-user-id')
+  @ApiOperation({ summary: 'Send friend request by user id' })
+  sendRequestByUserId(
+    @Request() req,
+    @Body() dto: SendFriendRequestByUserIdDto,
+  ) {
+    return this.friendsService.sendRequestByUserId(req.user.id, dto.userId);
   }
 
   @Post(':id/accept')

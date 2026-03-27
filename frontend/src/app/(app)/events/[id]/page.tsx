@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -12,12 +12,15 @@ import FeedbackSection from './feedback-section';
 import type {
   Game,
   GameEvent,
+  User,
   EventGameCandidate,
   BggSearchResult,
   VoteResult,
   EventVote,
   VotingStatus,
   FeedbackStatus,
+  InviteFriendsResponse,
+  FriendRequestByUserIdResponse,
 } from '@/lib/types';
 
 export default function EventDetailPage() {
@@ -31,6 +34,12 @@ export default function EventDetailPage() {
   const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null);
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | null>(null);
   const [inviteLink, setInviteLink] = useState('');
+  const [friendIds, setFriendIds] = useState<string[]>([]);
+  const [requestedFriendIds, setRequestedFriendIds] = useState<string[]>([]);
+  const [addingFriendUserId, setAddingFriendUserId] = useState<string | null>(null);
+  const [inviteableFriends, setInviteableFriends] = useState<User[]>([]);
+  const [loadingInviteableFriends, setLoadingInviteableFriends] = useState(false);
+  const [invitingFriends, setInvitingFriends] = useState(false);
   const [loading, setLoading] = useState(true);
   const [nowTs] = useState(() => Date.now());
   const [savingFallback, setSavingFallback] = useState(false);
@@ -40,6 +49,12 @@ export default function EventDetailPage() {
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
     setEvent(ev);
+    try {
+      const friends = await api.get<User[]>('/friends', { showErrorToast: false });
+      setFriendIds(friends.map((f) => f.id));
+    } catch {
+      /* best effort for attendee friend actions */
+    }
     try {
       const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`, { showErrorToast: false });
       setCandidates(c);
@@ -166,6 +181,76 @@ export default function EventDetailPage() {
     } catch { /* toast auto-shown */ }
   };
 
+  const loadInviteableFriends = async () => {
+    if (!isHost) return;
+    setLoadingInviteableFriends(true);
+    try {
+      const list = await api.get<User[]>(`/events/${id}/inviteable-friends`);
+      setInviteableFriends(list);
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setLoadingInviteableFriends(false);
+    }
+  };
+
+  const handleOpenInviteFriends = async () => {
+    await loadInviteableFriends();
+  };
+
+  const handleInviteFriend = async (userId: string) => {
+    setInvitingFriends(true);
+    try {
+      const result = await api.post<InviteFriendsResponse>(`/events/${id}/invite-friends`, {
+        userIds: [userId],
+      });
+
+      if (result.invitedUserIds.length > 0) {
+        toast.success('Friend invited');
+      } else if (result.alreadyAttendingUserIds.length > 0) {
+        toast('Already attending');
+      } else if (result.notFriendsUserIds.length > 0) {
+        toast.error('Only friends can be invited');
+      }
+
+      await Promise.all([loadEvent(), loadInviteableFriends()]);
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setInvitingFriends(false);
+    }
+  };
+
+  const handleAddFriendFromAttendee = async (userId: string) => {
+    if (!userId || friendIds.includes(userId) || requestedFriendIds.includes(userId)) {
+      return;
+    }
+    setAddingFriendUserId(userId);
+    try {
+      const result = await api.post<FriendRequestByUserIdResponse>(
+        '/friends/request-by-user-id',
+        { userId },
+      );
+      if (result.status === 'already_friends') {
+        setFriendIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
+        toast('Already in your friends list');
+      } else {
+        setRequestedFriendIds((prev) =>
+          prev.includes(userId) ? prev : [...prev, userId],
+        );
+        toast.success(
+          result.status === 'sent'
+            ? 'Friend request sent'
+            : 'Friend request already pending',
+        );
+      }
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setAddingFriendUserId(null);
+    }
+  };
+
   const handleStartVoting = async () => {
     try {
       const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -248,6 +333,16 @@ export default function EventDetailPage() {
             isHost={isHost}
             isPlanning={isPlanning}
             hostUserId={event.hostId}
+            currentUserId={user?.id}
+            friendIds={friendIds}
+            requestedFriendIds={requestedFriendIds}
+            addingFriendUserId={addingFriendUserId}
+            onAddFriend={handleAddFriendFromAttendee}
+            inviteableFriends={inviteableFriends}
+            loadingInviteableFriends={loadingInviteableFriends}
+            invitingFriends={invitingFriends}
+            onInviteFriend={handleInviteFriend}
+            onOpenInviteFriends={handleOpenInviteFriends}
             onRemove={handleRemoveAttendee}
           />
         </div>
@@ -324,6 +419,7 @@ export default function EventDetailPage() {
             </div>
           </div>
         )}
+
       </div>
 
       <div className="mt-6">
@@ -422,14 +518,66 @@ function AttendeesSection({
   isHost,
   isPlanning,
   hostUserId,
+  currentUserId,
+  friendIds,
+  requestedFriendIds,
+  addingFriendUserId,
+  onAddFriend,
+  inviteableFriends,
+  loadingInviteableFriends,
+  invitingFriends,
+  onInviteFriend,
+  onOpenInviteFriends,
   onRemove,
 }: {
   attendees: GameEvent['attendees'];
   isHost: boolean;
   isPlanning: boolean;
   hostUserId: string;
+  currentUserId?: string;
+  friendIds: string[];
+  requestedFriendIds: string[];
+  addingFriendUserId: string | null;
+  onAddFriend: (userId: string) => void;
+  inviteableFriends: User[];
+  loadingInviteableFriends: boolean;
+  invitingFriends: boolean;
+  onInviteFriend: (userId: string) => void;
+  onOpenInviteFriends: () => void;
   onRemove: (attendeeId: string) => void;
 }) {
+  const [inviteDropdownOpen, setInviteDropdownOpen] = useState(false);
+  const [inviteQuery, setInviteQuery] = useState('');
+  const inviteDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (!inviteDropdownRef.current) return;
+      if (!inviteDropdownRef.current.contains(event.target as Node)) {
+        setInviteDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+    };
+  }, []);
+
+  const openInviteDropdown = async () => {
+    setInviteDropdownOpen(true);
+    await onOpenInviteFriends();
+  };
+
+  const visibleInviteableFriends = inviteableFriends.filter((friend) => {
+    const q = inviteQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      friend.name.toLowerCase().includes(q) ||
+      friend.email.toLowerCase().includes(q)
+    );
+  });
+
   const groups = {
     going: attendees.filter((a) => a.rsvpStatus === 'going'),
     maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'),
@@ -451,6 +599,55 @@ function AttendeesSection({
             {list.map((a) => (
               <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm inline-flex items-center gap-2">
                 <span>{a.user?.name || a.guestName || 'Guest'}</span>
+                {a.userId &&
+                  !a.isGuest &&
+                  a.userId !== currentUserId &&
+                  (friendIds.includes(a.userId) ? (
+                    <span
+                      className="inline-flex items-center justify-center text-green-600"
+                      title="Already friends"
+                      aria-label="Already friends"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M10 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM4.25 16.5A5.75 5.75 0 0 1 10 10.75a5.75 5.75 0 0 1 5.75 5.75.75.75 0 0 1-.75.75H5a.75.75 0 0 1-.75-.75Z" />
+                      </svg>
+                    </span>
+                  ) : requestedFriendIds.includes(a.userId) ? (
+                    <span
+                      className="inline-flex items-center justify-center text-amber-600"
+                      title="Request pending"
+                      aria-label="Request pending"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Zm.75 3.25a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 .3.6l2.5 1.875a.75.75 0 1 0 .9-1.2l-2.2-1.65V5.75Z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onAddFriend(a.userId!)}
+                      disabled={addingFriendUserId === a.userId}
+                      className="text-xs text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                    >
+                      {addingFriendUserId === a.userId ? 'Adding...' : '+'}
+                    </button>
+                  ))}
                 {a.cancellationReason ? (
                   <span className="text-xs text-gray-500" title={a.cancellationReason}>
                     ({a.cancellationReason})
@@ -469,6 +666,58 @@ function AttendeesSection({
                 )}
               </span>
             ))}
+            {isHost && status === 'going' && (
+              <div ref={inviteDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (inviteDropdownOpen) {
+                      setInviteDropdownOpen(false);
+                      return;
+                    }
+                    void openInviteDropdown();
+                  }}
+                  className="bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-full px-3 py-1 text-sm font-medium hover:bg-indigo-200 transition"
+                  title="Invite friend"
+                  aria-label="Invite friend"
+                >
+                  +
+                </button>
+                {inviteDropdownOpen && (
+                  <div className="absolute z-20 mt-2 right-0 w-72 rounded-lg border border-gray-200 bg-white shadow-lg p-2">
+                    <input
+                      type="text"
+                      value={inviteQuery}
+                      onChange={(e) => setInviteQuery(e.target.value)}
+                      placeholder="Search friends..."
+                      className="w-full mb-2 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    <div className="max-h-56 overflow-y-auto">
+                      {loadingInviteableFriends ? (
+                        <p className="text-xs text-gray-500 px-1 py-2">Loading...</p>
+                      ) : visibleInviteableFriends.length === 0 ? (
+                        <p className="text-xs text-gray-500 px-1 py-2">No matching friends</p>
+                      ) : (
+                        visibleInviteableFriends.map((friend) => (
+                          <button
+                            key={friend.id}
+                            type="button"
+                            onClick={() => {
+                              onInviteFriend(friend.id);
+                            }}
+                            disabled={invitingFriends}
+                            className="w-full text-left rounded px-2 py-1.5 hover:bg-gray-100 disabled:opacity-50"
+                          >
+                            <span className="block text-sm text-gray-800 truncate">{friend.name}</span>
+                            <span className="block text-xs text-gray-500 truncate">{friend.email}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}

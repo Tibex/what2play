@@ -192,3 +192,13 @@ export interface Friendship {
   addressee: User;
   status: string;
 }
+
+export interface FriendRequestByUserIdResponse {
+  status: 'sent' | 'already_friends' | 'request_pending';
+}
+
+export interface InviteFriendsResponse {
+  invitedUserIds: string[];
+  alreadyAttendingUserIds: string[];
+  notFriendsUserIds: string[];
+}
