@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, In, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
@@ -74,20 +74,14 @@ export class EventsService {
       .createQueryBuilder('event')
       .leftJoinAndSelect('event.attendees', 'attendee')
       .leftJoinAndSelect('event.host', 'host')
-      .where('event.hostId = :userId', { userId })
-      .orWhere(
-        new Brackets((qb) => {
-          qb.where(
-            `EXISTS ${qb
-              .subQuery()
-              .select('1')
-              .from(EventAttendee, 'membership')
-              .where('membership.eventId = event.id')
-              .andWhere('membership.userId = :userId')
-              .getQuery()}`,
-          );
-        }),
+      .leftJoin(
+        'event.attendees',
+        'membership',
+        'membership.userId = :userId',
+        { userId },
       )
+      .where('event.hostId = :userId', { userId })
+      .orWhere('membership.id IS NOT NULL')
       .orderBy('event.dateTime', 'DESC')
       .getMany();
   }
