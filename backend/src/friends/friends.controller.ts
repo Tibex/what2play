@@ -33,6 +33,12 @@ export class FriendsController {
     return this.friendsService.getPendingRequests(req.user.id);
   }
 
+  @Get('pending/sent')
+  @ApiOperation({ summary: 'Get sent pending friend requests' })
+  getSentPending(@Request() req) {
+    return this.friendsService.getSentPendingRequests(req.user.id);
+  }
+
   @Post('request')
   @ApiOperation({ summary: 'Send friend request' })
   sendRequest(@Request() req, @Body() dto: SendFriendRequestDto) {

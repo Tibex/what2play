@@ -5,24 +5,31 @@ import { api } from '@/lib/api';
 import type { User, Friendship } from '@/lib/types';
 
 const loadFriendsData = async () => {
-  const [friends, pending] = await Promise.all([
+  const [friends, pendingIncoming, pendingSent] = await Promise.all([
     api.get<User[]>('/friends'),
     api.get<Friendship[]>('/friends/pending'),
+    api.get<Friendship[]>('/friends/pending/sent'),
   ]);
-  return { friends, pending };
+  return { friends, pendingIncoming, pendingSent };
 };
 
 export default function FriendsPage() {
   const [friends, setFriends] = useState<User[]>([]);
-  const [pending, setPending] = useState<Friendship[]>([]);
+  const [pendingIncoming, setPendingIncoming] = useState<Friendship[]>([]);
+  const [pendingSent, setPendingSent] = useState<Friendship[]>([]);
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
-    const { friends: loadedFriends, pending: loadedPending } = await loadFriendsData();
+    const {
+      friends: loadedFriends,
+      pendingIncoming: loadedPendingIncoming,
+      pendingSent: loadedPendingSent,
+    } = await loadFriendsData();
     setFriends(loadedFriends);
-    setPending(loadedPending);
+    setPendingIncoming(loadedPendingIncoming);
+    setPendingSent(loadedPendingSent);
     setLoading(false);
   };
 
@@ -38,6 +45,7 @@ export default function FriendsPage() {
       await api.post('/friends/request', { email });
       setMessage('Friend request sent!');
       setEmail('');
+      await loadData();
     } catch (err: unknown) {
       setMessage(err instanceof Error ? err.message : 'Failed');
     }
@@ -83,11 +91,11 @@ export default function FriendsPage() {
         {message && <p className="text-sm text-green-600 mt-2">{message}</p>}
       </div>
 
-      {pending.length > 0 && (
+      {pendingIncoming.length > 0 && (
         <div className="bg-yellow-50 rounded-2xl border border-yellow-100 p-6 mb-6">
-          <h2 className="font-semibold mb-3">Pending Requests ({pending.length})</h2>
+          <h2 className="font-semibold mb-3">Incoming Requests ({pendingIncoming.length})</h2>
           <div className="space-y-3">
-            {pending.map((f) => (
+            {pendingIncoming.map((f) => (
               <div key={f.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-yellow-200">
                 <span className="font-medium">{f.requester?.name || f.requester?.email}</span>
                 <div className="flex gap-2">
@@ -104,8 +112,30 @@ export default function FriendsPage() {
         </div>
       )}
 
+      {pendingSent.length > 0 && (
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-6 mb-6">
+          <h2 className="font-semibold mb-3">Sent Requests ({pendingSent.length})</h2>
+          <div className="space-y-3">
+            {pendingSent.map((f) => (
+              <div key={f.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-blue-200">
+                <span className="font-medium">
+                  {f.addressee?.name || f.addressee?.email}
+                </span>
+                <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
+                  Pending
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {friends.length === 0 ? (
-        <p className="text-gray-500 text-center py-10">No friends yet. Send a friend request above.</p>
+        <p className="text-gray-500 text-center py-10">
+          {pendingIncoming.length > 0 || pendingSent.length > 0
+            ? 'No accepted friends yet.'
+            : 'No friends yet. Send a friend request above.'}
+        </p>
       ) : (
         <div>
           <h2 className="font-semibold text-gray-700 mb-4">Your Friends ({friends.length})</h2>

@@ -72,6 +72,48 @@ describeIfDb('Friends (e2e)', () => {
     );
   });
 
+  it('returns sent pending requests for requester', async () => {
+    const requester = await registerUser('friendSentRequester');
+    const addressee = await registerUser('friendSentAddressee');
+
+    await request(app.getHttpServer())
+      .post('/api/friends/request-by-user-id')
+      .set('Authorization', `Bearer ${requester.accessToken}`)
+      .send({ userId: addressee.user.id })
+      .expect(201);
+
+    const sentPending = await request(app.getHttpServer())
+      .get('/api/friends/pending/sent')
+      .set('Authorization', `Bearer ${requester.accessToken}`)
+      .expect(200);
+
+    expect(sentPending.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requesterId: requester.user.id,
+          addresseeId: addressee.user.id,
+          status: 'pending',
+          addressee: expect.objectContaining({ id: addressee.user.id }),
+        }),
+      ]),
+    );
+
+    const incomingForAddressee = await request(app.getHttpServer())
+      .get('/api/friends/pending')
+      .set('Authorization', `Bearer ${addressee.accessToken}`)
+      .expect(200);
+
+    expect(incomingForAddressee.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requesterId: requester.user.id,
+          addresseeId: addressee.user.id,
+          status: 'pending',
+        }),
+      ]),
+    );
+  });
+
   async function registerUser(alias: string) {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')

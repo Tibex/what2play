@@ -96,6 +96,13 @@ export class FriendsService {
     });
   }
 
+  async getSentPendingRequests(userId: string): Promise<Friendship[]> {
+    return this.friendsRepo.find({
+      where: { requesterId: userId, status: 'pending' },
+      relations: ['addressee'],
+    });
+  }
+
   async removeFriend(userId: string, friendId: string): Promise<void> {
     await this.friendsRepo.delete([
       { requesterId: userId, addresseeId: friendId },
