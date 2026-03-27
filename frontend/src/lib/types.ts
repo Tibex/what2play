@@ -96,8 +96,6 @@ export interface EventAttendee {
   userId?: string;
   user?: User;
   rsvpStatus: string;
-  isGuest: boolean;
-  guestName?: string;
   cancellationReason?: string;
   waitlistPriority?: number;
   lastStatusChangeAt?: string;

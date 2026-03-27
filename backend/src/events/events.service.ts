@@ -177,68 +177,6 @@ export class EventsService {
     return saved;
   }
 
-  async guestRsvp(
-    eventId: string,
-    guestName: string,
-    status: string,
-    cancellationReason?: string,
-  ): Promise<EventAttendee> {
-    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
-    if (!event) throw new NotFoundException('Event not found');
-    if (event.status === 'completed' || event.status === 'cancelled') {
-      throw new BadRequestException(
-        'RSVP cannot be changed for completed or cancelled events',
-      );
-    }
-
-    const normalized = guestName.trim().toLowerCase();
-    const existing = await this.attendeesRepo
-      .createQueryBuilder('attendee')
-      .where('attendee.eventId = :eventId', { eventId })
-      .andWhere('attendee.isGuest = true')
-      .andWhere('LOWER(attendee.guestName) = :guestName', {
-        guestName: normalized,
-      })
-      .getOne();
-
-    if (existing) {
-      const previousStatus = existing.rsvpStatus;
-      existing.guestName = guestName.trim();
-      existing.rsvpStatus = status;
-      existing.lastStatusChangeAt = new Date();
-      existing.cancellationReason =
-        status === 'not_going' ? cancellationReason?.trim() || null : null;
-      existing.waitlistPriority = null;
-      const saved = await this.attendeesRepo.save(existing);
-      await this.handleAttendanceImpact(
-        eventId,
-        previousStatus,
-        status,
-        cancellationReason,
-      );
-      return saved;
-    }
-
-    const attendee = this.attendeesRepo.create({
-      eventId,
-      guestName: guestName.trim(),
-      rsvpStatus: status,
-      isGuest: true,
-      waitlistPriority: null,
-      lastStatusChangeAt: new Date(),
-      cancellationReason:
-        status === 'not_going' ? cancellationReason?.trim() || null : null,
-    });
-    const saved = await this.attendeesRepo.save(attendee);
-    await this.handleAttendanceImpact(
-      eventId,
-      undefined,
-      status,
-      cancellationReason,
-    );
-    return saved;
-  }
-
   private async handleAttendanceImpact(
     eventId: string,
     previousStatus: string | undefined,

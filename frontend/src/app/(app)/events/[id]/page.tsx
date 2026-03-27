@@ -613,9 +613,8 @@ function AttendeesSection({
           <div className="flex flex-wrap gap-2">
             {list.map((a) => (
               <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm inline-flex items-center gap-2">
-                <span>{a.user?.name || a.guestName || 'Guest'}</span>
+                <span>{a.user?.name || 'Unknown attendee'}</span>
                 {a.userId &&
-                  !a.isGuest &&
                   a.userId !== currentUserId &&
                   (friendIds.includes(a.userId) ? (
                     <span

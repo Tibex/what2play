@@ -8,7 +8,6 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 
 - **Host/Organizer**: creates events, manages invitations, locks game selection, reviews feedback
 - **Attendee**: RSVPs, votes on games, provides post-event feedback
-- **Guest**: can RSVP and vote via invite link without full registration
 
 ## Core User Flows
 
@@ -32,14 +31,13 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 2. Set title, date/time, duration budget, location (address or "online")
 3. Set capacity and event type (invite-only or open)
 4. Smart defaults pre-fill from last event or template
-5. Share invite link (works for guests without accounts)
+5. Share invite link (for account-based joins)
 
 ### 4. RSVP & Attendance
 
 1. Invitee receives link → views event details
 2. RSVP: Going / Maybe / Not Going
-3. Guest flow: RSVP and vote without forced registration
-4. Host sees live attendance dashboard
+3. Host sees live attendance dashboard
 
 ### 5. Game Recommendations
 
@@ -79,35 +77,35 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 
 ## Data Entities
 
-| Entity | Key Fields |
-|---|---|
-| User | id, email, name, avatar_url, timezone, preferred_duration, preferred_weight |
-| Friendship | user_id, friend_id, status |
-| Game | id, bgg_id, title, description, image_url, min_players, max_players, playing_time, weight, year_published |
-| UserGameOwnership | user_id, game_id |
-| UserGameRating | user_id, game_id, rating, notes |
-| Event | id, host_id, title, date_time, duration_minutes, location, capacity, type (invite/open), status |
-| EventAttendee | event_id, user_id, rsvp_status, is_guest |
-| EventInvite | id, event_id, token, email, created_at |
-| EventGameCandidate | event_id, game_id, source (owned/discovery), score, explanation |
-| EventVote | event_id, user_id, game_id, rank |
-| EventSelectedGame | event_id, game_id, selected_by, selected_at |
-| EventFeedback | event_id, user_id, enjoyment_rating, finished_game, duration_feel, notes |
-| SessionTiming | event_id, game_id, player_count, setup_minutes, gameplay_minutes, total_minutes, completed |
-| SyncAccount | user_id, provider (bgg), external_username, last_synced_at, status |
-| BggVerificationChallenge | user_id, token, status, expires_at, verified_at |
+| Entity                   | Key Fields                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| User                     | id, email, name, avatar_url, timezone, preferred_duration, preferred_weight                               |
+| Friendship               | user_id, friend_id, status                                                                                |
+| Game                     | id, bgg_id, title, description, image_url, min_players, max_players, playing_time, weight, year_published |
+| UserGameOwnership        | user_id, game_id                                                                                          |
+| UserGameRating           | user_id, game_id, rating, notes                                                                           |
+| Event                    | id, host_id, title, date_time, duration_minutes, location, capacity, type (invite/open), status           |
+| EventAttendee            | event_id, user_id, rsvp_status                                                                            |
+| EventInvite              | id, event_id, token, email, created_at                                                                    |
+| EventGameCandidate       | event_id, game_id, source (owned/discovery), score, explanation                                           |
+| EventVote                | event_id, user_id, game_id, rank                                                                          |
+| EventSelectedGame        | event_id, game_id, selected_by, selected_at                                                               |
+| EventFeedback            | event_id, user_id, enjoyment_rating, finished_game, duration_feel, notes                                  |
+| SessionTiming            | event_id, game_id, player_count, setup_minutes, gameplay_minutes, total_minutes, completed                |
+| SyncAccount              | user_id, provider (bgg), external_username, last_synced_at, status                                        |
+| BggVerificationChallenge | user_id, token, status, expires_at, verified_at                                                           |
 
 ## Free vs Pro Feature Split
 
-| Feature | Free | Pro Individual | Pro Host |
-|---|---|---|---|
-| Create events | 2 active groups | Unlimited | Unlimited |
-| Basic voting | Yes | Yes | Yes |
-| Advanced recommendations | Limited | Full | Full |
-| Analytics/history | Last 5 events | Full | Full |
-| Event templates | No | No | Yes |
-| Auto-reminders | Basic | Basic | Advanced |
-| Affiliate game links | Yes | Yes | Yes |
+| Feature                  | Free            | Pro Individual | Pro Host  |
+| ------------------------ | --------------- | -------------- | --------- |
+| Create events            | 2 active groups | Unlimited      | Unlimited |
+| Basic voting             | Yes             | Yes            | Yes       |
+| Advanced recommendations | Limited         | Full           | Full      |
+| Analytics/history        | Last 5 events   | Full           | Full      |
+| Event templates          | No              | No             | Yes       |
+| Auto-reminders           | Basic           | Basic          | Advanced  |
+| Affiliate game links     | Yes             | Yes            | Yes       |
 
 ## Non-Functional Requirements
 

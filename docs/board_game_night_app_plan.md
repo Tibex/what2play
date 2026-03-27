@@ -52,7 +52,7 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
   - Per-user ratings and play history notes
 - Events and attendance
   - Create private invite-only events and public/open events
-  - Guest RSVP/voting via secure invite links before full signup
+  - Account-based joins and RSVP via secure invite links
   - RSVP states: going/maybe/not going
   - Capacity, date/time, location (or online), host controls
 - Recommendation engine
@@ -130,7 +130,7 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 
 1. Foundation: auth, profiles, schema, web navigation, CI/CD, 60-second host onboarding
 2. Game libraries + BGG linking verification + sync integration
-3. Event creation/invites/RSVP + guest flow + open event discovery
+3. Event creation/invites/RSVP + open event discovery
 4. Recommendations + explainability labels + voting/ranking flow
 5. Post-event feedback and recommendation feedback loop
 6. Hardening: notifications, analytics, moderation, performance
@@ -145,7 +145,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - Must ship next
   - Live provider expansion beyond webhook-only notifications (email/push channels)
   - Closed-beta validation with real groups and tracked retention metrics
-  - Guest vote UX polish (identity continuity and invite-link vote edits)
 - Next bets after stability
   - Monetization experiments (soft limits, trial prompts, affiliate link placement)
   - Go-to-market pilots with beta cohorts and referral loops
@@ -156,7 +155,7 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 
 - First-success UX
   - 60-second first event creation with smart defaults
-  - Invitees can RSVP and vote without forced upfront registration
+  - Invitees can join quickly from invite links after login
 - Decision UX
   - Auto-generated shortlist of top game candidates
   - Recommendation explainability chips (player-fit, rating-fit, duration-fit, ownership source)
@@ -216,17 +215,24 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 ## Go-To-Market Rollout Plan
 
 1. Pre-launch (4-6 weeks)
-  - Landing page + waitlist by city/group type
-  - Recruit design partners (10-20 hosts) for concierge onboarding
+
+- Landing page + waitlist by city/group type
+- Recruit design partners (10-20 hosts) for concierge onboarding
+
 2. Closed beta (6-8 weeks)
-  - Run live pilots with real groups
-  - Collect qualitative feedback after each event and iterate core recommendation/voting UX
+
+- Run live pilots with real groups
+- Collect qualitative feedback after each event and iterate core recommendation/voting UX
+
 3. Public launch
-  - Coordinated posts in niche communities, launch content, and referral kickoff
-  - Partner with local cafes/stores for hosted events
+
+- Coordinated posts in niche communities, launch content, and referral kickoff
+- Partner with local cafes/stores for hosted events
+
 4. Scale phase
-  - Expand partnerships, repeatable creator program, and selective paid acquisition
-  - Trigger native app investment only after web retention and conversion milestones are met
+
+- Expand partnerships, repeatable creator program, and selective paid acquisition
+- Trigger native app investment only after web retention and conversion milestones are met
 
 ## Go-To-Market Metrics
 
@@ -286,8 +292,6 @@ flowchart TD
   apiBackend --> analytics[AnalyticsAndMonitoring]
 ```
 
-
-
 ## Risks and Mitigations
 
 - BoardGameGeek API limits/format changes -> cache responses, retry strategy, manual import fallback
@@ -295,4 +299,3 @@ flowchart TD
 - Cold-start recommendation quality -> transparent scoring + manual override + collect early feedback aggressively
 - Voting fairness disputes -> clear rules, visible ranking method, host override with audit trail
 - Open-event safety concerns -> privacy controls, reporting/blocking, moderation queue
-

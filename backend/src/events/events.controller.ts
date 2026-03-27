@@ -21,8 +21,6 @@ import { VotingService } from '../voting/voting.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
-import { GuestRsvpDto } from './dto/guest-rsvp.dto';
-import { GuestSubmitVotesDto } from '../voting/dto/guest-submit-votes.dto';
 import { InviteFriendsDto } from './dto/invite-friends.dto';
 
 @ApiTags('events')
@@ -77,62 +75,11 @@ export class EventsController {
     return result;
   }
 
-  @Post('invite/:token/guest-rsvp')
-  @ApiOperation({ summary: 'RSVP via invite link without account' })
-  async guestRsvpViaInvite(
-    @Param('token') token: string,
-    @Body() dto: GuestRsvpDto,
-  ) {
-    const inviteEvent = await this.eventsService.getInviteEvent(token);
-    const goingBefore = await this.eventsService.getGoingAttendeeCount(
-      inviteEvent.id,
-    );
-    const result = await this.eventsService.guestRsvp(
-      inviteEvent.id,
-      dto.guestName,
-      dto.status,
-      dto.cancellationReason,
-    );
-    const goingAfter = await this.eventsService.getGoingAttendeeCount(
-      inviteEvent.id,
-    );
-
-    if (goingBefore !== goingAfter) {
-      await this.maybeRegenerateFallbackOptions(inviteEvent.id, goingAfter);
-    }
-
-    return result;
-  }
-
   @Get('invite/:token/recommendations')
   @ApiOperation({ summary: 'Get event recommendations by invite token' })
   async getInviteRecommendations(@Param('token') token: string) {
     const inviteEvent = await this.eventsService.getInviteEvent(token);
     return this.recommendationsService.getCandidates(inviteEvent.id);
-  }
-
-  @Post('invite/:token/guest-voting')
-  @ApiOperation({ summary: 'Submit guest ranked votes via invite token' })
-  async submitGuestVotes(
-    @Param('token') token: string,
-    @Body() dto: GuestSubmitVotesDto,
-  ) {
-    const inviteEvent = await this.eventsService.getInviteEvent(token);
-    const result = await this.votingService.submitGuestVotes(
-      inviteEvent.id,
-      dto.guestName,
-      dto.rankings,
-    );
-    const status = await this.votingService.getVotingStatus(inviteEvent.id);
-    if (status.allVoted) {
-      await this.votingService.autoCloseVoting(inviteEvent.id);
-      this.notificationsService
-        .sendAllVotedNotification(inviteEvent.id)
-        .catch(() => {
-          /* non-critical */
-        });
-    }
-    return result;
   }
 
   @Get(':id')

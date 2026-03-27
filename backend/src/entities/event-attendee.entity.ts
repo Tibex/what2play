@@ -34,12 +34,6 @@ export class EventAttendee {
   @Column({ default: 'going' })
   rsvpStatus: string;
 
-  @Column({ default: false })
-  isGuest: boolean;
-
-  @Column({ type: 'varchar', nullable: true })
-  guestName: string | null;
-
   @Column({ type: 'varchar', nullable: true })
   cancellationReason: string | null;
 

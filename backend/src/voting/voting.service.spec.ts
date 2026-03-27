@@ -248,24 +248,6 @@ describe('VotingService', () => {
     });
   });
 
-  describe('submitGuestVotes', () => {
-    it('should reject votes from guests marked as not going', async () => {
-      mockEventsRepo.findOne.mockResolvedValue({
-        id: 'e1',
-        status: 'voting',
-        attendees: [
-          { isGuest: true, guestName: 'Chris', rsvpStatus: 'not_going' },
-        ],
-      });
-      mockVotesRepo.findOne.mockResolvedValue(null);
-      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
-
-      await expect(
-        service.submitGuestVotes('e1', 'Chris', [{ gameId: 'g1', rank: 1 }]),
-      ).rejects.toThrow('marked as going');
-    });
-  });
-
   describe('selectWinner', () => {
     it('should allow host to select specific game', async () => {
       const event = { id: 'e1', hostId: 'host1', status: 'voting' };

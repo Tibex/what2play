@@ -34,9 +34,6 @@ export class EventVote {
   @Column()
   voterKey: string;
 
-  @Column({ nullable: true })
-  guestName: string;
-
   @ManyToOne(() => Game, { onDelete: 'CASCADE' })
   game: Game;
 
