@@ -160,9 +160,9 @@ describe('EventsService', () => {
     it('throws when event does not exist', async () => {
       mockEventsRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.deleteForAdmin('missing-event')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.deleteForAdmin('missing-event'),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(mockEventsRepo.remove).not.toHaveBeenCalled();
     });
 

@@ -34,9 +34,9 @@ describe('UsersService', () => {
 
   describe('deleteForAdmin', () => {
     it('rejects self-delete attempts', async () => {
-      await expect(service.deleteForAdmin('admin-1', 'admin-1')).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(
+        service.deleteForAdmin('admin-1', 'admin-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
       expect(mockUsersRepo.findOne).not.toHaveBeenCalled();
       expect(mockEventsRepo.delete).not.toHaveBeenCalled();
       expect(mockUsersRepo.delete).not.toHaveBeenCalled();
@@ -45,9 +45,9 @@ describe('UsersService', () => {
     it('throws when target user does not exist', async () => {
       mockUsersRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.deleteForAdmin('user-1', 'admin-1')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.deleteForAdmin('user-1', 'admin-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(mockEventsRepo.delete).not.toHaveBeenCalled();
       expect(mockUsersRepo.delete).not.toHaveBeenCalled();
     });
