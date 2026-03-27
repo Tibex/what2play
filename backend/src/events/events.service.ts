@@ -90,6 +90,7 @@ export class EventsService {
     const event = await this.findById(id);
     if (event.hostId !== userId)
       throw new ForbiddenException('Only host can update');
+    const statusBeforeUpdate = event.status;
     if (dto.eventTimezone !== undefined) {
       event.eventTimezone = resolveEventTimezone(dto.eventTimezone);
     }
@@ -101,6 +102,13 @@ export class EventsService {
     }
     if (dto.votingDeadline !== undefined) {
       event.votingDeadline = new Date(dto.votingDeadline);
+    }
+    if (
+      dto.status === 'voting' &&
+      statusBeforeUpdate !== 'voting' &&
+      event.votingStartedAttendeeCount == null
+    ) {
+      event.votingStartedAttendeeCount = await this.getGoingAttendeeCount(id);
     }
     Object.assign(event, {
       ...dto,
@@ -186,9 +194,9 @@ export class EventsService {
   ): Promise<EventAttendee> {
     const event = await this.eventsRepo.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
-    if (event.status !== 'planning') {
+    if (event.status === 'completed' || event.status === 'cancelled') {
       throw new BadRequestException(
-        'RSVP cannot be changed after voting has started',
+        'RSVP cannot be changed for completed or cancelled events',
       );
     }
 
@@ -201,10 +209,7 @@ export class EventsService {
       attendee.lastStatusChangeAt = new Date();
       attendee.cancellationReason =
         status === 'not_going' ? cancellationReason?.trim() || null : null;
-      attendee.waitlistPriority =
-        status === 'standby'
-          ? await this.getNextWaitlistPriority(eventId)
-          : null;
+      attendee.waitlistPriority = null;
       const saved = await this.attendeesRepo.save(attendee);
       await this.handleAttendanceImpact(
         eventId,
@@ -212,28 +217,19 @@ export class EventsService {
         status,
         cancellationReason,
       );
-      if (status === 'not_going') {
-        await this.maybePromoteStandby(eventId);
-      }
       return saved;
     }
     attendee = this.attendeesRepo.create({
       eventId,
       userId,
       rsvpStatus: status,
-      waitlistPriority:
-        status === 'standby'
-          ? await this.getNextWaitlistPriority(eventId)
-          : null,
+      waitlistPriority: null,
       lastStatusChangeAt: new Date(),
       cancellationReason:
         status === 'not_going' ? cancellationReason?.trim() || null : null,
     });
     const saved = await this.attendeesRepo.save(attendee);
     await this.handleAttendanceImpact(eventId, undefined, status, cancellationReason);
-    if (status === 'not_going') {
-      await this.maybePromoteStandby(eventId);
-    }
     return saved;
   }
 
@@ -245,9 +241,9 @@ export class EventsService {
   ): Promise<EventAttendee> {
     const event = await this.eventsRepo.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
-    if (event.status !== 'planning') {
+    if (event.status === 'completed' || event.status === 'cancelled') {
       throw new BadRequestException(
-        'RSVP cannot be changed after voting has started',
+        'RSVP cannot be changed for completed or cancelled events',
       );
     }
 
@@ -268,10 +264,7 @@ export class EventsService {
       existing.lastStatusChangeAt = new Date();
       existing.cancellationReason =
         status === 'not_going' ? cancellationReason?.trim() || null : null;
-      existing.waitlistPriority =
-        status === 'standby'
-          ? await this.getNextWaitlistPriority(eventId)
-          : null;
+      existing.waitlistPriority = null;
       const saved = await this.attendeesRepo.save(existing);
       await this.handleAttendanceImpact(
         eventId,
@@ -279,9 +272,6 @@ export class EventsService {
         status,
         cancellationReason,
       );
-      if (status === 'not_going') {
-        await this.maybePromoteStandby(eventId);
-      }
       return saved;
     }
 
@@ -290,50 +280,14 @@ export class EventsService {
       guestName: guestName.trim(),
       rsvpStatus: status,
       isGuest: true,
-      waitlistPriority:
-        status === 'standby'
-          ? await this.getNextWaitlistPriority(eventId)
-          : null,
+      waitlistPriority: null,
       lastStatusChangeAt: new Date(),
       cancellationReason:
         status === 'not_going' ? cancellationReason?.trim() || null : null,
     });
     const saved = await this.attendeesRepo.save(attendee);
     await this.handleAttendanceImpact(eventId, undefined, status, cancellationReason);
-    if (status === 'not_going') {
-      await this.maybePromoteStandby(eventId);
-    }
     return saved;
-  }
-
-  private async getNextWaitlistPriority(eventId: string): Promise<number> {
-    const row = await this.attendeesRepo
-      .createQueryBuilder('attendee')
-      .select('MAX(attendee.waitlistPriority)', 'maxPriority')
-      .where('attendee.eventId = :eventId', { eventId })
-      .andWhere('attendee.rsvpStatus = :status', { status: 'standby' })
-      .getRawOne<{ maxPriority: string | null }>();
-    const maxPriority = row?.maxPriority ? Number(row.maxPriority) : 0;
-    return Number.isFinite(maxPriority) ? maxPriority + 1 : 1;
-  }
-
-  private async maybePromoteStandby(eventId: string): Promise<void> {
-    const event = await this.eventsRepo.findOne({
-      where: { id: eventId },
-      select: ['id', 'autoPromoteWaitlist'],
-    });
-    if (!event?.autoPromoteWaitlist) return;
-
-    const standby = await this.attendeesRepo.findOne({
-      where: { eventId, rsvpStatus: 'standby' },
-      order: { waitlistPriority: 'ASC', createdAt: 'ASC' },
-    });
-    if (!standby) return;
-
-    standby.rsvpStatus = 'going';
-    standby.waitlistPriority = null;
-    standby.lastStatusChangeAt = new Date();
-    await this.attendeesRepo.save(standby);
   }
 
   private async handleAttendanceImpact(
@@ -357,32 +311,6 @@ export class EventsService {
       event.attendanceChangeAfterDecision = true;
     }
     await this.eventsRepo.save(event);
-  }
-
-  async getStandbyAttendees(eventId: string): Promise<EventAttendee[]> {
-    return this.attendeesRepo.find({
-      where: { eventId, rsvpStatus: 'standby' },
-      relations: ['user'],
-      order: { waitlistPriority: 'ASC', createdAt: 'ASC' },
-    });
-  }
-
-  async promoteStandby(eventId: string, hostUserId: string): Promise<EventAttendee> {
-    const event = await this.findById(eventId);
-    if (event.hostId !== hostUserId) {
-      throw new ForbiddenException('Only host can promote standby attendees');
-    }
-    const standby = await this.attendeesRepo.findOne({
-      where: { eventId, rsvpStatus: 'standby' },
-      order: { waitlistPriority: 'ASC', createdAt: 'ASC' },
-    });
-    if (!standby) {
-      throw new BadRequestException('No standby attendees available');
-    }
-    standby.rsvpStatus = 'going';
-    standby.waitlistPriority = null;
-    standby.lastStatusChangeAt = new Date();
-    return this.attendeesRepo.save(standby);
   }
 
   async clearAttendanceDecisionFlag(
@@ -453,6 +381,12 @@ export class EventsService {
       where: { eventId, rsvpStatus: 'going' },
     });
     return attendees.filter((a) => a.userId).map((a) => a.userId);
+  }
+
+  async getGoingAttendeeCount(eventId: string): Promise<number> {
+    return this.attendeesRepo.count({
+      where: { eventId, rsvpStatus: 'going' },
+    });
   }
 
   async delete(id: string, userId: string): Promise<void> {

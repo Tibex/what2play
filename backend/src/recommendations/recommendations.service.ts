@@ -37,13 +37,15 @@ export class RecommendationsService {
 
   async generateCandidates(eventId: string): Promise<EventGameCandidate[]> {
     const event = await this.eventsService.findById(eventId);
-    if (event.status !== 'planning') {
+    if (event.status === 'completed' || event.status === 'cancelled') {
       throw new BadRequestException(
-        'Recommendations can only be generated while event is in planning',
+        'Recommendations cannot be regenerated for completed or cancelled events',
       );
     }
     const attendeeIds = await this.eventsService.getAttendeeUserIds(eventId);
-    const playerCount = attendeeIds.length;
+    const playerCount =
+      (await this.eventsService.getGoingAttendeeCount?.(eventId)) ??
+      attendeeIds.length;
 
     const ownedGames =
       await this.gamesService.getGamesOwnedByUsers(attendeeIds);

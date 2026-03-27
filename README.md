@@ -122,7 +122,7 @@ board-game-night/
 | GET | `/api/events/:id/recommendations` | Get recommendations |
 | POST | `/api/events/:id/voting` | Submit ranked votes |
 | GET | `/api/events/:id/voting/results` | Get voting results |
-| POST | `/api/events/:id/voting/select-winner` | Host selects game |
+| POST | `/api/events/:id/use-fallback` | Host selects configured fallback game |
 | GET | `/api/events/:id/outcome-analytics` | Host view of recommended vs voted vs played outcomes |
 | POST | `/api/events/:id/feedback` | Submit feedback |
 | POST | `/api/events/:id/feedback/timing` | Submit session timing |

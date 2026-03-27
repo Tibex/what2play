@@ -71,7 +71,7 @@ export default function InvitePage() {
     }
   };
 
-  const handleGuestRsvp = async () => {
+  const handleGuestRsvp = async (status: 'going' | 'not_going') => {
     const name = guestName.trim();
     if (name.length < 2) {
       setActionError('Please enter your name (at least 2 characters)');
@@ -83,7 +83,7 @@ export default function InvitePage() {
     try {
       await api.post(
         `/events/invite/${token}/guest-rsvp`,
-        { guestName: name, status: 'going' },
+        { guestName: name, status },
         { auth: false },
       );
       setGuestSubmitted(true);
@@ -201,11 +201,18 @@ export default function InvitePage() {
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
           <button
-            onClick={handleGuestRsvp}
+            onClick={() => handleGuestRsvp('going')}
             disabled={submittingGuest}
             className="mt-2 w-full bg-gray-900 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-black transition disabled:opacity-60"
           >
-            {submittingGuest ? 'Submitting...' : 'RSVP as Guest'}
+            {submittingGuest ? 'Submitting...' : 'RSVP Going as Guest'}
+          </button>
+          <button
+            onClick={() => handleGuestRsvp('not_going')}
+            disabled={submittingGuest}
+            className="mt-2 w-full bg-gray-200 text-gray-800 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60"
+          >
+            {submittingGuest ? 'Submitting...' : "Can’t Attend as Guest"}
           </button>
           {guestSubmitted && (
             <p className="mt-2 text-xs text-green-700">

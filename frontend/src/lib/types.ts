@@ -77,6 +77,7 @@ export interface GameEvent {
   type: 'invite' | 'open';
   status: string;
   votingDeadline?: string;
+  votingStartedAttendeeCount?: number;
   selectedGameId?: string;
   fallbackGameId?: string;
   discoveryMode: boolean;

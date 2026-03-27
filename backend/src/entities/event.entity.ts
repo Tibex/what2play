@@ -56,6 +56,9 @@ export class Event {
   @Column({ nullable: true, type: 'timestamptz' })
   votingDeadline: Date;
 
+  @Column({ type: 'int', nullable: true })
+  votingStartedAttendeeCount: number | null;
+
   @Column({ nullable: true })
   selectedGameId: string;
 

@@ -84,7 +84,7 @@ export class EventsController {
     @Body() dto: GuestRsvpDto,
   ) {
     const inviteEvent = await this.eventsService.getInviteEvent(token);
-    const goingBefore = await this.eventsService.getAttendeeUserIds(
+    const goingBefore = await this.eventsService.getGoingAttendeeCount(
       inviteEvent.id,
     );
     const result = await this.eventsService.guestRsvp(
@@ -93,16 +93,12 @@ export class EventsController {
       dto.status,
       dto.cancellationReason,
     );
-    const goingAfter = await this.eventsService.getAttendeeUserIds(
+    const goingAfter = await this.eventsService.getGoingAttendeeCount(
       inviteEvent.id,
     );
 
-    if (goingBefore.length !== goingAfter.length) {
-      this.recommendationsService
-        .generateCandidates(inviteEvent.id)
-        .catch(() => {
-          /* non-critical */
-        });
+    if (goingBefore !== goingAfter) {
+      await this.maybeRegenerateFallbackOptions(inviteEvent.id, goingAfter);
     }
 
     return result;
@@ -174,19 +170,17 @@ export class EventsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'RSVP to an event' })
   async rsvp(@Param('id') id: string, @Request() req, @Body() dto: RsvpDto) {
-    const goingBefore = await this.eventsService.getAttendeeUserIds(id);
+    const goingBefore = await this.eventsService.getGoingAttendeeCount(id);
     const result = await this.eventsService.rsvp(
       id,
       req.user.id,
       dto.status,
       dto.cancellationReason,
     );
-    const goingAfter = await this.eventsService.getAttendeeUserIds(id);
+    const goingAfter = await this.eventsService.getGoingAttendeeCount(id);
 
-    if (goingBefore.length !== goingAfter.length) {
-      this.recommendationsService.generateCandidates(id).catch(() => {
-        /* non-critical */
-      });
+    if (goingBefore !== goingAfter) {
+      await this.maybeRegenerateFallbackOptions(id, goingAfter);
       this.notificationsService
         .sendCancellationOrSpotUpdate(id, req.user.id, dto.status, dto.cancellationReason)
         .catch(() => {
@@ -197,32 +191,16 @@ export class EventsController {
     return result;
   }
 
-  @Get(':id/standby')
+  @Post(':id/use-fallback')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get standby attendees in promotion order' })
-  getStandby(@Param('id') id: string) {
-    return this.eventsService.getStandbyAttendees(id);
-  }
-
-  @Post(':id/standby/promote')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Promote next standby attendee (host only)' })
-  async promoteStandby(@Param('id') id: string, @Request() req) {
-    const promoted = await this.eventsService.promoteStandby(id, req.user.id);
-    this.recommendationsService.generateCandidates(id).catch(() => {
-      /* non-critical */
-    });
-    return promoted;
-  }
-
-  @Post(':id/attendance/decision-reviewed')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Clear attendance-change decision warning (host only)' })
-  clearAttendanceDecision(@Param('id') id: string, @Request() req) {
-    return this.eventsService.clearAttendanceDecisionFlag(id, req.user.id);
+  @ApiOperation({ summary: 'Use configured fallback game as selected game' })
+  async useFallback(@Param('id') id: string, @Request() req) {
+    const event = await this.eventsService.findById(id);
+    if (!event.fallbackGameId) {
+      return { ok: false, message: 'No fallback game configured' };
+    }
+    return this.votingService.selectWinner(id, req.user.id, event.fallbackGameId);
   }
 
   @Post(':id/invite-link')
@@ -278,14 +256,12 @@ export class EventsController {
     @Param('attendeeId') attendeeId: string,
     @Request() req,
   ) {
-    const goingBefore = await this.eventsService.getAttendeeUserIds(id);
+    const goingBefore = await this.eventsService.getGoingAttendeeCount(id);
     await this.eventsService.removeAttendee(id, req.user.id, attendeeId);
-    const goingAfter = await this.eventsService.getAttendeeUserIds(id);
+    const goingAfter = await this.eventsService.getGoingAttendeeCount(id);
 
-    if (goingBefore.length !== goingAfter.length) {
-      this.recommendationsService.generateCandidates(id).catch(() => {
-        /* non-critical */
-      });
+    if (goingBefore !== goingAfter) {
+      await this.maybeRegenerateFallbackOptions(id, goingAfter);
     }
 
     return { ok: true };
@@ -326,5 +302,23 @@ export class EventsController {
   async getCancellationAnalytics(@Param('id') id: string, @Request() req) {
     await this.eventsService.assertHostAccess(id, req.user.id);
     return this.eventsService.getCancellationAnalytics(id);
+  }
+
+  private async maybeRegenerateFallbackOptions(
+    eventId: string,
+    currentGoingCount: number,
+  ): Promise<void> {
+    const event = await this.eventsService.findById(eventId);
+    const baseline = event.votingStartedAttendeeCount;
+    if (
+      event.status !== 'confirmed' ||
+      baseline == null ||
+      Math.abs(currentGoingCount - baseline) < 2
+    ) {
+      return;
+    }
+    this.recommendationsService.generateCandidates(eventId).catch(() => {
+      /* non-critical */
+    });
   }
 }

@@ -66,13 +66,4 @@ export class VotingController {
     return this.votingService.getUserVotes(eventId, req.user.id);
   }
 
-  @Post('select-winner')
-  @ApiOperation({ summary: 'Host selects winning game' })
-  selectWinner(
-    @Param('eventId') eventId: string,
-    @Request() req,
-    @Body() body: { gameId?: string },
-  ) {
-    return this.votingService.selectWinner(eventId, req.user.id, body.gameId);
-  }
 }

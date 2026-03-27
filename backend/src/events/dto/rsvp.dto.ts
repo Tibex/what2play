@@ -2,8 +2,8 @@ import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RsvpDto {
-  @ApiProperty({ enum: ['going', 'maybe', 'not_going', 'standby'] })
-  @IsIn(['going', 'maybe', 'not_going', 'standby'])
+  @ApiProperty({ enum: ['going', 'maybe', 'not_going'] })
+  @IsIn(['going', 'maybe', 'not_going'])
   status: string;
 
   @ApiPropertyOptional({ description: 'Optional reason when cancelling late' })

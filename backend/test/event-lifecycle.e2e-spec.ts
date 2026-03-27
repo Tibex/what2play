@@ -140,11 +140,12 @@ describeIfDb('Event lifecycle (e2e)', () => {
       .expect(200);
     expect(votingStatus.body.allVoted).toBe(true);
 
-    await request(app.getHttpServer())
-      .post(`/api/events/${eventId}/voting/select-winner`)
+    const eventAfterVotes = await request(app.getHttpServer())
+      .get(`/api/events/${eventId}`)
       .set('Authorization', `Bearer ${host.accessToken}`)
-      .send({ gameId: game2.id })
-      .expect(201);
+      .expect(200);
+    expect(eventAfterVotes.body.status).toBe('confirmed');
+    expect(eventAfterVotes.body.selectedGameId).toBe(game2.id);
 
     await request(app.getHttpServer())
       .patch(`/api/events/${eventId}`)

@@ -332,16 +332,16 @@ describe('RecommendationsService', () => {
       expect(duneFamily[0].gameId).toBe('base');
     });
 
-    it('rejects generating recommendations after voting starts', async () => {
+    it('rejects generating recommendations for completed events', async () => {
       mockEventsService.findById.mockResolvedValue({
         id: 'e1',
         durationMinutes: 120,
         discoveryMode: false,
-        status: 'voting',
+        status: 'completed',
       });
 
       await expect(service.generateCandidates('e1')).rejects.toThrow(
-        'only be generated while event is in planning',
+        'cannot be regenerated for completed or cancelled events',
       );
     });
 

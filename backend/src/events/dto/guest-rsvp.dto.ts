@@ -15,7 +15,7 @@ export class GuestRsvpDto {
   guestName: string;
 
   @ApiProperty({ enum: ['going', 'maybe', 'not_going'] })
-  @IsIn(['going', 'maybe', 'not_going', 'standby'])
+  @IsIn(['going', 'maybe', 'not_going'])
   status: string;
 
   @ApiProperty({ required: false })

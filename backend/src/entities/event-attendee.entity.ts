@@ -28,7 +28,7 @@ export class EventAttendee {
   })
   user: User;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   userId: string;
 
   @Column({ default: 'going' })
@@ -37,13 +37,13 @@ export class EventAttendee {
   @Column({ default: false })
   isGuest: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   guestName: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cancellationReason: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   waitlistPriority: number | null;
 
   @Column({ type: 'timestamptz', nullable: true })
