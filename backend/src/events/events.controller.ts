@@ -223,6 +223,15 @@ export class EventsController {
     return this.eventsService.delete(id, req.user.id);
   }
 
+  @Delete('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin delete event' })
+  deleteForAdmin(@Param('id') id: string) {
+    return this.eventsService.deleteForAdmin(id);
+  }
+
   @Delete(':id/attendees/:attendeeId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

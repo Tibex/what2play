@@ -94,3 +94,6 @@ jobs:
       - name: E2E tests
         run: npm run test:e2e -- --runInBand
 
+      - name: Admin delete E2E guardrail
+        run: npm run test:e2e -- --runInBand admin-delete.e2e-spec.ts
+

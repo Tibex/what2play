@@ -284,6 +284,12 @@ export class EventsService {
     await this.eventsRepo.remove(event);
   }
 
+  async deleteForAdmin(id: string): Promise<void> {
+    const event = await this.eventsRepo.findOne({ where: { id } });
+    if (!event) throw new NotFoundException('Event not found');
+    await this.eventsRepo.remove(event);
+  }
+
   async removeAttendee(
     eventId: string,
     hostUserId: string,

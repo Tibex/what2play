@@ -2,10 +2,12 @@ import {
   Controller,
   Get,
   Patch,
+  Delete,
   Body,
   UseGuards,
   Request,
   Query,
+  Param,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -20,7 +22,7 @@ import { AdminListUsersQueryDto } from './dto/admin-list-users-query.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('api/users')
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -40,5 +42,13 @@ export class UsersController {
   @ApiOperation({ summary: 'Admin list users' })
   listUsers(@Query() query: AdminListUsersQueryDto) {
     return this.usersService.listForAdmin(query);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin delete user' })
+  deleteUser(@Param('id') id: string, @Request() req) {
+    return this.usersService.deleteForAdmin(id, req.user.id);
   }
 }

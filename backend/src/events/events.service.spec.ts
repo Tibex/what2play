@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
@@ -14,6 +14,7 @@ describe('EventsService', () => {
     findOne: jest.fn(),
     find: jest.fn(),
     save: jest.fn(),
+    remove: jest.fn(),
   };
 
   const mockAttendeesRepo = {
@@ -152,6 +153,26 @@ describe('EventsService', () => {
           status: 'completed',
         }),
       );
+    });
+  });
+
+  describe('deleteForAdmin', () => {
+    it('throws when event does not exist', async () => {
+      mockEventsRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteForAdmin('missing-event')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(mockEventsRepo.remove).not.toHaveBeenCalled();
+    });
+
+    it('removes event when found', async () => {
+      const event = { id: 'event-1' };
+      mockEventsRepo.findOne.mockResolvedValue(event);
+
+      await service.deleteForAdmin('event-1');
+
+      expect(mockEventsRepo.remove).toHaveBeenCalledWith(event);
     });
   });
 });

@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { Event } from '../entities/event.entity';
 import { AdminListUsersQueryDto } from './dto/admin-list-users-query.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
-    private usersRepo: Repository<User>,
+    private readonly usersRepo: Repository<User>,
+    @InjectRepository(Event)
+    private readonly eventsRepo: Repository<Event>,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -66,5 +69,17 @@ export class UsersService {
         hasNext: page * pageSize < total,
       },
     };
+  }
+
+  async deleteForAdmin(userId: string, actorUserId: string): Promise<void> {
+    if (userId === actorUserId) {
+      throw new ForbiddenException('Admins cannot delete their own account');
+    }
+
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.eventsRepo.delete({ hostId: userId });
+    await this.usersRepo.delete(userId);
   }
 }

@@ -18,6 +18,8 @@ export default function AdminPage() {
   );
   const [usersPage, setUsersPage] = useState(1);
   const [eventsPage, setEventsPage] = useState(1);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     const data = await api.get<PaginatedResponse<User>>(
@@ -32,6 +34,52 @@ export default function AdminPage() {
     );
     setEventsData(data);
   }, [eventsPage]);
+
+  const deleteUser = useCallback(
+    async (targetUser: User) => {
+      if (
+        !globalThis.confirm(
+          `Delete user "${targetUser.name || targetUser.email}"? This also deletes events hosted by this user.`,
+        )
+      ) {
+        return;
+      }
+      setDeletingUserId(targetUser.id);
+      setError('');
+      try {
+        await api.delete(`/users/${targetUser.id}`);
+        await Promise.all([loadUsers(), loadEvents()]);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to delete user');
+      } finally {
+        setDeletingUserId(null);
+      }
+    },
+    [loadEvents, loadUsers],
+  );
+
+  const deleteEvent = useCallback(
+    async (event: GameEvent) => {
+      if (
+        !globalThis.confirm(
+          `Delete event "${event.title}" scheduled for ${new Date(event.dateTime).toLocaleString()}?`,
+        )
+      ) {
+        return;
+      }
+      setDeletingEventId(event.id);
+      setError('');
+      try {
+        await api.delete(`/events/admin/${event.id}`);
+        await loadEvents();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to delete event');
+      } finally {
+        setDeletingEventId(null);
+      }
+    },
+    [loadEvents],
+  );
 
   useEffect(() => {
     if (user?.role !== 'admin') return;
@@ -105,6 +153,7 @@ export default function AdminPage() {
                   <th className="px-4 py-2 text-left">Email</th>
                   <th className="px-4 py-2 text-left">Role</th>
                   <th className="px-4 py-2 text-left">Subscription</th>
+                  <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,6 +163,16 @@ export default function AdminPage() {
                     <td className="px-4 py-2">{item.email}</td>
                     <td className="px-4 py-2">{item.role}</td>
                     <td className="px-4 py-2">{item.subscriptionTier}</td>
+                    <td className="px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => void deleteUser(item)}
+                        disabled={deletingUserId === item.id || item.id === user.id}
+                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+                      >
+                        {deletingUserId === item.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -138,6 +197,7 @@ export default function AdminPage() {
                   <th className="px-4 py-2 text-left">Host</th>
                   <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,6 +208,16 @@ export default function AdminPage() {
                     <td className="px-4 py-2">{item.status}</td>
                     <td className="px-4 py-2">
                       {new Date(item.dateTime).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => void deleteEvent(item)}
+                        disabled={deletingEventId === item.id}
+                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+                      >
+                        {deletingEventId === item.id ? 'Deleting...' : 'Delete'}
+                      </button>
                     </td>
                   </tr>
                 ))}
