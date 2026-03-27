@@ -38,10 +38,19 @@ export class VotingService {
     userId: string,
     rankings: { gameId: string; rank: number }[],
   ): Promise<EventVote[]> {
-    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees'],
+    });
     if (!event) throw new BadRequestException('Event not found');
     if (event.status !== 'voting') {
       throw new BadRequestException('Voting is not open for this event yet');
+    }
+    const attendee = (event.attendees || []).find(
+      (row) => row.userId === userId,
+    );
+    if (attendee?.rsvpStatus !== 'going') {
+      throw new BadRequestException('Only attendees marked as going can vote');
     }
 
     if (event.votingDeadline && new Date() > new Date(event.votingDeadline)) {
@@ -85,13 +94,25 @@ export class VotingService {
     guestName: string,
     rankings: { gameId: string; rank: number }[],
   ): Promise<EventVote[]> {
-    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees'],
+    });
     if (!event) throw new BadRequestException('Event not found');
     if (event.status !== 'voting') {
       throw new BadRequestException('Voting is not open for this event yet');
     }
     if (event.votingDeadline && new Date() > new Date(event.votingDeadline)) {
       throw new BadRequestException('Voting has closed');
+    }
+    const normalizedGuestName = guestName.trim().toLowerCase();
+    const guestAttendee = (event.attendees || []).find(
+      (attendee) =>
+        attendee.isGuest &&
+        attendee.guestName?.trim().toLowerCase() === normalizedGuestName,
+    );
+    if (guestAttendee?.rsvpStatus !== 'going') {
+      throw new BadRequestException('Only guests marked as going can vote');
     }
 
     const voterKey = this.createGuestVoterKey(guestName);

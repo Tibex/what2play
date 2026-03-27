@@ -436,7 +436,10 @@ export class EventsService {
     await this.attendeesRepo.remove(attendee);
   }
 
-  async getInviteableFriends(eventId: string, hostUserId: string): Promise<User[]> {
+  async getInviteableFriends(
+    eventId: string,
+    hostUserId: string,
+  ): Promise<User[]> {
     const event = await this.findById(eventId);
     if (event.hostId !== hostUserId) {
       throw new ForbiddenException('Only host can invite friends');
@@ -489,7 +492,9 @@ export class EventsService {
       };
     }
 
-    const friendIds = new Set(await this.friendsService.getFriendIds(hostUserId));
+    const friendIds = new Set(
+      await this.friendsService.getFriendIds(hostUserId),
+    );
     const attendeeByUserId = new Set(
       (event.attendees || [])
         .map((attendee) => attendee.userId)

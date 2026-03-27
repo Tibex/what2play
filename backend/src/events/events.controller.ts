@@ -119,7 +119,6 @@ export class EventsController {
     @Body() dto: GuestSubmitVotesDto,
   ) {
     const inviteEvent = await this.eventsService.getInviteEvent(token);
-    await this.eventsService.guestRsvp(inviteEvent.id, dto.guestName, 'going');
     const result = await this.votingService.submitGuestVotes(
       inviteEvent.id,
       dto.guestName,
@@ -245,7 +244,11 @@ export class EventsController {
     );
     if (result.invitedUserIds.length > 0) {
       this.notificationsService
-        .sendFriendAddedToEventNotification(id, req.user.id, result.invitedUserIds)
+        .sendFriendAddedToEventNotification(
+          id,
+          req.user.id,
+          result.invitedUserIds,
+        )
         .catch(() => {
           /* non-critical */
         });

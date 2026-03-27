@@ -144,7 +144,11 @@ describe('VotingService', () => {
 
   describe('submitVotes', () => {
     it('should delete existing votes and save new ones', async () => {
-      mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        status: 'voting',
+        attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
+      });
       mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([
         { gameId: 'g1' },
@@ -163,7 +167,11 @@ describe('VotingService', () => {
     });
 
     it('should ignore stale game ids not in current candidates', async () => {
-      mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        status: 'voting',
+        attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
+      });
       mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([
         { gameId: 'g1' },
@@ -182,7 +190,11 @@ describe('VotingService', () => {
     });
 
     it('should reject re-submission when user already voted', async () => {
-      mockEventsRepo.findOne.mockResolvedValue({ id: 'e1', status: 'voting' });
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        status: 'voting',
+        attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
+      });
       mockVotesRepo.findOne.mockResolvedValue({ id: 'vote-1' });
       mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
 
@@ -197,6 +209,7 @@ describe('VotingService', () => {
         id: 'e1',
         status: 'voting',
         votingDeadline: pastDeadline,
+        attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
       });
       mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
@@ -210,6 +223,7 @@ describe('VotingService', () => {
       mockEventsRepo.findOne.mockResolvedValue({
         id: 'e1',
         status: 'planning',
+        attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
       });
       mockVotesRepo.findOne.mockResolvedValue(null);
       mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
@@ -217,6 +231,38 @@ describe('VotingService', () => {
       await expect(
         service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),
       ).rejects.toThrow('not open');
+    });
+
+    it('should reject votes from attendees marked as not going', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        status: 'voting',
+        attendees: [{ userId: 'u1', rsvpStatus: 'not_going' }],
+      });
+      mockVotesRepo.findOne.mockResolvedValue(null);
+      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
+
+      await expect(
+        service.submitVotes('e1', 'u1', [{ gameId: 'g1', rank: 1 }]),
+      ).rejects.toThrow('marked as going');
+    });
+  });
+
+  describe('submitGuestVotes', () => {
+    it('should reject votes from guests marked as not going', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        status: 'voting',
+        attendees: [
+          { isGuest: true, guestName: 'Chris', rsvpStatus: 'not_going' },
+        ],
+      });
+      mockVotesRepo.findOne.mockResolvedValue(null);
+      mockCandidatesRepo.find.mockResolvedValue([{ gameId: 'g1' }]);
+
+      await expect(
+        service.submitGuestVotes('e1', 'Chris', [{ gameId: 'g1', rank: 1 }]),
+      ).rejects.toThrow('marked as going');
     });
   });
 

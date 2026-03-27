@@ -63,9 +63,9 @@ describe('EventsService', () => {
         attendees: [],
       });
 
-      await expect(service.inviteFriends('e1', 'not-host', ['u2'])).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(
+        service.inviteFriends('e1', 'not-host', ['u2']),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('invites only accepted friends and skips existing attendees', async () => {
