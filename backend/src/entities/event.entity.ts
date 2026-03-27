@@ -13,7 +13,6 @@ import { EventInvite } from './event-invite.entity';
 import { EventGameCandidate } from './event-game-candidate.entity';
 import { EventVote } from './event-vote.entity';
 import { EventFeedback } from './event-feedback.entity';
-import { SessionTiming } from './session-timing.entity';
 
 @Entity('events')
 export class Event {
@@ -80,18 +79,6 @@ export class Event {
   @Column({ default: 0 })
   lateCancellationCount: number;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  sessionStartedAt: Date;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  sessionEndedAt: Date;
-
-  @Column({ nullable: true })
-  sessionTotalMinutes: number;
-
-  @Column({ nullable: true })
-  sessionTimingSource: string;
-
   @Column({ type: 'simple-json', nullable: true })
   excludedGameIds: string[];
 
@@ -115,7 +102,4 @@ export class Event {
 
   @OneToMany(() => EventFeedback, (f) => f.event)
   feedbacks: EventFeedback[];
-
-  @OneToMany(() => SessionTiming, (t) => t.event)
-  sessionTimings: SessionTiming[];
 }

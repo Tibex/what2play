@@ -13,7 +13,7 @@ export class SessionTiming {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Event, (e) => e.sessionTimings, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Event, { onDelete: 'CASCADE' })
   event: Event;
 
   @Column()

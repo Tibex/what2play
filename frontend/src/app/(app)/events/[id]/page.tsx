@@ -95,8 +95,12 @@ export default function EventDetailPage() {
     attendeeCount < votingStartAttendeeCount;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const isPlanning = event.status === 'planning';
-  const canManageEvent = event.status !== 'completed' && event.status !== 'cancelled';
-  const canRsvp = event.status !== 'completed' && event.status !== 'cancelled';
+  const isPastEvent = event.status === 'past' || event.status === 'completed';
+  const canRemoveAttendees =
+    isHost && !isPastEvent && event.status !== 'cancelled';
+  const canManageEvent =
+    !isPastEvent && event.status !== 'cancelled';
+  const canRsvp = !isPastEvent && event.status !== 'cancelled';
   const eventTimeZone = event.eventTimezone || 'UTC';
   const formattedEventDateTime = formatEventDateTime(event.dateTime, eventTimeZone);
   const eventEndsAt =
@@ -272,32 +276,56 @@ export default function EventDetailPage() {
     } catch { /* toast auto-shown */ }
   };
 
-  const handleStartSession = async () => {
-    try {
-      await api.post(`/events/${id}/session/start`);
-      toast.success('Session started');
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
-    }
-  };
-
-  const handleEndSession = async () => {
-    try {
-      await api.post(`/events/${id}/session/end`);
-      toast.success('Session ended');
-      loadEvent();
-    } catch {
-      /* toast auto-shown */
-    }
-  };
-
   return (
     <div>
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold">{event.title}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{event.title}</h1>
+              {isHost && canManageEvent && (
+                <Link
+                  href={`/events/${id}/edit`}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
+                  title="Edit event"
+                  aria-label="Edit event"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path d="M5.44 13.94a.75.75 0 0 0 .53-.22l7.56-7.56a1.75 1.75 0 1 0-2.47-2.47L3.5 11.25a.75.75 0 0 0-.2.36l-.75 3a.75.75 0 0 0 .91.91l3-.75a.75.75 0 0 0 .36-.2l.62-.63Z" />
+                    <path d="M3 16.25a.75.75 0 0 0 .75.75h12.5a.75.75 0 0 0 0-1.5H3.75a.75.75 0 0 0-.75.75Z" />
+                  </svg>
+                </Link>
+              )}
+              {isHost && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition"
+                  title="Delete event"
+                  aria-label="Delete event"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.75 2.75a1.25 1.25 0 0 1 2.5 0V3h3.5a.75.75 0 0 1 0 1.5h-.69l-.62 10.03A2 2 0 0 1 11.45 16.5h-2.9a2 2 0 0 1-1.99-1.97L5.94 4.5h-.69a.75.75 0 0 1 0-1.5h3.5v-.25Zm-.81 1.75.61 9.95a.5.5 0 0 0 .5.49h2.9a.5.5 0 0 0 .5-.49l.61-9.95H7.94Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
             <p className="text-gray-500 mt-1">
               Hosted by {event.host?.name || 'Unknown'}
               {' · '}
@@ -318,9 +346,6 @@ export default function EventDetailPage() {
           {event.durationMinutes && (
             <span>⏱ {formatDurationMinutes(event.durationMinutes)}</span>
           )}
-          {event.sessionTotalMinutes != null && (
-            <span>🕒 Session lasted {formatDurationMinutes(event.sessionTotalMinutes)}</span>
-          )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
           <span>
             {event.status === 'completed'
@@ -338,7 +363,7 @@ export default function EventDetailPage() {
           <AttendeesSection
             attendees={event.attendees}
             isHost={isHost}
-            isPlanning={isPlanning}
+            canRemoveAttendees={canRemoveAttendees}
             hostUserId={event.hostId}
             currentUserId={user?.id}
             friendIds={friendIds}
@@ -372,9 +397,6 @@ export default function EventDetailPage() {
           )}
           {isHost && canManageEvent && (
             <>
-              <Link href={`/events/${id}/edit`} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
-                Edit Event
-              </Link>
               {isPlanning && (
                 <button onClick={handleCreateInvite} className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200 transition">
                   Create Invite Link
@@ -394,21 +416,6 @@ export default function EventDetailPage() {
               {candidates.length > 0 && event.status === 'planning' && (
                 <button onClick={handleStartVoting} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
                   Start Voting
-                </button>
-              )}
-              <button onClick={handleDelete} className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-200 transition">
-                Delete Event
-              </button>
-              {event.status === 'confirmed' && !event.sessionStartedAt && (
-                <button onClick={handleStartSession} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
-                  Start night
-                </button>
-              )}
-              {event.status === 'confirmed' &&
-                event.sessionStartedAt &&
-                !event.sessionEndedAt && (
-                <button onClick={handleEndSession} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition">
-                  End night
                 </button>
               )}
             </>
@@ -524,7 +531,7 @@ function StatusBadge({ status }: { status: string }) {
 function AttendeesSection({
   attendees,
   isHost,
-  isPlanning,
+  canRemoveAttendees,
   hostUserId,
   currentUserId,
   friendIds,
@@ -540,7 +547,7 @@ function AttendeesSection({
 }: {
   attendees: GameEvent['attendees'];
   isHost: boolean;
-  isPlanning: boolean;
+  canRemoveAttendees: boolean;
   hostUserId: string;
   currentUserId?: string;
   friendIds: string[];
@@ -661,7 +668,7 @@ function AttendeesSection({
                     ({a.cancellationReason})
                   </span>
                 ) : null}
-                {isHost && isPlanning && a.userId !== hostUserId && (
+                {isHost && canRemoveAttendees && a.userId !== hostUserId && (
                   <button
                     type="button"
                     onClick={() => onRemove(a.id)}

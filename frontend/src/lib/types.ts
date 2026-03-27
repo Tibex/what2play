@@ -85,10 +85,6 @@ export interface GameEvent {
   lastAttendanceChangeAt?: string;
   attendanceChangeAfterDecision?: boolean;
   lateCancellationCount?: number;
-  sessionStartedAt?: string;
-  sessionEndedAt?: string;
-  sessionTotalMinutes?: number;
-  sessionTimingSource?: string;
   attendees: EventAttendee[];
   candidates: EventGameCandidate[];
   createdAt: string;
