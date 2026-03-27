@@ -39,8 +39,17 @@ export class FriendsService {
         { requesterId: addressee.id, addresseeId: requesterId },
       ],
     });
-    if (existing)
+    if (existing) {
+      if (
+        existing.status === 'pending' &&
+        existing.requesterId === addressee.id &&
+        existing.addresseeId === requesterId
+      ) {
+        existing.status = 'accepted';
+        return this.friendsRepo.save(existing);
+      }
       throw new BadRequestException('Friend request already exists');
+    }
 
     const friendship = this.friendsRepo.create({
       requesterId,
@@ -146,6 +155,14 @@ export class FriendsService {
     }
 
     if (existing.status === 'pending') {
+      if (
+        existing.requesterId === addresseeId &&
+        existing.addresseeId === requesterId
+      ) {
+        existing.status = 'accepted';
+        await this.friendsRepo.save(existing);
+        return { status: 'already_friends' };
+      }
       return { status: 'request_pending' };
     }
 

@@ -59,11 +59,31 @@ describe('FriendsService', () => {
 
     it('returns request_pending when pending record exists', async () => {
       mockUsersRepo.findOne.mockResolvedValue({ id: 'u2' });
-      mockFriendsRepo.findOne.mockResolvedValue({ status: 'pending' });
+      mockFriendsRepo.findOne.mockResolvedValue({
+        requesterId: 'u1',
+        addresseeId: 'u2',
+        status: 'pending',
+      });
 
       const result = await service.sendRequestByUserId('u1', 'u2');
 
       expect(result).toEqual({ status: 'request_pending' });
+    });
+
+    it('auto-accepts when reverse pending request exists', async () => {
+      mockUsersRepo.findOne.mockResolvedValue({ id: 'u2' });
+      const existing = {
+        requesterId: 'u2',
+        addresseeId: 'u1',
+        status: 'pending',
+      };
+      mockFriendsRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.sendRequestByUserId('u1', 'u2');
+
+      expect(result).toEqual({ status: 'already_friends' });
+      expect(existing.status).toBe('accepted');
+      expect(mockFriendsRepo.save).toHaveBeenCalledWith(existing);
     });
 
     it('reopens rejected relationships as sent', async () => {
