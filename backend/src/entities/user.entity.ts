@@ -51,7 +51,7 @@ export class User {
   @Column({ default: 'free' })
   subscriptionTier: string;
 
-  @Column({ default: 'user' })
+  @Column({ type: 'varchar', default: 'user' })
   role: UserRole;
 
   @CreateDateColumn()
