@@ -196,7 +196,8 @@ export class VotingService {
 
     results.sort((a, b) => {
       if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
-      return a.averageRank - b.averageRank;
+      if (a.averageRank !== b.averageRank) return a.averageRank - b.averageRank;
+      return b.firstPlaceCount - a.firstPlaceCount;
     });
 
     return results;

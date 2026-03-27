@@ -118,6 +118,45 @@ describe('VotingService', () => {
       expect(results[0].totalScore).toBe(results[1].totalScore);
     });
 
+    it('should break remaining ties by first-place count', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        hostId: 'u1',
+        attendees: [
+          { userId: 'u1', rsvpStatus: 'going' },
+          { userId: 'u2', rsvpStatus: 'going' },
+          { userId: 'u3', rsvpStatus: 'going' },
+          { userId: 'u4', rsvpStatus: 'going' },
+          { userId: 'u5', rsvpStatus: 'going' },
+          { userId: 'u6', rsvpStatus: 'going' },
+          { userId: 'u7', rsvpStatus: 'going' },
+          { userId: 'u8', rsvpStatus: 'going' },
+        ],
+      });
+      mockCandidatesRepo.find.mockResolvedValue([
+        { gameId: 'g1' },
+        { gameId: 'g2' },
+      ]);
+      mockVotesRepo.find.mockResolvedValue([
+        { eventId: 'e1', userId: 'u1', gameId: 'g1', rank: 1 },
+        { eventId: 'e1', userId: 'u2', gameId: 'g1', rank: 1 },
+        { eventId: 'e1', userId: 'u3', gameId: 'g1', rank: 4 },
+        { eventId: 'e1', userId: 'u4', gameId: 'g1', rank: 4 },
+        { eventId: 'e1', userId: 'u5', gameId: 'g2', rank: 1 },
+        { eventId: 'e1', userId: 'u6', gameId: 'g2', rank: 2 },
+        { eventId: 'e1', userId: 'u7', gameId: 'g2', rank: 3 },
+        { eventId: 'e1', userId: 'u8', gameId: 'g2', rank: 4 },
+      ]);
+
+      const results = await service.getResults('e1');
+      expect(results[0].totalScore).toBe(results[1].totalScore);
+      expect(results[0].averageRank).toBe(results[1].averageRank);
+      expect(results[0].firstPlaceCount).toBeGreaterThan(
+        results[1].firstPlaceCount,
+      );
+      expect(results[0].gameId).toBe('g1');
+    });
+
     it('should hide results until all expected voters have submitted', async () => {
       mockEventsRepo.findOne.mockResolvedValue({
         id: 'e1',
