@@ -95,6 +95,7 @@ export default function EventDetailPage() {
     attendeeCount < votingStartAttendeeCount;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const isPlanning = event.status === 'planning';
+  const canManageEvent = event.status !== 'completed' && event.status !== 'cancelled';
   const canRsvp = event.status !== 'completed' && event.status !== 'cancelled';
   const eventTimeZone = event.eventTimezone || 'UTC';
   const formattedEventDateTime = formatEventDateTime(event.dateTime, eventTimeZone);
@@ -321,7 +322,13 @@ export default function EventDetailPage() {
             <span>🕒 Session lasted {formatDurationMinutes(event.sessionTotalMinutes)}</span>
           )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
-          <span>{event.type === 'open' ? '🌐 Open' : '🔒 Invite only'}</span>
+          <span>
+            {event.status === 'completed'
+              ? '🗂 Past event'
+              : event.type === 'open'
+                ? '🌐 Open'
+                : '🔒 Invite only'}
+          </span>
           {event.lateCancellationCount ? (
             <span>⚠ {event.lateCancellationCount} late cancellations</span>
           ) : null}
@@ -363,7 +370,7 @@ export default function EventDetailPage() {
               Can&apos;t make it
             </button>
           )}
-          {isHost && (
+          {isHost && canManageEvent && (
             <>
               <Link href={`/events/${id}/edit`} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
                 Edit Event

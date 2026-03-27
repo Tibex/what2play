@@ -10,6 +10,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { FeedbackModule } from '../feedback/feedback.module';
 import { VotingModule } from '../voting/voting.module';
 import { FriendsModule } from '../friends/friends.module';
+import { EventsLifecycleService } from './events-lifecycle.service';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { FriendsModule } from '../friends/friends.module';
     FeedbackModule,
     FriendsModule,
   ],
-  providers: [EventsService],
+  providers: [EventsService, EventsLifecycleService],
   controllers: [EventsController],
   exports: [EventsService],
 })

@@ -3,9 +3,10 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
@@ -19,6 +20,8 @@ import { FriendsService } from '../friends/friends.service';
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
   constructor(
     @InjectRepository(Event)
     private readonly eventsRepo: Repository<Event>,
@@ -544,5 +547,31 @@ export class EventsService {
     if (event.hostId !== userId) {
       throw new ForbiddenException('Only host can access analytics');
     }
+  }
+
+  async markPastEventsAsCompleted(now: Date = new Date()): Promise<number> {
+    const activeStatuses = ['planning', 'voting', 'confirmed', 'active'];
+    const candidates = await this.eventsRepo.find({
+      where: {
+        status: In(activeStatuses),
+      },
+      select: ['id', 'title', 'dateTime', 'durationMinutes', 'status', 'type'],
+    });
+
+    let updated = 0;
+    for (const event of candidates) {
+      const eventEndsAt = new Date(
+        new Date(event.dateTime).getTime() +
+          (event.durationMinutes ?? 0) * 60_000,
+      );
+      if (eventEndsAt > now) continue;
+
+      event.status = 'completed';
+      await this.eventsRepo.save(event);
+      updated += 1;
+      this.logger.log(`Auto-completed past event ${event.id}: ${event.title}`);
+    }
+
+    return updated;
   }
 }

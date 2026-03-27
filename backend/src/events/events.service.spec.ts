@@ -12,6 +12,7 @@ describe('EventsService', () => {
 
   const mockEventsRepo = {
     findOne: jest.fn(),
+    find: jest.fn(),
     save: jest.fn(),
   };
 
@@ -116,6 +117,41 @@ describe('EventsService', () => {
 
       expect(result).toEqual([{ id: 'u3' }, { id: 'u4' }]);
       expect(mockUsersRepo.find).toHaveBeenCalled();
+    });
+  });
+
+  describe('markPastEventsAsCompleted', () => {
+    it('marks ended events as completed and past', async () => {
+      const now = new Date('2026-03-27T12:00:00.000Z');
+      mockEventsRepo.find.mockResolvedValue([
+        {
+          id: 'past-1',
+          title: 'Past Event',
+          status: 'confirmed',
+          type: 'open',
+          dateTime: new Date('2026-03-27T09:00:00.000Z'),
+          durationMinutes: 120,
+        },
+        {
+          id: 'future-1',
+          title: 'Future Event',
+          status: 'planning',
+          type: 'invite',
+          dateTime: new Date('2026-03-27T14:00:00.000Z'),
+          durationMinutes: 90,
+        },
+      ]);
+
+      const updated = await service.markPastEventsAsCompleted(now);
+
+      expect(updated).toBe(1);
+      expect(mockEventsRepo.save).toHaveBeenCalledTimes(1);
+      expect(mockEventsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'past-1',
+          status: 'completed',
+        }),
+      );
     });
   });
 });

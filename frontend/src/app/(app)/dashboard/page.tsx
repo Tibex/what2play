@@ -14,8 +14,11 @@ export default function DashboardPage() {
     api.get<GameEvent[]>('/events').then(setEvents).finally(() => setLoading(false));
   }, []);
 
-  const upcoming = events.filter((e) => new Date(e.dateTime) >= new Date());
-  const past = events.filter((e) => new Date(e.dateTime) < new Date());
+  const now = new Date();
+  const isPastEvent = (event: GameEvent) =>
+    event.status === 'completed' || new Date(event.dateTime) < now;
+  const upcoming = events.filter((event) => !isPastEvent(event));
+  const past = events.filter((event) => isPastEvent(event));
 
   if (loading) {
     return (
@@ -77,12 +80,22 @@ export default function DashboardPage() {
   );
 }
 
-function EventCard({ event }: { event: GameEvent }) {
+function EventCard({ event }: Readonly<{ event: GameEvent }>) {
   const date = new Date(event.dateTime);
   const timeZone = event.eventTimezone || 'UTC';
   const formatted = formatEventDateTime(event.dateTime, timeZone);
-  const isPast = date < new Date();
+  const isPast = event.status === 'completed' || date < new Date();
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
+  const isCompleted = event.status === 'completed';
+  let typeLabel = 'Invite only';
+  let typeLabelClass = 'text-gray-400';
+  if (isCompleted) {
+    typeLabel = 'Past event';
+    typeLabelClass = 'text-gray-500';
+  } else if (event.type === 'open') {
+    typeLabel = 'Open';
+    typeLabelClass = 'text-green-600';
+  }
 
   const formatDurationMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
@@ -123,9 +136,7 @@ function EventCard({ event }: { event: GameEvent }) {
           {event.durationMinutes && (
             <span>{formatDurationMinutes(event.durationMinutes)}</span>
           )}
-          <span className={event.type === 'open' ? 'text-green-600' : 'text-gray-400'}>
-            {event.type === 'open' ? 'Open' : 'Invite only'}
-          </span>
+          <span className={typeLabelClass}>{typeLabel}</span>
         </div>
       </div>
     </Link>
