@@ -21,6 +21,7 @@ import type {
   FeedbackStatus,
   InviteFriendsResponse,
   FriendRequestByUserIdResponse,
+  Friendship,
 } from '@/lib/types';
 
 export default function EventDetailPage() {
@@ -50,8 +51,12 @@ export default function EventDetailPage() {
     const ev = await api.get<GameEvent>(`/events/${id}`);
     setEvent(ev);
     try {
-      const friends = await api.get<User[]>('/friends', { showErrorToast: false });
+      const [friends, sentPending] = await Promise.all([
+        api.get<User[]>('/friends', { showErrorToast: false }),
+        api.get<Friendship[]>('/friends/pending/sent', { showErrorToast: false }),
+      ]);
       setFriendIds(friends.map((f) => f.id));
+      setRequestedFriendIds(sentPending.map((request) => request.addresseeId));
     } catch {
       /* best effort for attendee friend actions */
     }
