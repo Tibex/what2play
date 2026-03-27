@@ -9,6 +9,13 @@ import {
 import { UserGameOwnership } from './user-game-ownership.entity';
 import { UserGameRating } from './user-game-rating.entity';
 
+export interface BggPlayerCountPollEntry {
+  best: number;
+  recommended: number;
+  notRecommended: number;
+  totalVotes: number;
+}
+
 @Entity('games')
 export class Game {
   @PrimaryGeneratedColumn('uuid')
@@ -64,6 +71,9 @@ export class Game {
 
   @Column({ type: 'simple-array', nullable: true })
   expansionForBggIds: string[];
+
+  @Column({ type: 'simple-json', nullable: true })
+  bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
 
   @CreateDateColumn()
   createdAt: Date;

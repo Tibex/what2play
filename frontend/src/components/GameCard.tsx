@@ -65,14 +65,16 @@ export default function GameCard({
           </div>
           {explanation && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {Object.entries(explanation).map(([key, val]) => (
+              {Object.entries(explanation)
+                .filter(([key]) => key !== 'score_breakdown')
+                .map(([key, val]) => (
                 <span
                   key={key}
                   className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full"
                 >
                   {val}
                 </span>
-              ))}
+                ))}
             </div>
           )}
           {actions && <div className="mt-3">{actions}</div>}

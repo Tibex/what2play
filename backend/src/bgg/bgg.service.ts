@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { v4 as uuid } from 'uuid';
 import { SyncAccount } from '../entities/sync-account.entity';
 import { BggVerificationChallenge } from '../entities/bgg-verification-challenge.entity';
+import { BggPlayerCountPollEntry } from '../entities/game.entity';
 import { GamesService } from '../games/games.service';
 
 @Injectable()
@@ -98,6 +99,7 @@ export class BggService {
         yearPublished: bg.yearPublished,
         isExpansion: bg.isExpansion,
         expansionForBggIds: bg.expansionForBggIds,
+        bggPlayerCountPoll: bg.bggPlayerCountPoll,
       });
       await this.gamesService.addToCollection(userId, game.id);
       if (bg.userRating) {
@@ -129,6 +131,7 @@ export class BggService {
         yearPublished: bg.yearPublished,
         isExpansion: bg.isExpansion,
         expansionForBggIds: bg.expansionForBggIds,
+        bggPlayerCountPoll: bg.bggPlayerCountPoll,
       });
       await this.gamesService.addToCollection(userId, game.id);
       if (bg.userRating) {
@@ -210,6 +213,7 @@ export class BggService {
       maxPlayers: d.maxPlayers,
       playingTime: d.playingTime,
       yearPublished: d.yearPublished,
+      bggPlayerCountPoll: d.bggPlayerCountPoll,
     });
     await this.gamesService.addToCollection(userId, game.id);
     return { game };
@@ -258,6 +262,7 @@ export class BggService {
       maxPlayers?: number;
       playingTime?: number;
       yearPublished?: number;
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }>
   > {
     if (!bggIds.length) return [];
@@ -270,6 +275,7 @@ export class BggService {
       maxPlayers?: number;
       playingTime?: number;
       yearPublished?: number;
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }> = [];
 
     const headers = this.getBggHeaders();
@@ -301,6 +307,7 @@ export class BggService {
     maxPlayers?: number;
     playingTime?: number;
     yearPublished?: number;
+    bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
   }> {
     const results: Array<{
       bggId: number;
@@ -311,6 +318,7 @@ export class BggService {
       maxPlayers?: number;
       playingTime?: number;
       yearPublished?: number;
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }> = [];
 
     const itemRegex = /<item\b([^>]*)>([\s\S]*?)<\/item>/g;
@@ -336,6 +344,7 @@ export class BggService {
       const maxPlayers = this.extractNumAttr(body, 'maxplayers');
       const playingTime = this.extractNumAttr(body, 'playingtime');
       const yearPublished = this.extractNumAttr(body, 'yearpublished');
+      const bggPlayerCountPoll = this.parsePlayerCountPoll(body);
 
       results.push({
         bggId,
@@ -346,6 +355,7 @@ export class BggService {
         maxPlayers,
         playingTime,
         yearPublished,
+        bggPlayerCountPoll,
       });
     }
 
@@ -365,6 +375,7 @@ export class BggService {
       userRating?: number;
       isExpansion?: boolean;
       expansionForBggIds?: string[];
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }>
   > {
     const token = this.config.get<string>('BGG_API_TOKEN');
@@ -417,6 +428,7 @@ export class BggService {
     userRating?: number;
     isExpansion?: boolean;
     expansionForBggIds?: string[];
+    bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
   }> {
     const games: Array<{
       bggId: number;
@@ -430,6 +442,7 @@ export class BggService {
       userRating?: number;
       isExpansion?: boolean;
       expansionForBggIds?: string[];
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }> = [];
 
     const itemRegex = /<item[^>]*objectid="(\d+)"[^>]*>([\s\S]*?)<\/item>/g;
@@ -469,6 +482,7 @@ export class BggService {
         playingTime,
         yearPublished,
         userRating,
+        bggPlayerCountPoll: this.parsePlayerCountPoll(block),
       });
     }
 
@@ -503,6 +517,7 @@ export class BggService {
       userRating?: number;
       isExpansion?: boolean;
       expansionForBggIds?: string[];
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }>,
   ): Promise<
     Array<{
@@ -517,6 +532,7 @@ export class BggService {
       userRating?: number;
       isExpansion?: boolean;
       expansionForBggIds?: string[];
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
     }>
   > {
     if (!games.length) return games;
@@ -525,7 +541,11 @@ export class BggService {
 
     const metadata = new Map<
       number,
-      { isExpansion: boolean; baseIds: string[] }
+      {
+        isExpansion: boolean;
+        baseIds: string[];
+        bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
+      }
     >();
     const ids = games.map((g) => g.bggId);
     const chunkSize = 20;
@@ -554,13 +574,21 @@ export class BggService {
         ...game,
         isExpansion: meta.isExpansion,
         expansionForBggIds: meta.baseIds,
+        bggPlayerCountPoll: meta.bggPlayerCountPoll ?? game.bggPlayerCountPoll,
       };
     });
   }
 
   private parseThingMetadata(
     xml: string,
-    target: Map<number, { isExpansion: boolean; baseIds: string[] }>,
+    target: Map<
+      number,
+      {
+        isExpansion: boolean;
+        baseIds: string[];
+        bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
+      }
+    >,
   ): void {
     const itemRegex = /<item\b([^>]*)>([\s\S]*?)<\/item>/g;
     let itemMatch: RegExpExecArray | null;
@@ -583,8 +611,50 @@ export class BggService {
       }
 
       const isExpansion = type === 'boardgameexpansion' || baseIds.length > 0;
-      target.set(id, { isExpansion, baseIds });
+      target.set(id, {
+        isExpansion,
+        baseIds,
+        bggPlayerCountPoll: this.parsePlayerCountPoll(body),
+      });
     }
+  }
+
+  private parsePlayerCountPoll(
+    xmlBlock: string,
+  ): Record<string, BggPlayerCountPollEntry> | undefined {
+    const pollMatch = xmlBlock.match(
+      /<poll[^>]*name="suggested_numplayers"[^>]*>([\s\S]*?)<\/poll>/,
+    );
+    if (!pollMatch) return undefined;
+
+    const pollBody = pollMatch[1];
+    const resultsRegex =
+      /<results[^>]*numplayers="([^"]+)"[^>]*>([\s\S]*?)<\/results>/g;
+    const output: Record<string, BggPlayerCountPollEntry> = {};
+    let resultsMatch: RegExpExecArray | null;
+
+    while ((resultsMatch = resultsRegex.exec(pollBody)) !== null) {
+      const playerLabel = this.decodeHtmlEntities(resultsMatch[1].trim());
+      const body = resultsMatch[2];
+      const best = this.extractPollVotes(body, 'Best');
+      const recommended = this.extractPollVotes(body, 'Recommended');
+      const notRecommended = this.extractPollVotes(body, 'Not Recommended');
+      const totalVotes = best + recommended + notRecommended;
+      if (totalVotes === 0) continue;
+      output[playerLabel] = { best, recommended, notRecommended, totalVotes };
+    }
+
+    return Object.keys(output).length ? output : undefined;
+  }
+
+  private extractPollVotes(resultsBody: string, value: string): number {
+    const safeValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = resultsBody.match(
+      new RegExp(
+        `<result[^>]*value="${safeValue}"[^>]*numvotes="(\\d+)"[^>]*/?>`,
+      ),
+    );
+    return match ? Number.parseInt(match[1], 10) : 0;
   }
 
   private async sleep(ms: number): Promise<void> {

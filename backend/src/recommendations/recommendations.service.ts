@@ -13,6 +13,13 @@ import { Game } from '../entities/game.entity';
 import { GamesService } from '../games/games.service';
 import { EventsService } from '../events/events.service';
 
+interface BggPlayerCountPollEntry {
+  best: number;
+  recommended: number;
+  notRecommended: number;
+  totalVotes: number;
+}
+
 interface ScoredCandidate {
   game: Game;
   score: number;
@@ -109,7 +116,7 @@ export class RecommendationsService {
         const contribution = ratingFit * RECOMMENDATION_WEIGHTS.groupRating;
         score += contribution;
         scoreBreakdown['group_rating'] = contribution;
-        explanation['rating'] = `Group avg rating: ${avg.toFixed(1)}/10`;
+        explanation['rating'] = `Group avg BGG rating: ${avg.toFixed(1)}`;
       }
 
       if (game.bggRating) {
@@ -126,8 +133,7 @@ export class RecommendationsService {
         const contribution = timeFit * RECOMMENDATION_WEIGHTS.timeFit;
         score += contribution;
         scoreBreakdown['time_fit'] = contribution;
-        explanation['time'] =
-          `Avg ${timing}min vs ${event.durationMinutes}min budget`;
+        explanation['time'] = `~${timing} min playtime`;
       } else if (game.playingTime && event.durationMinutes) {
         const timeFit = this.getTimeFitScore(
           game.playingTime,
@@ -136,8 +142,7 @@ export class RecommendationsService {
         const contribution = timeFit * RECOMMENDATION_WEIGHTS.timeFit;
         score += contribution;
         scoreBreakdown['time_fit'] = contribution;
-        explanation['time'] =
-          `Estimated ${game.playingTime}min vs ${event.durationMinutes}min budget`;
+        explanation['time'] = `~${game.playingTime} min playtime`;
       }
 
       const feedback = historicalFeedback.get(game.id);
@@ -152,7 +157,9 @@ export class RecommendationsService {
         score += contribution;
         scoreBreakdown['history'] = contribution;
         explanation['history'] =
-          `${(feedback.completionRate * 100).toFixed(0)}% completion, ${feedback.avgEnjoyment.toFixed(1)}/5 enjoyment`;
+          `Completion rate: ${(feedback.completionRate * 100).toFixed(0)}%`;
+        explanation['group_enjoyment'] =
+          `Group avg. enjoyment: ${feedback.avgEnjoyment.toFixed(1)}`;
       }
 
       const attendeeFeedback = attendeeHistoricalFeedback.get(game.id);
@@ -172,7 +179,7 @@ export class RecommendationsService {
         score += contribution;
         scoreBreakdown['attendee_history'] = contribution;
         explanation['attendee_history'] =
-          `Attendees played ${Math.round(attendeeFeedback.playRate * 100)}% and rated ${attendeeFeedback.avgEnjoyment.toFixed(1)}/5`;
+          `Attendees played: ${Math.round(attendeeFeedback.playRate * 100)}%`;
       }
 
       const averagePreferredWeight = this.getAveragePreferredWeight(event);
@@ -189,17 +196,16 @@ export class RecommendationsService {
           `Complexity fit: ${Number(game.weight).toFixed(2)} vs group pref ${averagePreferredWeight.toFixed(2)}`;
       }
 
-      const bestPlayerFit = this.getBestPlayersFitScore(
-        game.minPlayers,
-        game.maxPlayers,
-        playerCount,
-      );
+      const bestPlayerFit = this.getBestPlayersFitScore(game, playerCount);
       const bestPlayerContribution =
         bestPlayerFit * RECOMMENDATION_WEIGHTS.bggBestPlayersFit;
       score += bestPlayerContribution;
       scoreBreakdown['best_players_fit'] = bestPlayerContribution;
-      explanation['best_players'] =
-        `Best-player fit: ${(bestPlayerFit * 100).toFixed(0)}%`;
+      explanation['best_players'] = this.getBestPlayersExplanation(
+        game,
+        playerCount,
+        bestPlayerFit,
+      );
 
       if (recentlyPlayed.has(game.id)) {
         score -= RECOMMENDATION_WEIGHTS.freshness;
@@ -209,8 +215,6 @@ export class RecommendationsService {
 
       const confidence = this.getRecommendationConfidence(explanation);
       explanation['confidence'] = `Confidence: ${confidence}`;
-      explanation['score_breakdown'] =
-        this.formatScoreBreakdown(scoreBreakdown);
 
       scored.push({ game, score, source: 'owned', explanation });
     }
@@ -260,8 +264,7 @@ export class RecommendationsService {
           const contribution = timeFit * RECOMMENDATION_WEIGHTS.timeFit;
           score += contribution;
           scoreBreakdown['time_fit'] = contribution;
-          explanation['time'] =
-            `Estimated ${game.playingTime}min vs ${event.durationMinutes}min budget`;
+          explanation['time'] = `~${game.playingTime} min playtime`;
         }
 
         const averagePreferredWeight = this.getAveragePreferredWeight(event);
@@ -278,17 +281,16 @@ export class RecommendationsService {
             `Complexity fit: ${Number(game.weight).toFixed(2)} vs group pref ${averagePreferredWeight.toFixed(2)}`;
         }
 
-        const bestPlayerFit = this.getBestPlayersFitScore(
-          game.minPlayers,
-          game.maxPlayers,
-          playerCount,
-        );
+        const bestPlayerFit = this.getBestPlayersFitScore(game, playerCount);
         const bestPlayerContribution =
           bestPlayerFit * RECOMMENDATION_WEIGHTS.bggBestPlayersFit;
         score += bestPlayerContribution;
         scoreBreakdown['best_players_fit'] = bestPlayerContribution;
-        explanation['best_players'] =
-          `Best-player fit: ${(bestPlayerFit * 100).toFixed(0)}%`;
+        explanation['best_players'] = this.getBestPlayersExplanation(
+          game,
+          playerCount,
+          bestPlayerFit,
+        );
 
         if (!event.discoveryMode && bestOwnedScore != null) {
           const maxAllowed = bestOwnedScore - FALLBACK_DISCOVERY_MAX_DELTA;
@@ -303,8 +305,6 @@ export class RecommendationsService {
 
         explanation['confidence'] =
           `Confidence: ${this.getRecommendationConfidence(explanation)}`;
-        explanation['score_breakdown'] =
-          this.formatScoreBreakdown(scoreBreakdown);
 
         scored.push({
           game,
@@ -589,16 +589,67 @@ export class RecommendationsService {
     return this.clamp(1 - overrunRatio, 0, 1);
   }
 
-  private getBestPlayersFitScore(
-    minPlayers: number,
-    maxPlayers: number,
-    playerCount: number,
-  ): number {
-    if (minPlayers > maxPlayers) return 0;
-    const midpoint = (minPlayers + maxPlayers) / 2;
-    const halfRange = Math.max(1, (maxPlayers - minPlayers) / 2);
+  private getBestPlayersFitScore(game: Game, playerCount: number): number {
+    const pollEntry = this.getPollEntryForPlayerCount(game, playerCount);
+    if (pollEntry) {
+      return this.getPollFitScore(pollEntry);
+    }
+
+    if (game.minPlayers > game.maxPlayers) return 0;
+    const midpoint = (game.minPlayers + game.maxPlayers) / 2;
+    const halfRange = Math.max(1, (game.maxPlayers - game.minPlayers) / 2);
     const distance = Math.abs(playerCount - midpoint);
     return this.clamp(1 - distance / (halfRange + 1), 0, 1);
+  }
+
+  private getBestPlayersExplanation(
+    game: Game,
+    playerCount: number,
+    fitScore: number,
+  ): string {
+    const pollEntry = this.getPollEntryForPlayerCount(game, playerCount);
+    if (!pollEntry || pollEntry.totalVotes <= 0) {
+      return `Best-player fit: ${(fitScore * 100).toFixed(0)}%`;
+    }
+
+    const bestPct = (pollEntry.best / pollEntry.totalVotes) * 100;
+    const recPct = (pollEntry.recommended / pollEntry.totalVotes) * 100;
+    return `BGG ${playerCount}p: Best ${bestPct.toFixed(0)}%, Rec ${recPct.toFixed(0)}%`;
+  }
+
+  private getPollFitScore(pollEntry: BggPlayerCountPollEntry): number {
+    if (pollEntry.totalVotes <= 0) return 0;
+    const weighted =
+      pollEntry.best * 1 +
+      pollEntry.recommended * 0.65 +
+      pollEntry.notRecommended * 0;
+    return this.clamp(weighted / pollEntry.totalVotes, 0, 1);
+  }
+
+  private getPollEntryForPlayerCount(
+    game: Game,
+    playerCount: number,
+  ): BggPlayerCountPollEntry | null {
+    const poll = game.bggPlayerCountPoll as
+      | Record<string, BggPlayerCountPollEntry>
+      | undefined;
+    if (!poll) return null;
+
+    const exact = poll[String(playerCount)];
+    if (exact) return exact;
+
+    for (const [key, value] of Object.entries(poll)) {
+      const plusMatch = key.match(/^(\d+)\+$/);
+      if (plusMatch && playerCount >= Number.parseInt(plusMatch[1], 10)) {
+        return value;
+      }
+      const moreMatch = key.match(/^more than (\d+)$/i);
+      if (moreMatch && playerCount > Number.parseInt(moreMatch[1], 10)) {
+        return value;
+      }
+    }
+
+    return null;
   }
 
   private getAveragePreferredWeight(event: Event): number | null {
@@ -631,15 +682,5 @@ export class RecommendationsService {
     if (coverage >= 0.7) return 'high';
     if (coverage >= 0.4) return 'medium';
     return 'low';
-  }
-
-  private formatScoreBreakdown(breakdown: Record<string, number>): string {
-    const parts = Object.entries(breakdown)
-      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-      .slice(0, 6)
-      .map(
-        ([key, value]) => `${key}:${value >= 0 ? '+' : ''}${value.toFixed(1)}`,
-      );
-    return `Breakdown ${parts.join(' | ')}`;
   }
 }

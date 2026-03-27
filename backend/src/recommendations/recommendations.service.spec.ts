@@ -434,7 +434,6 @@ describe('RecommendationsService', () => {
       expect(Number(g1!.score)).toBeGreaterThan(Number(g2!.score));
       expect(g1!.explanation).toHaveProperty('complexity');
       expect(g1!.explanation).toHaveProperty('confidence');
-      expect(g1!.explanation).toHaveProperty('score_breakdown');
     });
 
     it('boosts games with stronger best-player-count fit', async () => {
@@ -476,6 +475,72 @@ describe('RecommendationsService', () => {
       expect(g2).toBeDefined();
       expect(Number(g1!.score)).toBeGreaterThan(Number(g2!.score));
       expect(g1!.explanation).toHaveProperty('best_players');
+    });
+
+    it('uses BGG player-count poll fit when available', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+      ]);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'g1',
+          title: 'Poll favored at 3',
+          minPlayers: 1,
+          maxPlayers: 6,
+          bggPlayerCountPoll: {
+            '3': {
+              best: 800,
+              recommended: 150,
+              notRecommended: 50,
+              totalVotes: 1000,
+            },
+          },
+        },
+        {
+          id: 'g2',
+          title: 'Poll disliked at 3',
+          minPlayers: 1,
+          maxPlayers: 6,
+          bggPlayerCountPoll: {
+            '3': {
+              best: 100,
+              recommended: 200,
+              notRecommended: 700,
+              totalVotes: 1000,
+            },
+          },
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'getAverageTimings')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      const favored = result.find((r) => r.gameId === 'g1');
+      const disliked = result.find((r) => r.gameId === 'g2');
+
+      expect(favored).toBeDefined();
+      expect(disliked).toBeDefined();
+      expect(Number(favored!.score)).toBeGreaterThan(Number(disliked!.score));
+      expect(favored!.explanation.best_players).toContain('BGG 3p');
     });
 
     it('adds external discovery candidates when discovery mode is enabled', async () => {
