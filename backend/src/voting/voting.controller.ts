@@ -65,5 +65,4 @@ export class VotingController {
   getMyVotes(@Param('eventId') eventId: string, @Request() req) {
     return this.votingService.getUserVotes(eventId, req.user.id);
   }
-
 }

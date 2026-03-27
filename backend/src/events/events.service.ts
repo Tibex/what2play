@@ -229,7 +229,12 @@ export class EventsService {
         status === 'not_going' ? cancellationReason?.trim() || null : null,
     });
     const saved = await this.attendeesRepo.save(attendee);
-    await this.handleAttendanceImpact(eventId, undefined, status, cancellationReason);
+    await this.handleAttendanceImpact(
+      eventId,
+      undefined,
+      status,
+      cancellationReason,
+    );
     return saved;
   }
 
@@ -286,7 +291,12 @@ export class EventsService {
         status === 'not_going' ? cancellationReason?.trim() || null : null,
     });
     const saved = await this.attendeesRepo.save(attendee);
-    await this.handleAttendanceImpact(eventId, undefined, status, cancellationReason);
+    await this.handleAttendanceImpact(
+      eventId,
+      undefined,
+      status,
+      cancellationReason,
+    );
     return saved;
   }
 

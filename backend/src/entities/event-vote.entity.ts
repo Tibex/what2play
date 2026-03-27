@@ -22,7 +22,10 @@ export class EventVote {
   @Column()
   eventId: string;
 
-  @ManyToOne(() => User, (u) => u.votes, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => User, (u) => u.votes, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   user: User;
 
   @Column({ nullable: true })

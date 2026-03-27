@@ -146,7 +146,11 @@ export class VotingService {
       if (attendee.userId && attendee.rsvpStatus === 'going') {
         expectedVoterKeys.add(this.createUserVoterKey(attendee.userId));
       }
-      if (attendee.isGuest && attendee.guestName && attendee.rsvpStatus === 'going') {
+      if (
+        attendee.isGuest &&
+        attendee.guestName &&
+        attendee.rsvpStatus === 'going'
+      ) {
         expectedVoterKeys.add(this.createGuestVoterKey(attendee.guestName));
       }
     }

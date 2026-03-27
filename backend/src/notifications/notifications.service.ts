@@ -163,8 +163,9 @@ export class NotificationsService {
           actorUserId,
           actorName,
           reason: reason || null,
-          currentGoingCount: event.attendees.filter((a) => a.rsvpStatus === 'going')
-            .length,
+          currentGoingCount: event.attendees.filter(
+            (a) => a.rsvpStatus === 'going',
+          ).length,
         },
       });
     }

@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AttendanceReliabilitySupport1764320000000
-  implements MigrationInterface
-{
+export class AttendanceReliabilitySupport1764320000000 implements MigrationInterface {
   name = 'AttendanceReliabilitySupport1764320000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

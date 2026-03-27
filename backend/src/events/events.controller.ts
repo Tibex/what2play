@@ -182,7 +182,12 @@ export class EventsController {
     if (goingBefore !== goingAfter) {
       await this.maybeRegenerateFallbackOptions(id, goingAfter);
       this.notificationsService
-        .sendCancellationOrSpotUpdate(id, req.user.id, dto.status, dto.cancellationReason)
+        .sendCancellationOrSpotUpdate(
+          id,
+          req.user.id,
+          dto.status,
+          dto.cancellationReason,
+        )
         .catch(() => {
           /* non-critical */
         });
@@ -200,7 +205,11 @@ export class EventsController {
     if (!event.fallbackGameId) {
       return { ok: false, message: 'No fallback game configured' };
     }
-    return this.votingService.selectWinner(id, req.user.id, event.fallbackGameId);
+    return this.votingService.selectWinner(
+      id,
+      req.user.id,
+      event.fallbackGameId,
+    );
   }
 
   @Post(':id/invite-link')
@@ -278,11 +287,11 @@ export class EventsController {
     await this.eventsService.assertHostAccess(id, req.user.id);
     const [feedbackAnalytics, deliveryMetrics, event, cancellation] =
       await Promise.all([
-      this.feedbackService.getEventFeedbackAnalytics(id),
-      this.notificationsService.getDeliveryMetrics(id),
-      this.eventsService.findById(id),
-      this.eventsService.getCancellationAnalytics(id),
-    ]);
+        this.feedbackService.getEventFeedbackAnalytics(id),
+        this.notificationsService.getDeliveryMetrics(id),
+        this.eventsService.findById(id),
+        this.eventsService.getCancellationAnalytics(id),
+      ]);
 
     return {
       eventId: id,

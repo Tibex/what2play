@@ -18,15 +18,18 @@ export default function InvitePage() {
   const [guestName, setGuestName] = useState('');
   const [submittingGuest, setSubmittingGuest] = useState(false);
   const [guestSubmitted, setGuestSubmitted] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [hasAuthToken, setHasAuthToken] = useState(false);
   const [candidates, setCandidates] = useState<EventGameCandidate[]>([]);
   const [rankings, setRankings] = useState<Record<string, number>>({});
   const [submittingVotes, setSubmittingVotes] = useState(false);
   const [guestVoted, setGuestVoted] = useState(false);
-  const voteButtonLabel = guestVoted
-    ? 'Vote Submitted'
-    : submittingVotes
-      ? 'Submitting Vote...'
-      : 'Submit Guest Vote';
+  let voteButtonLabel = 'Submit Guest Vote';
+  if (guestVoted) {
+    voteButtonLabel = 'Vote Submitted';
+  } else if (submittingVotes) {
+    voteButtonLabel = 'Submitting Vote...';
+  }
 
   useEffect(() => {
     api
@@ -35,6 +38,30 @@ export default function InvitePage() {
       .catch(() => setLoadError('Invalid or expired invite link'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    setHasAuthToken(Boolean(localStorage.getItem('accessToken')));
+    const userRaw = localStorage.getItem('user');
+    if (!userRaw) return;
+    try {
+      const parsed = JSON.parse(userRaw) as { id?: string };
+      if (parsed?.id) {
+        setCurrentUserId(parsed.id);
+      }
+    } catch {
+      // Ignore malformed local storage user payload.
+    }
+  }, []);
+
+  const alreadyJoinedWithAccount =
+    Boolean(currentUserId) &&
+    Boolean(event) &&
+    event.attendees.some((attendee) => attendee.userId === currentUserId);
+
+  useEffect(() => {
+    if (!event?.id || !alreadyJoinedWithAccount) return;
+    router.replace(`/events/${event.id}`);
+  }, [alreadyJoinedWithAccount, event?.id, router]);
 
   useEffect(() => {
     if (event?.status !== 'voting') return;
@@ -182,12 +209,31 @@ export default function InvitePage() {
         {actionError && (
           <p className="mt-3 text-sm text-red-600">{actionError}</p>
         )}
-        <button onClick={handleJoin} className="mt-6 w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition">
-          Join With Account
-        </button>
-        <p className="text-xs text-gray-400 mt-3">
-          Account join supports RSVP plus voting
-        </p>
+        {alreadyJoinedWithAccount ? (
+          <>
+            <button
+              onClick={() => router.push(`/events/${event.id}`)}
+              className="mt-6 w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+            >
+              Open Event
+            </button>
+            <p className="text-xs text-gray-400 mt-3">
+              You are already joined with this account
+            </p>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={handleJoin}
+              className="mt-6 w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+            >
+              {hasAuthToken ? 'Join With Account' : 'Login and Join'}
+            </button>
+            <p className="text-xs text-gray-400 mt-3">
+              Account join supports RSVP plus voting
+            </p>
+          </>
+        )}
 
         <div className="mt-5 border-t border-gray-100 pt-5 text-left">
           <p className="text-sm font-medium text-gray-800 mb-2">Quick guest RSVP</p>

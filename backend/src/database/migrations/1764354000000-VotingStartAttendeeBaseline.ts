@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class VotingStartAttendeeBaseline1764354000000
-  implements MigrationInterface
-{
+export class VotingStartAttendeeBaseline1764354000000 implements MigrationInterface {
   name = 'VotingStartAttendeeBaseline1764354000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
