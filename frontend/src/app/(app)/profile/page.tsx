@@ -22,7 +22,6 @@ export default function ProfilePage() {
   const [bggUsername, setBggUsername] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
@@ -75,24 +74,6 @@ export default function ProfilePage() {
     }
   };
 
-  const linkBgg = async () => {
-    if (!bggUsername.trim()) {
-      toast.error('Enter your BoardGameGeek username');
-      return;
-    }
-    setLinking(true);
-    try {
-      await api.post<SyncAccount>('/bgg/link', { bggUsername: bggUsername.trim() });
-      const linked = await api.get<SyncAccount | null>('/bgg/link', {
-        showErrorToast: false,
-      });
-      setBggAccount(linked);
-      toast.success('BGG linked. Auto-sync started.');
-    } finally {
-      setLinking(false);
-    }
-  };
-
   const unlinkBgg = async () => {
     setUnlinking(true);
     try {
@@ -108,6 +89,14 @@ export default function ProfilePage() {
   const syncNow = async () => {
     setSyncing(true);
     try {
+      if (!bggAccount) {
+        const username = bggUsername.trim();
+        if (!username) {
+          toast.error('Enter your BoardGameGeek username');
+          return;
+        }
+        await api.post<SyncAccount>('/bgg/link', { bggUsername: username });
+      }
       const result = await api.post<{ imported: number; fetched: number }>('/bgg/sync');
       setBggAccount(await api.get<SyncAccount | null>('/bgg/link', { showErrorToast: false }));
       toast.success(`Synced ${result.imported}/${result.fetched} games`);
@@ -197,7 +186,7 @@ export default function ProfilePage() {
 
         <div className="border-t border-gray-100 pt-5 space-y-3">
           <h2 className="font-semibold text-gray-800">BoardGameGeek</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
             <div>
               <label htmlFor="profile-bgg-username" className="block text-sm font-medium text-gray-700 mb-1">
                 BGG Username
@@ -213,16 +202,8 @@ export default function ProfilePage() {
             </div>
             <button
               type="button"
-              onClick={() => void linkBgg()}
-              disabled={linking}
-              className="h-[42px] px-4 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition"
-            >
-              {linking ? 'Linking...' : 'Link'}
-            </button>
-            <button
-              type="button"
               onClick={() => void syncNow()}
-              disabled={!bggAccount || syncing}
+              disabled={syncing}
               className="h-[42px] px-4 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:border-indigo-300 disabled:opacity-50 transition"
             >
               {syncing ? 'Syncing...' : 'Sync now'}
