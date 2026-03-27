@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, LessThanOrEqual, MoreThan } from 'typeorm';
+import { Repository, Between, LessThanOrEqual } from 'typeorm';
 import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
 import { VotingService } from '../voting/voting.service';
@@ -204,7 +204,7 @@ export class NotificationsService {
       }));
   }
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_HOUR)
   async autoCloseExpiredVoting() {
     const now = new Date();
     const events = await this.eventsRepo.find({
@@ -222,7 +222,7 @@ export class NotificationsService {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_HOUR)
   async retryFailedDeliveries() {
     const retried = await this.deliveryService.retryFailedDeliveries();
     if (retried > 0) {
@@ -230,7 +230,7 @@ export class NotificationsService {
     }
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron('0 0 * * *')
   async sendUpcomingEventReminders() {
     const now = new Date();
     const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -244,7 +244,9 @@ export class NotificationsService {
     });
 
     for (const event of upcomingEvents) {
+      if (event.dateTime <= now) continue;
       const recipients = this.getEmailRecipients(event.attendees);
+      if (!recipients.length) continue;
       const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
       const reminderPayload = {
         eventId: event.id,
@@ -270,15 +272,14 @@ export class NotificationsService {
     }
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron('0 0 * * *')
   async promptPostEventFeedback() {
     const now = new Date();
-    const past6h = new Date(now.getTime() - 6 * 60 * 60 * 1000);
 
     const recentlyCompleted = await this.eventsRepo.find({
       where: {
         status: 'completed',
-        dateTime: MoreThan(past6h),
+        dateTime: LessThanOrEqual(now),
       },
       relations: ['attendees', 'attendees.user', 'feedbacks'],
     });
