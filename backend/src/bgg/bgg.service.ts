@@ -234,7 +234,9 @@ export class BggService {
       const nameMatch = block.match(
         /<name[^>]*type="primary"[^>]*value="([^"]+)"/,
       );
-      const title = nameMatch ? nameMatch[1] : `Game ${bggId}`;
+      const title = nameMatch
+        ? this.decodeHtmlEntities(nameMatch[1])
+        : `Game ${bggId}`;
 
       const yearMatch = block.match(/<yearpublished[^>]*value="(\d+)"/);
       const yearPublished = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
@@ -325,7 +327,9 @@ export class BggService {
       const nameMatch = body.match(
         /<name[^>]*type="primary"[^>]*value="([^"]+)"/,
       );
-      const title = nameMatch ? nameMatch[1] : `Game ${bggId}`;
+      const title = nameMatch
+        ? this.decodeHtmlEntities(nameMatch[1])
+        : `Game ${bggId}`;
       const thumbnailUrl = this.extractTag(body, 'thumbnail');
       const imageUrl = this.extractTag(body, 'image');
       const minPlayers = this.extractNumAttr(body, 'minplayers');
@@ -473,7 +477,7 @@ export class BggService {
 
   private extractTag(block: string, tag: string): string | undefined {
     const m = block.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
-    return m ? m[1].trim() : undefined;
+    return m ? this.decodeHtmlEntities(m[1].trim()) : undefined;
   }
 
   private extractNumAttr(block: string, attr: string): number | undefined {
@@ -585,5 +589,16 @@ export class BggService {
 
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private decodeHtmlEntities(value: string): string {
+    return value
+      .replace(/&amp;/g, '&')
+      .replace(/&apos;/g, "'")
+      .replace(/&#039;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
   }
 }
