@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './../src/app.module';
 
 const describeIfDb =
@@ -16,6 +17,13 @@ describeIfDb('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Board Game Night API')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
     await app.init();
   });
 

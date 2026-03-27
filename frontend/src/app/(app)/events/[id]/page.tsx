@@ -490,6 +490,7 @@ export default function EventDetailPage() {
                 myVotes={myVotes}
                 votingStatus={votingStatus}
                 status={event.status}
+                canSubmitVotes={myAttendee?.rsvpStatus === 'going'}
                 onVoted={loadEvent}
               />
             )}
@@ -945,13 +946,14 @@ function RecommendationsSection({
   );
 }
 
-function VotingSection({ eventId, candidates, results, myVotes, votingStatus, status, onVoted }: {
+function VotingSection({ eventId, candidates, results, myVotes, votingStatus, status, canSubmitVotes, onVoted }: {
   eventId: string;
   candidates: EventGameCandidate[];
   results: VoteResult[];
   myVotes: EventVote[];
   votingStatus: VotingStatus | null;
   status: string;
+  canSubmitVotes: boolean;
   onVoted: () => void;
 }) {
   const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>([]);
@@ -999,7 +1001,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
   };
 
   const submitVotes = async () => {
-    if (hasSubmittedVotes) return;
+    if (hasSubmittedVotes || !canSubmitVotes) return;
     setSubmitting(true);
     try {
       await api.post(`/events/${eventId}/voting`, { rankings });
@@ -1138,7 +1140,11 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
     <div className="space-y-6">
       {status === 'voting' && candidates.length > 0 && (
         <div>
-          {!hasSubmittedVotes ? (
+          {!canSubmitVotes ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              Only attendees marked as going can submit votes.
+            </div>
+          ) : !hasSubmittedVotes ? (
             <>
               <h3 className="font-semibold mb-3">Rank your preferences (most wanted at top)</h3>
               <div className="space-y-2">{voteTiles}</div>
