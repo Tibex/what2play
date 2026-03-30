@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddPushSubscriptions1764400000000
-  implements MigrationInterface
-{
+export class AddPushSubscriptions1764400000000 implements MigrationInterface {
   name = 'AddPushSubscriptions1764400000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -29,4 +27,3 @@ export class AddPushSubscriptions1764400000000
     await queryRunner.query(`DROP TABLE IF EXISTS "push_subscriptions"`);
   }
 }
-

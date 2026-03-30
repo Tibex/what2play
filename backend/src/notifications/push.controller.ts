@@ -61,14 +61,17 @@ export class PushController {
   @ApiOperation({ summary: 'Get VAPID public key for browser subscription' })
   getVapidPublicKey() {
     const publicKey = this.config.get<string>('WEB_PUSH_PUBLIC_KEY');
-    if (!publicKey) throw new BadRequestException('WEB_PUSH_PUBLIC_KEY not set');
+    if (!publicKey)
+      throw new BadRequestException('WEB_PUSH_PUBLIC_KEY not set');
     return { publicKey };
   }
 
   @Post('push/subscribe')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Register browser push subscription for current user' })
+  @ApiOperation({
+    summary: 'Register browser push subscription for current user',
+  })
   async subscribe(
     @Req() req: Request & { user: { id: string } },
     @Body() dto: PushSubscribeDto,
@@ -103,11 +106,11 @@ export class PushController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user push subscriptions (debug)' })
-  async getMySubscriptions(
-    @Req() req: Request & { user: { id: string } },
-  ) {
+  async getMySubscriptions(@Req() req: Request & { user: { id: string } }) {
     const userId = req.user.id;
-    const subscriptions = await this.subscriptionsRepo.find({ where: { userId } });
+    const subscriptions = await this.subscriptionsRepo.find({
+      where: { userId },
+    });
 
     return {
       ok: true,
@@ -122,7 +125,7 @@ export class PushController {
   })
   async pushWebhook(@Body() body: PushWebhookPayload) {
     // NotificationDeliveryService already handles idempotency at the delivery-row level.
-    const payload = body as PushWebhookPayload;
+    const payload = body;
     const recipientUserIds = payload.recipientUserIds ?? [];
 
     if (!Array.isArray(recipientUserIds) || recipientUserIds.length === 0) {
@@ -170,9 +173,9 @@ export class PushController {
             .catch(async (err) => {
               failed += 1;
               const statusCode =
-                (err as any)?.statusCode ??
-                (err as any)?.body?.statusCode ??
-                (err as any)?.response?.statusCode;
+                err?.statusCode ??
+                err?.body?.statusCode ??
+                err?.response?.statusCode;
 
               // Common Web Push error codes: 404/410 => subscription is gone/expired.
               if (statusCode === 404 || statusCode === 410) {
@@ -190,7 +193,9 @@ export class PushController {
   @Post('push/test')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send a test Web Push notification to the current user' })
+  @ApiOperation({
+    summary: 'Send a test Web Push notification to the current user',
+  })
   async pushTest(
     @Req() req: Request & { user: { id: string } },
     @Body()
@@ -245,4 +250,3 @@ export class PushController {
     return { ok: true, delivered, failed };
   }
 }
-

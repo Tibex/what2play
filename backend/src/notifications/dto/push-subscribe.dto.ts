@@ -23,4 +23,3 @@ export class PushSubscribeDto {
   @Type(() => PushSubscriptionKeysDto)
   keys: PushSubscriptionKeysDto;
 }
-

@@ -14,7 +14,12 @@ import { PushSubscription } from '../entities/push-subscription.entity';
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([Event, EventVote, NotificationDelivery, PushSubscription]),
+    TypeOrmModule.forFeature([
+      Event,
+      EventVote,
+      NotificationDelivery,
+      PushSubscription,
+    ]),
     forwardRef(() => VotingModule),
   ],
   providers: [NotificationsService, NotificationDeliveryService],

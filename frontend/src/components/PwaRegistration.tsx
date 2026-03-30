@@ -67,12 +67,10 @@ export default function PwaRegistration() {
 
         const newSubscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: applicationServerKey as any,
+          applicationServerKey,
         });
 
-        const subscriptionJson = (newSubscription as any).toJSON
-          ? (newSubscription as any).toJSON()
-          : newSubscription;
+        const subscriptionJson = newSubscription.toJSON();
 
         await api.post('/notifications/push/subscribe', subscriptionJson, {
           showErrorToast: false,

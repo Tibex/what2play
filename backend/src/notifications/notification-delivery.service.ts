@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import nodemailer, { type Transporter } from 'nodemailer';
+import nodemailer from 'nodemailer';
 import { Repository } from 'typeorm';
 import { NotificationDelivery } from '../entities/notification-delivery.entity';
 
@@ -38,7 +38,7 @@ export interface NotificationDeliveryMetrics {
 export class NotificationDeliveryService {
   private readonly logger = new Logger(NotificationDeliveryService.name);
   private readonly maxAttempts = 5;
-  private emailTransporter: Transporter | null = null;
+  private emailTransporter: any = null;
 
   constructor(
     private readonly config: ConfigService,
@@ -69,7 +69,9 @@ export class NotificationDeliveryService {
     const successfulChannels: string[] = [];
     const channelErrors: string[] = [];
 
-    const webhookEndpoint = this.config.get<string>('NOTIFICATIONS_WEBHOOK_URL');
+    const webhookEndpoint = this.config.get<string>(
+      'NOTIFICATIONS_WEBHOOK_URL',
+    );
     if (webhookEndpoint) {
       configuredChannels.push('webhook');
       try {
@@ -82,7 +84,9 @@ export class NotificationDeliveryService {
       }
     }
 
-    const pushEndpoint = this.config.get<string>('NOTIFICATIONS_PUSH_WEBHOOK_URL');
+    const pushEndpoint = this.config.get<string>(
+      'NOTIFICATIONS_PUSH_WEBHOOK_URL',
+    );
     if (pushEndpoint) {
       configuredChannels.push('push');
       try {
@@ -232,7 +236,7 @@ export class NotificationDeliveryService {
     return Boolean(this.config.get<string>('SMTP_HOST'));
   }
 
-  private getEmailTransporter(): Transporter {
+  private getEmailTransporter(): any {
     if (this.emailTransporter) {
       return this.emailTransporter;
     }

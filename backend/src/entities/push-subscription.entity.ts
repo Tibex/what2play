@@ -27,4 +27,3 @@ export class PushSubscription {
   @CreateDateColumn()
   createdAt: Date;
 }
-
