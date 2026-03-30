@@ -195,7 +195,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" />
       </div>
     );
   }
@@ -203,15 +203,15 @@ export default function ProfilePage() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Profile</h1>
-      <div className="bg-white rounded-2xl border border-gray-100 p-8 space-y-5">
+      <div className="wt-card space-y-5 p-8">
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--primary-soft)] text-2xl font-bold text-[var(--primary)]">
             {profile?.name?.charAt(0)?.toUpperCase()}
           </div>
           <div>
             <p className="font-semibold text-lg">{profile?.name}</p>
-            <p className="text-sm text-gray-500">{profile?.email}</p>
-            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{profile?.subscriptionTier}</span>
+            <p className="wt-muted text-sm">{profile?.email}</p>
+            <span className="wt-chip border-[var(--border-strong)] bg-[var(--primary-soft)] text-[var(--primary)]">{profile?.subscriptionTier}</span>
           </div>
         </div>
 
@@ -222,7 +222,7 @@ export default function ProfilePage() {
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="wt-input"
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -234,7 +234,7 @@ export default function ProfilePage() {
               onChange={(e) =>
                 setForm({ ...form, preferredDuration: Number(e.target.value) })
               }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+              className="wt-input"
             >
               {DURATION_OPTIONS.map((mins) => (
                 <option key={mins} value={mins}>
@@ -249,7 +249,7 @@ export default function ProfilePage() {
               id="profile-weight"
               value={form.preferredWeight}
               onChange={(e) => setForm({ ...form, preferredWeight: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+              className="wt-input"
             >
               {WEIGHT_OPTIONS.map((weight) => (
                 <option key={weight} value={weight}>
@@ -260,7 +260,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-100 pt-5 space-y-3">
+        <div className="space-y-3 border-t border-[var(--border)] pt-5">
           <h2 className="font-semibold text-gray-800">BoardGameGeek</h2>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
             <div>
@@ -273,26 +273,26 @@ export default function ProfilePage() {
                 value={bggUsername}
                 onChange={(e) => setBggUsername(e.target.value)}
                 placeholder="your_bgg_username"
-                className={`w-full border border-gray-300 rounded-lg px-3 ${BGG_CONTROL_HEIGHT_CLASS} focus:ring-2 focus:ring-indigo-500 outline-none transition`}
+                className={`wt-input w-full px-3 ${BGG_CONTROL_HEIGHT_CLASS}`}
               />
             </div>
             <button
               type="button"
               onClick={() => void syncNow()}
               disabled={syncing}
-              className={`${BGG_CONTROL_HEIGHT_CLASS} px-4 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:border-indigo-300 disabled:opacity-50 transition`}
+              className={`wt-btn wt-btn-secondary ${BGG_CONTROL_HEIGHT_CLASS} px-4 text-sm font-medium disabled:opacity-50`}
             >
               {syncing ? 'Syncing...' : 'Sync now'}
             </button>
           </div>
 
           <div className="flex items-center justify-between text-sm">
-            <div className="text-gray-600">
+            <div className="wt-muted">
               {bggAccount ? (
                 <>
                   Linked as <span className="font-medium">{bggAccount.externalUsername}</span>
                   {bggAccount.lastSyncedAt ? (
-                    <span className="text-gray-500">
+                    <span className="wt-muted">
                       {' '}
                       • Last sync: {new Date(bggAccount.lastSyncedAt).toLocaleString()}
                     </span>
@@ -315,9 +315,9 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-100 pt-5 space-y-3">
+        <div className="space-y-3 border-t border-[var(--border)] pt-5">
           <h2 className="font-semibold text-gray-800">Calendar sync</h2>
-          <p className="text-sm text-gray-500">
+          <p className="wt-muted text-sm">
             Connect your calendar account for automatic event sync.
           </p>
           <div className="grid grid-cols-1 gap-3">
@@ -327,16 +327,16 @@ export default function ProfilePage() {
               return (
                 <div
                   key={provider}
-                  className="rounded-lg border border-gray-200 p-3 flex items-center justify-between"
+                  className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3"
                 >
                   <div>
-                    <p className="font-medium text-gray-800">
+                    <p className="font-medium">
                       <span className="mr-1" aria-hidden="true">
                         {provider === 'google' ? '🗓️' : '📆'}
                       </span>
                       {provider === 'google' ? 'Google Calendar' : 'Apple Calendar'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="wt-muted text-xs">
                       {connected ? 'Connected' : 'Not connected'}
                     </p>
                   </div>
@@ -345,7 +345,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => void disconnectCalendar(provider)}
                       disabled={busy}
-                      className="px-3 py-1.5 rounded-lg text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      className="wt-btn rounded-lg border border-[#ddb5ae] px-3 py-1.5 text-sm text-[var(--danger)] disabled:opacity-50"
                     >
                       {busy ? '...' : 'Disconnect'}
                     </button>
@@ -354,7 +354,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => void connectCalendar(provider)}
                       disabled={busy}
-                      className="px-3 py-1.5 rounded-lg text-sm border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                      className="wt-btn wt-btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
                     >
                       {busy ? '...' : 'Connect'}
                     </button>
@@ -368,7 +368,7 @@ export default function ProfilePage() {
         <button
           onClick={() => void handleSave()}
           disabled={saving}
-          className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+          className="wt-btn wt-btn-primary w-full py-2.5 font-medium disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>

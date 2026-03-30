@@ -49,13 +49,13 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-700">What2Play</h1>
-          <p className="text-gray-500 mt-2">Create your account</p>
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-[var(--primary)]">What2Play</h1>
+          <p className="wt-muted mt-2">Create your account</p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="wt-card space-y-5 p-8">
           {error && (
-            <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>
+            <div className="rounded-lg border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">{error}</div>
           )}
           <div>
             <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -65,7 +65,7 @@ export default function RegisterPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              className="wt-input"
               placeholder="Your name"
             />
           </div>
@@ -77,7 +77,7 @@ export default function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              className="wt-input"
               placeholder="you@example.com"
             />
           </div>
@@ -90,33 +90,33 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              className="wt-input"
               placeholder="Min 8 characters"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="wt-btn wt-btn-primary w-full py-2.5 font-medium disabled:opacity-50"
           >
             {loading ? 'Creating account...' : 'Create account'}
           </button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
+              <div className="w-full border-t border-[var(--border)]" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">or</span>
+              <span className="wt-muted bg-[var(--paper)] px-2">or</span>
             </div>
           </div>
 
           <GoogleSignInButton label="Sign up with Google" />
           <AppleSignInButton label="Sign up with Apple" />
 
-          <p className="text-center text-sm text-gray-500">
+          <p className="wt-muted text-center text-sm">
             Already have an account?{' '}
-            <Link href="/login" className="text-indigo-600 hover:underline font-medium">
+            <Link href="/login" className="font-medium text-[var(--primary)] hover:underline">
               Sign in
             </Link>
           </p>

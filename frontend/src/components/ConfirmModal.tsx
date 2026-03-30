@@ -41,7 +41,7 @@ export default function ConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2f251d]/55 px-4">
       <button
         type="button"
         aria-label="Close confirmation dialog"
@@ -53,19 +53,19 @@ export default function ConfirmModal({
       <dialog
         open
         aria-labelledby="confirm-modal-title"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-[var(--border-strong)] bg-[var(--paper)] p-5 shadow-[var(--shadow-raised)]"
       >
-        <h2 id="confirm-modal-title" className="text-lg font-semibold text-gray-900">
+        <h2 id="confirm-modal-title" className="text-lg font-semibold text-[var(--foreground)]">
           {title}
         </h2>
-        <p className="mt-2 text-sm text-gray-600">{message}</p>
+        <p className="wt-muted mt-2 text-sm">{message}</p>
 
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
             disabled={isConfirming}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -73,7 +73,7 @@ export default function ConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={isConfirming}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="wt-btn rounded-lg border border-[var(--danger)] bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white hover:bg-[#8b332b] disabled:opacity-50"
           >
             {isConfirming ? 'Working...' : confirmLabel}
           </button>

@@ -68,8 +68,8 @@ globalThis.addEventListener('push', (event) => {
   const options = {
     body,
     data: { url },
-    icon: '/next.svg',
-    badge: '/next.svg',
+    icon: '/meeple.svg',
+    badge: '/meeple.svg',
   };
 
   event.waitUntil(

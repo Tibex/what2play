@@ -39,8 +39,8 @@ export default function AuthCallbackPage() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto" />
-        <p className="mt-4 text-gray-600">Signing you in...</p>
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+        <p className="wt-muted mt-4">Signing you in...</p>
       </div>
       <Suspense>
         <CallbackHandler />

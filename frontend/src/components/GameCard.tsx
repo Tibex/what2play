@@ -18,7 +18,7 @@ export default function GameCard({
   bggUrl,
 }: GameCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+    <div className="wt-card overflow-hidden transition-shadow hover:shadow-[var(--shadow-raised)]">
       <div className="flex">
         {game.thumbnailUrl &&
           (bggUrl ? (
@@ -44,21 +44,21 @@ export default function GameCard({
                   href={bggUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-semibold text-gray-900 truncate hover:underline"
+                  className="truncate font-semibold text-[var(--foreground)] hover:underline"
                 >
                   {game.title}
                 </a>
               ) : (
-                <h3 className="font-semibold text-gray-900 truncate">{game.title}</h3>
+                <h3 className="truncate font-semibold text-[var(--foreground)]">{game.title}</h3>
               )}
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="wt-muted mt-0.5 text-sm">
                 {game.minPlayers}-{game.maxPlayers} players
                 {game.playingTime && ` · ${game.playingTime} min`}
                 {game.yearPublished && ` · ${game.yearPublished}`}
               </p>
             </div>
             {showScore !== undefined && (
-              <span className="flex-shrink-0 bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">
+              <span className="wt-chip shrink-0 border-[var(--border-strong)] bg-[var(--primary-soft)] text-[var(--primary)]">
                 {showScore.toFixed(0)} pts
               </span>
             )}
@@ -70,7 +70,7 @@ export default function GameCard({
                 .map(([key, val]) => (
                 <span
                   key={key}
-                  className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full"
+                  className="wt-chip"
                 >
                   {val}
                 </span>

@@ -39,7 +39,7 @@ export default function CollectionPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" />
       </div>
     );
   }
@@ -51,19 +51,19 @@ export default function CollectionPage() {
 
         <Link
           href="/collection/add"
-          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+          className="wt-btn wt-btn-primary px-3 py-1.5 text-sm font-medium"
         >
           + Add
         </Link>
       </div>
 
       {collection.length === 0 ? (
-        <p className="text-gray-500 text-center py-10">
+        <p className="wt-muted py-10 text-center">
           No games in your collection yet.
         </p>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-          <h2 className="font-semibold text-gray-700 mb-4">
+        <div className="wt-card mb-6 p-6">
+          <h2 className="wt-muted mb-4 font-semibold">
             Your Games ({collection.length})
           </h2>
 
@@ -75,7 +75,7 @@ export default function CollectionPage() {
                 actions={
                   <button
                     onClick={() => void removeFromCollection(ownership.gameId)}
-                    className="text-xs text-red-500 hover:text-red-700 transition"
+                    className="text-xs text-[var(--danger)] transition hover:text-[#8b332b]"
                   >
                     Remove
                   </button>

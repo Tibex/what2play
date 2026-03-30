@@ -42,8 +42,8 @@ export default function Navbar() {
   if (!isAuthenticated) return null;
 
   return (
-    <nav className="bg-indigo-700 text-white shadow-lg overflow-x-clip">
-      <div className="max-w-6xl mx-auto px-4">
+    <nav className="overflow-x-clip border-b border-[var(--border-strong)] bg-[linear-gradient(90deg,#1f2f4d,#2a4677,#365fb3)] text-slate-50 shadow-[0_10px_20px_rgba(18,30,54,.22)]">
+      <div className="wt-page px-4">
         <div className="flex items-center justify-between py-3">
           <Link
             href="/dashboard"
@@ -55,42 +55,42 @@ export default function Navbar() {
           <div className="hidden sm:flex items-center gap-6">
             <Link
               href="/dashboard"
-              className="hover:text-indigo-200 transition-colors text-sm font-medium"
+              className="text-sm font-medium transition-colors hover:text-sky-200"
             >
               Events
             </Link>
             <Link
               href="/collection"
-              className="hover:text-indigo-200 transition-colors text-sm font-medium"
+              className="text-sm font-medium transition-colors hover:text-sky-200"
             >
               Collection
             </Link>
             <Link
               href="/friends"
-              className="hover:text-indigo-200 transition-colors text-sm font-medium"
+              className="text-sm font-medium transition-colors hover:text-sky-200"
             >
               Friends
             </Link>
             {user?.role === 'admin' && (
               <Link
                 href="/admin"
-                className="hover:text-indigo-200 transition-colors text-sm font-medium"
+                className="text-sm font-medium transition-colors hover:text-sky-200"
               >
                 Admin
               </Link>
             )}
             <Link
               href="/profile"
-              className="hover:text-indigo-200 transition-colors text-sm font-medium"
+              className="text-sm font-medium transition-colors hover:text-sky-200"
             >
               Profile
             </Link>
 
-            <div className="flex items-center gap-3 ml-4 pl-4 border-l border-indigo-500">
-              <span className="text-sm text-indigo-200">{user?.name}</span>
+            <div className="ml-4 flex items-center gap-3 border-l border-blue-200/30 pl-4">
+              <span className="text-sm text-blue-100">{user?.name}</span>
               <button
                 onClick={handleLogout}
-                className="text-sm bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-md transition-colors"
+                className="wt-btn rounded-md border border-blue-100/35 bg-blue-50/15 px-3 py-1.5 text-sm hover:bg-blue-50/25"
               >
                 Logout
               </button>
@@ -101,7 +101,7 @@ export default function Navbar() {
             ref={toggleButtonRef}
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="sm:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-indigo-600 transition-colors"
+            className="sm:hidden inline-flex items-center justify-center rounded-md p-2 transition-colors hover:bg-blue-50/20"
             aria-label="Open navigation menu"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav-menu"
@@ -134,21 +134,21 @@ export default function Navbar() {
               <Link
                 href="/dashboard"
                 onClick={() => setMenuOpen(false)}
-                className="hover:text-indigo-200 transition-colors text-sm font-medium py-1"
+                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
               >
                 Events
               </Link>
               <Link
                 href="/collection"
                 onClick={() => setMenuOpen(false)}
-                className="hover:text-indigo-200 transition-colors text-sm font-medium py-1"
+                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
               >
                 Collection
               </Link>
               <Link
                 href="/friends"
                 onClick={() => setMenuOpen(false)}
-                className="hover:text-indigo-200 transition-colors text-sm font-medium py-1"
+                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
               >
                 Friends
               </Link>
@@ -156,7 +156,7 @@ export default function Navbar() {
                 <Link
                   href="/admin"
                   onClick={() => setMenuOpen(false)}
-                  className="hover:text-indigo-200 transition-colors text-sm font-medium py-1"
+                  className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
                 >
                   Admin
                 </Link>
@@ -164,18 +164,18 @@ export default function Navbar() {
               <Link
                 href="/profile"
                 onClick={() => setMenuOpen(false)}
-                className="hover:text-indigo-200 transition-colors text-sm font-medium py-1"
+                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
               >
                 Profile
               </Link>
 
-              <div className="pt-2 border-t border-indigo-500/50 mt-2">
+              <div className="mt-2 border-t border-blue-100/30 pt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-indigo-200">{user?.name}</span>
+                  <span className="text-sm text-blue-100">{user?.name}</span>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-sm bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-md transition-colors"
+                    className="wt-btn rounded-md border border-blue-100/35 bg-blue-50/15 px-3 py-1.5 text-sm hover:bg-blue-50/25"
                   >
                     Logout
                   </button>

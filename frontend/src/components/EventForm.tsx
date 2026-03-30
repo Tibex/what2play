@@ -159,31 +159,31 @@ export default function EventForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-8 space-y-5">
-      {error && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>}
+    <form onSubmit={handleSubmit} className="wt-card space-y-5 p-8">
+      {error && <div className="rounded-lg border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">{error}</div>}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+        <label className="mb-1 block text-sm font-medium">Title</label>
         <input
           type="text"
           value={form.title}
           onChange={(e) => setForm({ ...form, title: e.target.value })}
           required
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+          className="wt-input"
           placeholder="Friday Night Board Games"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
-        <div className="rounded-xl border border-gray-200 p-3 sm:p-4 bg-gray-50/60 space-y-3">
+        <label className="mb-1 block text-sm font-medium">Date & Time</label>
+        <div className="wt-subtle space-y-3 p-3 sm:p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               type="date"
               value={datePart}
               onChange={(e) => setDateTime(e.target.value, timePart)}
               required
-              className="w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+              className="wt-input"
             />
             <input
               type="time"
@@ -191,7 +191,7 @@ export default function EventForm({
               onChange={(e) => setDateTime(datePart, e.target.value)}
               step={900}
               required
-              className="w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+              className="wt-input"
             />
           </div>
         </div>
@@ -199,33 +199,33 @@ export default function EventForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+          <label className="mb-1 block text-sm font-medium">Location</label>
           <input
             ref={locationInputRef}
             type="text"
             value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            className="wt-input"
             placeholder={placesReady ? 'Search for a place or type manually' : '123 Main St or Online'}
           />
           {placesReady && (
-            <p className="mt-1 text-xs text-gray-500">Google Places autocomplete enabled.</p>
+            <p className="wt-muted mt-1 text-xs">Google Places autocomplete enabled.</p>
           )}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Duration</label>
+        <label className="mb-1.5 block text-sm font-medium">Duration</label>
         <div className="flex flex-wrap gap-2">
           {DURATION_OPTIONS.map((mins) => (
             <button
               key={mins}
               type="button"
               onClick={() => setForm({ ...form, durationMinutes: mins })}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+              className={`wt-btn px-4 py-2 text-sm font-medium ${
                 form.durationMinutes === mins
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-300'
+                  ? 'wt-btn-primary'
+                  : 'wt-btn-secondary'
               }`}
             >
               {durationLabel(mins)}
@@ -235,36 +235,36 @@ export default function EventForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Max Capacity</label>
+        <label className="mb-1.5 block text-sm font-medium">Max Capacity</label>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setForm({ ...form, capacity: Math.max(2, form.capacity - 1) })}
-            className="w-10 h-10 rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-bold hover:border-indigo-300 transition flex items-center justify-center"
+            className="wt-btn wt-btn-secondary flex h-10 w-10 items-center justify-center text-lg font-bold"
           >
             −
           </button>
-          <span className="text-2xl font-semibold text-gray-900 w-12 text-center tabular-nums">
+          <span className="w-12 text-center text-2xl font-semibold tabular-nums">
             {form.capacity}
           </span>
           <button
             type="button"
             onClick={() => setForm({ ...form, capacity: form.capacity + 1 })}
-            className="w-10 h-10 rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-bold hover:border-indigo-300 transition flex items-center justify-center"
+            className="wt-btn wt-btn-secondary flex h-10 w-10 items-center justify-center text-lg font-bold"
           >
             +
           </button>
-          <span className="text-sm text-gray-500">players</span>
+          <span className="wt-muted text-sm">players</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Event Type</label>
+          <label className="mb-1 block text-sm font-medium">Event Type</label>
           <select
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value })}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            className="wt-input"
           >
             <option value="invite">Invite Only</option>
             <option value="open">Open</option>
@@ -273,12 +273,12 @@ export default function EventForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+        <label className="mb-1 block text-sm font-medium">Description (optional)</label>
         <textarea
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
           rows={3}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+          className="wt-input"
           placeholder="What kind of night are we having?"
         />
       </div>
@@ -288,7 +288,7 @@ export default function EventForm({
           type="checkbox"
           checked={form.discoveryMode}
           onChange={(e) => setForm({ ...form, discoveryMode: e.target.checked })}
-          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          className="rounded border-[var(--border)] text-[var(--primary)]"
         />
         <span>Include game suggestions beyond what attendees own</span>
       </label>
@@ -296,7 +296,7 @@ export default function EventForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm sm:text-base font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        className="wt-btn wt-btn-primary w-full py-2 text-sm font-medium disabled:opacity-50 sm:text-base"
       >
         {loading ? submittingLabel : submitLabel}
       </button>

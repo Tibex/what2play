@@ -50,19 +50,19 @@ function PlayedGamesEditor({
   onRemove,
 }: PlayedGamesEditorProps) {
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
+    <div className="wt-subtle space-y-3 p-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">Played games</span>
+        <span className="text-sm font-medium">Played games</span>
         <button
           type="button"
           onClick={onAdd}
-          className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded hover:bg-indigo-200"
+          className="wt-btn wt-btn-secondary px-2.5 py-1 text-xs"
         >
           + Add played game
         </button>
       </div>
       {playedRows.length === 0 ? (
-        <p className="text-xs text-gray-500">
+        <p className="wt-muted text-xs">
           No played games added. You can still submit quick feedback.
         </p>
       ) : (
@@ -70,13 +70,13 @@ function PlayedGamesEditor({
           {playedRows.map((row, idx) => (
             <div
               key={`${idx}-${row.gameId}`}
-              className="bg-white border border-gray-200 rounded-lg p-3 space-y-2"
+              className="wt-card space-y-2 p-3"
             >
               <div className="flex gap-2 items-center">
                 <select
                   value={row.gameId}
                   onChange={(e) => onUpdate(idx, { gameId: e.target.value })}
-                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                  className="wt-input flex-1 px-2 py-1.5 text-sm"
                 >
                   <option value="">Select game</option>
                   {games.map((g) => (
@@ -88,7 +88,7 @@ function PlayedGamesEditor({
                 <button
                   type="button"
                   onClick={() => onRemove(idx)}
-                  className="text-xs text-red-600 hover:text-red-700"
+                  className="text-xs text-[var(--danger)] hover:text-[#8b332b]"
                 >
                   Remove
                 </button>
@@ -99,7 +99,7 @@ function PlayedGamesEditor({
                   onChange={(e) =>
                     onUpdate(idx, { enjoymentRating: Number(e.target.value) })
                   }
-                  className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                  className="wt-input px-2 py-1.5 text-sm"
                 >
                   {[1, 2, 3, 4, 5].map((n) => (
                     <option key={n} value={n}>
@@ -110,7 +110,7 @@ function PlayedGamesEditor({
                 <select
                   value={row.durationFeel}
                   onChange={(e) => onUpdate(idx, { durationFeel: e.target.value })}
-                  className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                  className="wt-input px-2 py-1.5 text-sm"
                 >
                   <option value="too_short">Too short</option>
                   <option value="just_right">Just right</option>
@@ -130,7 +130,7 @@ function PlayedGamesEditor({
                 onChange={(e) => onUpdate(idx, { notes: e.target.value })}
                 rows={2}
                 placeholder="Notes (optional)"
-                className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                className="wt-input w-full px-2 py-1.5 text-sm"
               />
             </div>
           ))}
@@ -147,10 +147,10 @@ type FeedbackAnalyticsProps = {
 
 function FeedbackAnalytics({ analytics, loadingAnalytics }: FeedbackAnalyticsProps) {
   return (
-    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-indigo-800 mb-2">Recommendation outcomes</h4>
+    <div className="wt-subtle p-4">
+      <h4 className="mb-2 text-sm font-semibold text-[var(--primary)]">Recommendation outcomes</h4>
       {loadingAnalytics || !analytics ? (
-        <p className="text-sm text-indigo-700">Loading analytics...</p>
+        <p className="text-sm text-[var(--primary)]">Loading analytics...</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div>
@@ -229,23 +229,23 @@ function FeedbackEntriesList({ feedbackEntries, games, loadingEntries }: Feedbac
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+          <div className="wt-subtle p-3">
           <div className="text-xs text-indigo-700 font-medium">Avg rating</div>
           <div className="text-2xl font-bold text-indigo-900">
             {avgEnjoyment != null ? avgEnjoyment.toFixed(1) : '—'}/5
           </div>
         </div>
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+          <div className="wt-subtle p-3">
           <div className="text-xs text-indigo-700 font-medium">Completion rate</div>
           <div className="text-2xl font-bold text-indigo-900">
             {completionRate != null ? `${Math.round(completionRate * 100)}%` : '—'}
           </div>
         </div>
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+          <div className="wt-subtle p-3">
           <div className="text-xs text-indigo-700 font-medium">Top duration feel</div>
           <div className="text-lg font-bold text-indigo-900">{durationFeelLabel(topDurationFeel)}</div>
         </div>
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+          <div className="wt-subtle p-3">
           <div className="text-xs text-indigo-700 font-medium">Feedback entries / notes</div>
           <div className="text-2xl font-bold text-indigo-900">
             {feedbackEntries.length} / {noteTextCount}
@@ -263,7 +263,7 @@ function FeedbackEntriesList({ feedbackEntries, games, loadingEntries }: Feedbac
               : undefined;
 
           return (
-            <div key={f.id} className="flex gap-3 bg-gray-50 border border-gray-100 rounded-lg p-3">
+            <div key={f.id} className="wt-subtle flex gap-3 p-3">
               {gameForDisplay?.thumbnailUrl ? (
                 <img
                   src={gameForDisplay.thumbnailUrl}
@@ -284,7 +284,7 @@ function FeedbackEntriesList({ feedbackEntries, games, loadingEntries }: Feedbac
                           href={bggUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs text-indigo-700 hover:underline truncate block mt-0.5"
+                          className="mt-0.5 block truncate text-xs text-[var(--primary)] hover:underline"
                         >
                           {gameForDisplay.title}
                         </a>
@@ -397,13 +397,13 @@ function FeedbackForm({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-2xl mx-auto space-y-5">
+    <div className="wt-card mx-auto max-w-2xl space-y-5 p-6">
       <div>
         <h3 className="font-semibold text-lg">Quick feedback</h3>
       </div>
 
       <div>
-        <p className="block text-sm font-medium text-gray-700 mb-2">Enjoyment (1-5)</p>
+        <p className="mb-2 block text-sm font-medium">Enjoyment (1-5)</p>
         <div className="flex gap-2">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
@@ -411,7 +411,7 @@ function FeedbackForm({
               type="button"
               onClick={() => setEnjoyment(n)}
               className={`w-10 h-10 rounded-full text-lg font-bold transition ${
-                enjoyment >= n ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-400'
+                enjoyment >= n ? 'bg-[#b88733] text-[#fff8ea]' : 'bg-[var(--surface)] text-[var(--muted)]'
               }`}
             >
               {n}
@@ -425,7 +425,7 @@ function FeedbackForm({
           type="checkbox"
           checked={finished}
           onChange={(e) => setFinished(e.target.checked)}
-          className="rounded border-gray-300 text-indigo-600"
+          className="rounded border-[var(--border)] text-[var(--primary)]"
         />
         We finished at least one game
       </label>
@@ -438,7 +438,7 @@ function FeedbackForm({
             type="time"
             value={nightStartedTime}
             onChange={(e) => setNightStartedTime(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="wt-input w-full py-2 text-sm"
           />
         </div>
         <div>
@@ -447,7 +447,7 @@ function FeedbackForm({
             id="feedback-night-duration"
             value={nightDurationHours}
             onChange={(e) => setNightDurationHours(Number(e.target.value))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="wt-input w-full py-2 text-sm"
           >
             {[1, 2, 3, 4, 5, 6, 7, 8].map((hours) => (
               <option key={hours} value={hours}>
@@ -464,7 +464,7 @@ function FeedbackForm({
           id="feedback-duration-feel"
           value={durationFeel}
           onChange={(e) => setDurationFeel(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="wt-input w-full py-2 text-sm"
         >
           <option value="too_short">Too short</option>
           <option value="just_right">Just right</option>
@@ -479,7 +479,7 @@ function FeedbackForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="wt-input w-full py-2 text-sm"
         />
       </div>
 
@@ -487,7 +487,7 @@ function FeedbackForm({
         <button
           type="button"
           onClick={() => setShowDetails((v) => !v)}
-          className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium hover:bg-gray-100 transition"
+          className="wt-btn wt-btn-secondary flex w-full items-center justify-between px-3 py-2 text-sm font-medium"
         >
           <span>Optional details by played game</span>
           <span aria-hidden className="text-gray-500">{showDetails ? '▾' : '▸'}</span>
@@ -509,7 +509,7 @@ function FeedbackForm({
         type="button"
         onClick={handleSubmit}
         disabled={submitting || !canSubmit}
-        className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+        className="wt-btn wt-btn-primary w-full py-2.5 font-medium disabled:opacity-50"
       >
         {submitting ? 'Submitting...' : 'Submit feedback'}
       </button>
@@ -603,13 +603,13 @@ export default function FeedbackSection({
       )}
 
       {canViewFeedback && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-3xl mx-auto space-y-4">
+        <div className="wt-card mx-auto max-w-3xl space-y-4 p-6">
           {isHost && (
             <div>
               <button
                 type="button"
                 onClick={() => setShowAnalytics((v) => !v)}
-                className="w-full flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3 text-sm font-medium text-indigo-800 hover:bg-indigo-100 transition"
+                className="wt-btn wt-btn-secondary flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--primary)]"
               >
                 <span>Host insights</span>
                 <span aria-hidden>{showAnalytics ? '▾' : '▸'}</span>
@@ -626,7 +626,7 @@ export default function FeedbackSection({
             <button
               type="button"
               onClick={() => setShowEntries((v) => !v)}
-              className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm font-medium hover:bg-gray-100 transition"
+                className="wt-btn wt-btn-secondary flex w-full items-center justify-between px-4 py-3 text-sm font-medium"
             >
               <span>Feedback history</span>
               <span aria-hidden className="text-gray-500">{showEntries ? '▾' : '▸'}</span>

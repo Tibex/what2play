@@ -16,8 +16,8 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: '/next.svg',
-    apple: '/next.svg',
+    icon: '/meeple.svg',
+    apple: '/meeple.svg',
   },
 };
 
@@ -26,7 +26,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-50 text-gray-900 antialiased`}>
+      <body className={`${inter.className} antialiased`}>
         <ToastProvider />
         <PwaRegistration />
         {children}

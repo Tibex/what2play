@@ -8,7 +8,7 @@ export default function GoogleSignInButton({ label = 'Sign in with Google' }: Re
   return (
     <a
       href={googleAuthUrl}
-      className="flex items-center justify-center gap-3 w-full border border-gray-300 rounded-lg px-3 py-2.5 font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+      className="wt-btn wt-btn-secondary flex w-full items-center justify-center gap-3 px-3 py-2.5 font-medium"
     >
       <svg width="20" height="20" viewBox="0 0 48 48">
         <path

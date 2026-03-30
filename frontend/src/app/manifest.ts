@@ -7,12 +7,12 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Plan game nights, vote on games, and track your collection.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#111827',
+    background_color: '#f5f7fb',
+    theme_color: '#365fb3',
     icons: [
       {
-        src: '/next.svg',
-        sizes: 'any',
+        src: '/meeple.svg',
+        sizes: '512x512',
         type: 'image/svg+xml',
       },
     ],

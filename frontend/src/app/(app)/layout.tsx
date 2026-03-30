@@ -8,7 +8,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AuthGuard>
       <div className="min-h-screen overflow-x-hidden">
         <Navbar />
-        <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
+        <main className="wt-page px-4 py-8">{children}</main>
       </div>
     </AuthGuard>
   );

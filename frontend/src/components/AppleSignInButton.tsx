@@ -95,7 +95,7 @@ export default function AppleSignInButton({
       type="button"
       onClick={handleAppleSignIn}
       disabled={loading}
-      className="flex items-center justify-center gap-3 w-full border border-gray-900 rounded-lg px-3 py-2.5 font-medium text-white bg-gray-900 hover:bg-black disabled:opacity-60 transition-colors"
+      className="wt-btn flex w-full items-center justify-center gap-3 rounded-lg border border-[#2f251d] bg-[#2f251d] px-3 py-2.5 font-medium text-[#fff9ef] hover:bg-[#231a14] disabled:opacity-60"
     >
       <span className="text-sm font-semibold">Apple</span>
       {loading ? 'Opening Apple...' : label}

@@ -136,7 +136,7 @@ export default function CollectionAddPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" />
       </div>
     );
   }
@@ -145,7 +145,7 @@ export default function CollectionAddPage() {
     <div>
       <h1 className="text-xl sm:text-2xl font-bold mb-4">Add Games</h1>
 
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+      <div className="wt-card mb-6 p-6">
         <h2 className="font-semibold mb-3">Search & Add</h2>
         <div className="flex gap-2 mb-4">
           <input
@@ -154,12 +154,12 @@ export default function CollectionAddPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void handleSearch()}
             placeholder="Search by title..."
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+            className="wt-input flex-1 py-2 text-sm"
           />
           <button
             onClick={() => void handleSearch()}
             disabled={searching}
-            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+            className="wt-btn wt-btn-primary px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
             {searching ? 'Searching...' : 'Find'}
           </button>
@@ -183,7 +183,7 @@ export default function CollectionAddPage() {
                 }}
                 actions={
                   result.inCollection ? (
-                    <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                    <span className="wt-chip px-3 py-1">
                       Already in collection
                     </span>
                   ) : (
@@ -201,10 +201,10 @@ export default function CollectionAddPage() {
                         }
                       }}
                       disabled={addingKey === result.key}
-                      className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50 transition inline-flex items-center gap-1"
+                      className="wt-btn inline-flex items-center gap-1 rounded-full border border-[#afc6a1] bg-[#dbe8d3] px-3 py-1 text-xs text-[#355f39] disabled:opacity-50"
                     >
                       {addingKey === result.key && (
-                        <span className="animate-spin inline-block h-3 w-3 border-b-2 border-green-700 rounded-full" />
+                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-b-2 border-[#355f39]" />
                       )}
                       {addingKey === result.key ? 'Adding...' : '+ Add'}
                     </button>
@@ -216,7 +216,7 @@ export default function CollectionAddPage() {
         )}
 
         {!searching && searchQuery && results.length === 0 && (
-          <p className="text-sm text-gray-500">
+          <p className="wt-muted text-sm">
             No results found for &ldquo;{searchQuery}&rdquo;
           </p>
         )}

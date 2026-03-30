@@ -87,7 +87,7 @@ export default function AdminPage() {
 
   if (user?.role !== 'admin') {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+      <div className="rounded-xl border border-[#ddb5ae] bg-[var(--danger-soft)] p-4 text-[var(--danger)]">
         Admin access required.
       </div>
     );
@@ -97,17 +97,17 @@ export default function AdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin</h1>
-        <p className="text-sm text-gray-500">Users and events overview</p>
+        <p className="wt-muted text-sm">Users and events overview</p>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-gray-200">
+      <div className="flex items-center gap-2 border-b border-[var(--border)]">
         <button
           type="button"
           onClick={() => setActiveTab('users')}
           className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
             activeTab === 'users'
-              ? 'border-indigo-600 text-indigo-700'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
           }`}
         >
           Users
@@ -117,26 +117,26 @@ export default function AdminPage() {
           onClick={() => setActiveTab('events')}
           className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
             activeTab === 'events'
-              ? 'border-indigo-600 text-indigo-700'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
           }`}
         >
           Events
         </button>
       </div>
 
-      {loading ? <p className="text-gray-500">Loading...</p> : null}
+      {loading ? <p className="wt-muted">Loading...</p> : null}
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-xl border border-[#ddb5ae] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
           {error}
         </div>
       ) : null}
 
       {!loading && !error && activeTab === 'users' ? (
         <section className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-[var(--surface)] text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-2 text-left">Name</th>
                   <th className="px-4 py-2 text-left">Email</th>
@@ -157,7 +157,7 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => setPendingUserDelete(item)}
                         disabled={deletingUserId === item.id || item.id === user.id}
-                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+                        className="wt-btn rounded border border-[#ddb5ae] px-2 py-1 text-xs text-[var(--danger)] disabled:opacity-50"
                       >
                         {deletingUserId === item.id ? 'Deleting...' : 'Delete'}
                       </button>
@@ -178,9 +178,9 @@ export default function AdminPage() {
 
       {!loading && !error && activeTab === 'events' ? (
         <section className="space-y-3">
-          <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-[var(--surface)] text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-2 text-left">Title</th>
                   <th className="px-4 py-2 text-left">Host</th>
@@ -207,7 +207,7 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => setPendingEventDelete(item)}
                         disabled={deletingEventId === item.id}
-                        className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+                        className="wt-btn rounded border border-[#ddb5ae] px-2 py-1 text-xs text-[var(--danger)] disabled:opacity-50"
                       >
                         {deletingEventId === item.id ? 'Deleting...' : 'Delete'}
                       </button>
@@ -288,7 +288,7 @@ function Pagination({
       >
         Prev
       </button>
-      <span className="text-sm text-gray-600">Page {page}</span>
+      <span className="wt-muted text-sm">Page {page}</span>
       <button
         type="button"
         onClick={onNext}

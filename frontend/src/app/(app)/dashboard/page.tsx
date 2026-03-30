@@ -14,48 +14,48 @@ const statusStyles: Record<
   { badge: string; accent: string; dot: string; border: string }
 > = {
   planning: {
-    badge: 'bg-yellow-100 text-yellow-800',
+    badge: 'bg-[#f1e0b8] text-[#6b521f]',
     accent: 'bg-yellow-50',
-    dot: 'bg-yellow-500',
-    border: 'border-yellow-200',
+    dot: 'bg-[#b88733]',
+    border: 'border-[#d8ba7a]',
   },
   voting: {
-    badge: 'bg-blue-100 text-blue-800',
+    badge: 'bg-[#d8e4ea] text-[#2f586b]',
     accent: 'bg-blue-50',
-    dot: 'bg-blue-500',
-    border: 'border-blue-200',
+    dot: 'bg-[#4a7b90]',
+    border: 'border-[#a6c0cd]',
   },
   confirmed: {
-    badge: 'bg-emerald-100 text-emerald-800',
+    badge: 'bg-[#dbe8d3] text-[#355f39]',
     accent: 'bg-emerald-50',
-    dot: 'bg-emerald-500',
-    border: 'border-emerald-200',
+    dot: 'bg-[#4f7e4f]',
+    border: 'border-[#afc6a1]',
   },
   active: {
-    badge: 'bg-purple-100 text-purple-800',
+    badge: 'bg-[#e1d8ea] text-[#5a3f78]',
     accent: 'bg-purple-50',
-    dot: 'bg-purple-500',
-    border: 'border-purple-200',
+    dot: 'bg-[#7c5aa6]',
+    border: 'border-[#c5b3dd]',
   },
   completed: {
-    badge: 'bg-gray-100 text-gray-700',
+    badge: 'bg-[#e5dccf] text-[#5d5345]',
     accent: 'bg-gray-50',
-    dot: 'bg-gray-500',
-    border: 'border-gray-200',
+    dot: 'bg-[#7c7163]',
+    border: 'border-[#cabca8]',
   },
   cancelled: {
-    badge: 'bg-red-100 text-red-800',
+    badge: 'bg-[#efd8d3] text-[#8a4137]',
     accent: 'bg-red-50',
-    dot: 'bg-red-500',
-    border: 'border-red-200',
+    dot: 'bg-[#a35247]',
+    border: 'border-[#ddb5ae]',
   },
 };
 
 const FALLBACK_STATUS = {
-  badge: 'bg-gray-100 text-gray-700',
+  badge: 'bg-[#e5dccf] text-[#5d5345]',
   accent: 'bg-gray-50',
-  dot: 'bg-gray-500',
-  border: 'border-gray-200',
+  dot: 'bg-[#7c7163]',
+  border: 'border-[#cabca8]',
 };
 
 function getDateKey(dateInput: string | Date): string {
@@ -150,13 +150,13 @@ export default function DashboardPage() {
 
   if (shouldShowEmptyState) {
     content = (
-      <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+      <div className="wt-card-raised py-20 text-center">
         <div className="text-5xl mb-4">🎲</div>
         <h2 className="text-xl font-semibold mb-2">No game nights yet</h2>
-        <p className="text-gray-500 mb-6">Create your first game night in under 60 seconds</p>
+        <p className="wt-muted mb-6">Create your first game night in under 60 seconds</p>
         <Link
           href="/events/new"
-          className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          className="wt-btn wt-btn-primary inline-block px-4 py-2 text-sm font-medium"
         >
           Create Night
         </Link>
@@ -167,7 +167,7 @@ export default function DashboardPage() {
       <>
         {upcoming.length > 0 && (
           <section className="mb-10">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">Upcoming</h2>
+            <h2 className="wt-muted mb-4 text-lg font-semibold">Upcoming</h2>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
               {upcoming.map((event) => (
                 <EventCard key={event.id} event={event} />
@@ -180,12 +180,12 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setShowPastEvents((prev) => !prev)}
-              className="mb-4 inline-flex items-center gap-2 text-lg font-semibold text-gray-700 hover:text-gray-900"
+              className="wt-muted mb-4 inline-flex items-center gap-2 text-lg font-semibold hover:text-[var(--foreground)]"
               aria-expanded={showPastEvents}
               aria-controls="past-events-grid"
             >
               <span>Past</span>
-              <span className="text-sm text-gray-500">
+              <span className="wt-muted text-sm">
                 ({past.length}) {showPastEvents ? 'Hide' : 'Show'}
               </span>
             </button>
@@ -206,7 +206,7 @@ export default function DashboardPage() {
   } else {
     content = (
       <section className="space-y-4">
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5">
+        <div className="wt-card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
               {monthCursor.toLocaleString(undefined, {
@@ -226,7 +226,7 @@ export default function DashboardPage() {
                     ),
                   )
                 }
-                className="rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                className="wt-btn wt-btn-secondary px-2.5 py-1.5 text-sm"
                 aria-label="Previous month"
               >
                 Prev
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                     ),
                   )
                 }
-                className="rounded-md border border-gray-200 px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                className="wt-btn wt-btn-secondary px-2.5 py-1.5 text-sm"
                 aria-label="Next month"
               >
                 Next
@@ -272,7 +272,7 @@ export default function DashboardPage() {
                     day.inCurrentMonth
                       ? 'bg-white border-gray-200 hover:border-indigo-300'
                       : 'bg-gray-50 border-gray-100 text-gray-400'
-                  } ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-400' : ''}`}
+                  } ${isSelected ? 'ring-2 ring-[var(--primary)] border-[var(--primary)]' : ''}`}
                 >
                   <div className="text-xs font-semibold">{day.dayNumber}</div>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -300,7 +300,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5">
+        <div className="wt-card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">
             {selectedDateKey
               ? `Events on ${new Date(selectedDateKey).toLocaleDateString()}`
@@ -344,7 +344,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" />
       </div>
     );
   }
@@ -355,7 +355,7 @@ export default function DashboardPage() {
         <h1 className="text-xl sm:text-2xl font-bold">Your Game Nights</h1>
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <div
-            className="inline-flex h-9 items-center rounded-lg border border-gray-200 bg-white p-1"
+            className="inline-flex h-9 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1"
             role="tablist"
             aria-label="Dashboard view"
           >
@@ -366,8 +366,8 @@ export default function DashboardPage() {
               onClick={() => setView('cards')}
               className={`h-7 px-3 rounded-md text-sm font-medium transition-colors ${
                 view === 'cards'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'bg-[var(--primary)] text-[#fff9ef]'
+                  : 'wt-muted hover:bg-[var(--surface)] hover:text-[var(--foreground)]'
               }`}
             >
               Cards
@@ -379,8 +379,8 @@ export default function DashboardPage() {
               onClick={() => setView('calendar')}
               className={`h-7 px-3 rounded-md text-sm font-medium transition-colors ${
                 view === 'calendar'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'bg-[var(--primary)] text-[#fff9ef]'
+                  : 'wt-muted hover:bg-[var(--surface)] hover:text-[var(--foreground)]'
               }`}
             >
               Calendar
@@ -388,7 +388,7 @@ export default function DashboardPage() {
           </div>
           <Link
             href="/events/new"
-              className="inline-flex h-9 items-center bg-indigo-600 text-white px-3 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+              className="wt-btn wt-btn-primary inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium"
           >
             + New Night
           </Link>
@@ -417,13 +417,13 @@ function EventCard({ event }: Readonly<{ event: GameEvent }>) {
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
   const isCompleted = event.status === 'completed';
   let typeLabel = 'Invite only';
-  let typeLabelClass = 'text-gray-400';
+  let typeLabelClass = 'text-[var(--muted)]';
   if (isCompleted) {
     typeLabel = 'Past event';
-    typeLabelClass = 'text-gray-500';
+    typeLabelClass = 'text-[#7c7163]';
   } else if (event.type === 'open') {
     typeLabel = 'Open';
-    typeLabelClass = 'text-green-600';
+    typeLabelClass = 'text-[#3f6a3f]';
   }
 
   const formatDurationMinutes = (mins: number) => {
@@ -439,10 +439,10 @@ function EventCard({ event }: Readonly<{ event: GameEvent }>) {
   return (
     <Link
       href={`/events/${event.id}`}
-      className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+      className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2"
     >
       <div
-        className={`h-full min-h-40 rounded-xl border p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md bg-white ${status.border} ${isPast ? 'opacity-85' : ''}`}
+        className={`h-full min-h-40 rounded-xl border bg-[var(--paper)] p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-raised)] ${status.border} ${isPast ? 'opacity-85' : ''}`}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="min-w-0 flex-1 pr-2 font-semibold text-gray-900 truncate">

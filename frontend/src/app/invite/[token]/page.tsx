@@ -90,7 +90,7 @@ export default function InvitePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" />
       </div>
     );
   }
@@ -99,10 +99,10 @@ export default function InvitePage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{loadError}</p>
+          <p className="mb-4 text-[var(--danger)]">{loadError}</p>
           <Link
             href="/login"
-            className="text-indigo-600 hover:underline"
+            className="text-[var(--primary)] hover:underline"
             onClick={() =>
               localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token)
             }
@@ -121,13 +121,13 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+      <div className="wt-card-raised w-full max-w-md p-8 text-center">
         <div className="text-4xl mb-4">🎲</div>
         <h1 className="text-2xl font-bold mb-2">You&apos;re Invited!</h1>
-        <h2 className="text-xl font-semibold text-indigo-700 mb-4">
+        <h2 className="mb-4 text-xl font-semibold text-[var(--primary)]">
           {event.title}
         </h2>
-        <p className="text-gray-600 mb-1">
+        <p className="wt-muted mb-1">
           {formatted.date}
           {" at "}
           {formatted.time}
@@ -135,23 +135,23 @@ export default function InvitePage() {
           {timeZone}
         </p>
         {event.location && (
-          <p className="text-gray-500 text-sm mb-1">{event.location}</p>
+          <p className="wt-muted mb-1 text-sm">{event.location}</p>
         )}
         {event.description && (
-          <p className="text-gray-500 text-sm mt-3">{event.description}</p>
+          <p className="wt-muted mt-3 text-sm">{event.description}</p>
         )}
         {actionError && (
-          <p className="mt-3 text-sm text-red-600">{actionError}</p>
+          <p className="mt-3 text-sm text-[var(--danger)]">{actionError}</p>
         )}
         {alreadyJoinedWithAccount ? (
           <>
             <button
               onClick={() => router.push(`/events/${event.id}`)}
-              className="mt-6 w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+              className="wt-btn wt-btn-primary mt-6 w-full py-3 font-semibold"
             >
               Open Event
             </button>
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="wt-muted mt-3 text-xs">
               You are already joined with this account
             </p>
           </>
@@ -159,11 +159,11 @@ export default function InvitePage() {
           <>
             <button
               onClick={handleJoin}
-              className="mt-6 w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+              className="wt-btn wt-btn-primary mt-6 w-full py-3 font-semibold"
             >
               {hasAuthToken ? "Join With Account" : "Login and Join"}
             </button>
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="wt-muted mt-3 text-xs">
               Login with your account to join this event
             </p>
           </>

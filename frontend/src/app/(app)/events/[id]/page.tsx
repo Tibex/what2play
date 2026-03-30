@@ -93,7 +93,7 @@ export default function EventDetailPage() {
   }, [loadEvent]);
 
   if (loading || !event) {
-    return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
+    return <div className="flex justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" /></div>;
   }
 
   const isHost = user?.id === event.hostId;
@@ -316,7 +316,7 @@ export default function EventDetailPage() {
 
   return (
     <div>
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div className="wt-card mb-4 p-4 sm:mb-6 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -326,7 +326,7 @@ export default function EventDetailPage() {
               {isHost && canManageEvent && (
                 <Link
                   href={`/events/${id}/edit`}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition"
+                  className="wt-btn wt-btn-secondary inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)]"
                   title="Edit event"
                   aria-label="Edit event"
                 >
@@ -346,7 +346,7 @@ export default function EventDetailPage() {
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition"
+                  className="wt-btn inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--danger)]/40 bg-[var(--danger-soft)] text-[var(--danger)]"
                   title="Delete event"
                   aria-label="Delete event"
                 >
@@ -366,7 +366,7 @@ export default function EventDetailPage() {
                 </button>
               )}
             </div>
-            <p className="text-gray-500 mt-1">
+            <p className="wt-muted mt-1">
               Hosted by {event.host?.name || 'Unknown'}
               {' · '}
               {shortEventDate}
@@ -377,9 +377,9 @@ export default function EventDetailPage() {
           <StatusBadge status={event.status} />
         </div>
 
-        {event.description && <p className="text-gray-700 mb-4">{event.description}</p>}
+        {event.description && <p className="mb-4 text-[var(--foreground)]">{event.description}</p>}
 
-        <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
+        <div className="wt-muted mb-4 flex flex-wrap gap-4 text-sm">
           {event.location && <span>📍 {event.location}</span>}
           {event.durationMinutes && (
             <span>⏱ {formatDurationMinutes(event.durationMinutes)}</span>
@@ -423,7 +423,7 @@ export default function EventDetailPage() {
               {!myAttendee && (
                 <button
                   onClick={() => handleRsvp('going')}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                  className="wt-btn rounded-lg border border-[#3f6a3f] bg-[#3f6a3f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   Join
                 </button>
@@ -431,7 +431,7 @@ export default function EventDetailPage() {
               {myAttendee && myAttendee.rsvpStatus !== 'going' && (
                 <button
                   onClick={() => handleRsvp('going')}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                  className="wt-btn rounded-lg border border-[#3f6a3f] bg-[#3f6a3f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   Going
                 </button>
@@ -439,7 +439,7 @@ export default function EventDetailPage() {
               {myAttendee && myAttendee.rsvpStatus === 'going' && (
                 <button
                   onClick={() => handleRsvp('not_going')}
-                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition"
+                  className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium disabled:opacity-50"
                 >
                   Can&apos;t make it
                 </button>
@@ -449,7 +449,7 @@ export default function EventDetailPage() {
           {isHost && canManageEvent && (
             <>
               {isPlanning && (
-                <button onClick={handleCreateInvite} className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200 transition">
+                <button onClick={handleCreateInvite} className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium">
                   Create Invite Link
                 </button>
               )}
@@ -457,7 +457,7 @@ export default function EventDetailPage() {
                 <button
                   onClick={handleGenerateRecommendations}
                   disabled={generatingRecommendations}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+                  className="wt-btn wt-btn-primary px-4 py-2 text-sm font-medium"
                 >
                   {generatingRecommendations
                     ? 'Generating...'
@@ -465,7 +465,7 @@ export default function EventDetailPage() {
                 </button>
               )}
               {candidates.length > 0 && event.status === 'planning' && (
-                <button onClick={handleStartVoting} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                <button onClick={handleStartVoting} className="wt-btn rounded-lg border border-[#4a7b90] bg-[#4a7b90] px-4 py-2 text-sm font-medium text-white">
                   Start Voting
                 </button>
               )}
@@ -474,11 +474,11 @@ export default function EventDetailPage() {
         </div>
 
         {inviteLink && (
-          <div className="mt-4 p-3 bg-indigo-50 rounded-lg">
-            <p className="text-sm text-indigo-700 font-medium mb-1">Invite Link</p>
+          <div className="wt-subtle mt-4 p-3">
+            <p className="mb-1 text-sm font-medium text-[var(--primary)]">Invite Link</p>
             <div className="flex gap-2">
-              <input readOnly value={inviteLink} className="flex-1 bg-white border rounded px-3 py-1.5 text-sm" />
-              <button onClick={() => navigator.clipboard.writeText(inviteLink)} className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700 transition">
+              <input readOnly value={inviteLink} className="wt-input flex-1 py-1.5 text-sm" />
+              <button onClick={() => navigator.clipboard.writeText(inviteLink)} className="wt-btn wt-btn-primary px-3 py-1.5 text-sm">
                 Copy
               </button>
             </div>
@@ -507,14 +507,14 @@ export default function EventDetailPage() {
         ) : event.status === 'voting' || event.status === 'confirmed' ? (
           <>
             {event.status === 'confirmed' && showFallbackControls && (
-              <div className="mb-4 flex items-center gap-2 border-b border-gray-200">
+              <div className="mb-4 flex items-center gap-2 border-b border-[var(--border)]">
                 <button
                   type="button"
                   onClick={() => setEventTab('results')}
                   className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
                     eventTab === 'results'
-                      ? 'border-indigo-600 text-indigo-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      ? 'border-[var(--primary)] text-[var(--primary)]'
+                      : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
                   }`}
                 >
                   Results
@@ -524,8 +524,8 @@ export default function EventDetailPage() {
                   onClick={() => setEventTab('fallback')}
                   className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
                     eventTab === 'fallback'
-                      ? 'border-indigo-600 text-indigo-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      ? 'border-[var(--primary)] text-[var(--primary)]'
+                      : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
                   }`}
                 >
                   Fallback options
@@ -594,14 +594,14 @@ export default function EventDetailPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    planning: 'bg-yellow-100 text-yellow-700',
-    voting: 'bg-blue-100 text-blue-700',
-    confirmed: 'bg-green-100 text-green-700',
-    active: 'bg-purple-100 text-purple-700',
-    completed: 'bg-gray-100 text-gray-600',
-    cancelled: 'bg-red-100 text-red-700',
+    planning: 'bg-[#f1e0b8] text-[#6b521f]',
+    voting: 'bg-[#d8e4ea] text-[#2f586b]',
+    confirmed: 'bg-[#dbe8d3] text-[#355f39]',
+    active: 'bg-[#e1d8ea] text-[#5a3f78]',
+    completed: 'bg-[#e5dccf] text-[#5d5345]',
+    cancelled: 'bg-[#efd8d3] text-[#8a4137]',
   };
-  return <span className={`text-xs font-semibold px-3 py-1 rounded-full ${colors[status] || 'bg-gray-100'}`}>{status}</span>;
+  return <span className={`text-xs font-semibold px-3 py-1 rounded-full ${colors[status] || 'bg-[#e5dccf]'}`}>{status}</span>;
 }
 
 function AttendeesSection({
@@ -679,16 +679,16 @@ function AttendeesSection({
     groups.maybe.length +
     groups.not_going.length;
   if (total === 0) {
-    return <div className="text-sm text-gray-500">No attendees yet.</div>;
+    return <div className="wt-muted text-sm">No attendees yet.</div>;
   }
   return (
     <div className="space-y-4">
       {Object.entries(groups).map(([status, list]) => list.length > 0 && (
         <div key={status}>
-          <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">{status.replace('_', ' ')} ({list.length})</h3>
+          <h3 className="wt-muted mb-2 text-sm font-semibold uppercase">{status.replace('_', ' ')} ({list.length})</h3>
           <div className="flex flex-wrap gap-2">
             {list.map((a) => (
-              <span key={a.id} className="bg-white border border-gray-200 rounded-full px-3 py-1 text-sm inline-flex items-center gap-2">
+              <span key={a.id} className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] px-3 py-1 text-sm">
                 <span>{a.user?.name || 'Unknown attendee'}</span>
                 {a.userId &&
                   a.userId !== currentUserId &&
@@ -733,13 +733,13 @@ function AttendeesSection({
                       type="button"
                       onClick={() => onAddFriend(a.userId!)}
                       disabled={addingFriendUserId === a.userId}
-                      className="text-xs text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                      className="text-xs text-[var(--primary)] hover:text-[var(--primary-strong)] disabled:opacity-50"
                     >
                       {addingFriendUserId === a.userId ? 'Adding...' : '+'}
                     </button>
                   ))}
                 {a.cancellationReason ? (
-                  <span className="text-xs text-gray-500" title={a.cancellationReason}>
+                  <span className="wt-muted text-xs" title={a.cancellationReason}>
                     ({a.cancellationReason})
                   </span>
                 ) : null}
@@ -767,20 +767,20 @@ function AttendeesSection({
                     }
                     void openInviteDropdown();
                   }}
-                  className="bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-full px-3 py-1 text-sm font-medium hover:bg-indigo-200 transition"
+                  className="wt-btn wt-btn-secondary rounded-full px-3 py-1 text-sm font-medium"
                   title="Invite friend"
                   aria-label="Invite friend"
                 >
                   +
                 </button>
                 {inviteDropdownOpen && (
-                  <div className="absolute z-20 mt-2 right-0 w-[calc(100vw-2rem)] sm:w-72 rounded-lg border border-gray-200 bg-white shadow-lg p-2">
+                  <div className="absolute z-20 mt-2 right-0 w-[calc(100vw-2rem)] sm:w-72 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-2 shadow-[var(--shadow-soft)]">
                     <input
                       type="text"
                       value={inviteQuery}
                       onChange={(e) => setInviteQuery(e.target.value)}
                       placeholder="Search friends..."
-                      className="w-full mb-2 border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="wt-input mb-2 w-full rounded-md px-2 py-1.5 text-sm"
                     />
                     <div className="max-h-56 overflow-y-auto">
                       {loadingInviteableFriends ? (
