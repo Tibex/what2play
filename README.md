@@ -13,6 +13,8 @@ A web-first, mobile-responsive app for organizing board game nights with friends
 - **Ranked Voting** — attendees rank games; Borda count aggregation with tie-breaks and host override
 - **Real-time Updates** — WebSocket-powered live voting results
 - **Post-Event Feedback** — enjoyment rating, completion tracking, and duration feel for improving future suggestions
+- **PWA Support** — installable web app with offline fallback
+- **Multi-channel Notifications** — webhook, push webhook, and SMTP email delivery paths
 - **Friends** — add friends, accept requests, build your gaming group
 
 ## Tech Stack

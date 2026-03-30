@@ -8,15 +8,17 @@ import { NotificationsService } from './notifications.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { VotingModule } from '../voting/voting.module';
 import { NotificationsController } from './notifications.controller';
+import { PushController } from './push.controller';
+import { PushSubscription } from '../entities/push-subscription.entity';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([Event, EventVote, NotificationDelivery]),
+    TypeOrmModule.forFeature([Event, EventVote, NotificationDelivery, PushSubscription]),
     forwardRef(() => VotingModule),
   ],
   providers: [NotificationsService, NotificationDeliveryService],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, PushController],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

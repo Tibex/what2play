@@ -11,3 +11,4 @@ export { EventFeedback } from './event-feedback.entity';
 export { SyncAccount } from './sync-account.entity';
 export { BggVerificationChallenge } from './bgg-verification-challenge.entity';
 export { Friendship } from './friendship.entity';
+export { PushSubscription } from './push-subscription.entity';

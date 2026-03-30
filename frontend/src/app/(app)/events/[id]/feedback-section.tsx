@@ -18,6 +18,7 @@ type FeedbackSectionProps = {
   onSubmitted: () => void;
   games: Game[];
   isHost: boolean;
+  isGoingAttendee: boolean;
   eventDateTime: string;
   eventTimezone: string;
   eventDurationMinutes?: number;
@@ -522,6 +523,7 @@ export default function FeedbackSection({
   onSubmitted,
   games,
   isHost,
+  isGoingAttendee,
   eventDateTime,
   eventTimezone,
   eventDurationMinutes,
@@ -536,6 +538,7 @@ export default function FeedbackSection({
 
   const alreadySubmitted = feedbackStatus?.alreadySubmitted || submitted;
   const canSubmit = feedbackStatus?.canSubmit ?? false;
+  const canSubmitForThisUser = isGoingAttendee && canSubmit;
   const canViewFeedback = alreadySubmitted;
 
   const refresh = async () => {
@@ -569,16 +572,28 @@ export default function FeedbackSection({
     });
   }, [canViewFeedback, eventId]);
 
+  if (!alreadySubmitted && feedbackStatus?.eventEnded && !canSubmitForThisUser) {
+    return (
+      <p className="text-center text-gray-500 py-10">
+        Feedback is only available to attendees who marked the event as <span className="font-semibold">Going</span>.
+      </p>
+    );
+  }
+
   if (!canViewFeedback && feedbackStatus && !feedbackStatus.eventEnded) {
-    return <p className="text-center text-gray-500 py-10">Feedback opens after the event date.</p>;
+    return (
+      <p className="text-center text-gray-500 py-10">
+        Feedback opens after the event date.
+      </p>
+    );
   }
 
   return (
     <div className="space-y-6">
-      {canSubmit && !alreadySubmitted && (
+      {canSubmitForThisUser && !alreadySubmitted && (
         <FeedbackForm
           eventId={eventId}
-          canSubmit={canSubmit}
+          canSubmit={canSubmitForThisUser}
           games={games}
           onSubmitted={refresh}
           eventDateTime={eventDateTime}

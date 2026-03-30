@@ -106,6 +106,7 @@ export default function EventDetailPage() {
   const canManageEvent =
     !isPastEvent && event.status !== 'cancelled';
   const canRsvp = !isPastEvent && event.status !== 'cancelled';
+  const isGoingAttendee = myAttendee?.rsvpStatus === 'going';
   const eventTimeZone = event.eventTimezone || 'UTC';
   const formattedEventDateTime = formatEventDateTime(event.dateTime, eventTimeZone);
   const eventEndsAt =
@@ -385,20 +386,33 @@ export default function EventDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {!myAttendee && (
-            <button onClick={() => handleRsvp('going')} disabled={!canRsvp} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
-              Join
-            </button>
-          )}
-          {myAttendee && myAttendee.rsvpStatus !== 'going' && (
-            <button onClick={() => handleRsvp('going')} disabled={!canRsvp} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition">
-              Going
-            </button>
-          )}
-          {myAttendee && myAttendee.rsvpStatus === 'going' && canRsvp && (
-            <button onClick={() => handleRsvp('not_going')} disabled={!canRsvp} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition">
-              Can&apos;t make it
-            </button>
+          {canRsvp && (
+            <>
+              {!myAttendee && (
+                <button
+                  onClick={() => handleRsvp('going')}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                >
+                  Join
+                </button>
+              )}
+              {myAttendee && myAttendee.rsvpStatus !== 'going' && (
+                <button
+                  onClick={() => handleRsvp('going')}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                >
+                  Going
+                </button>
+              )}
+              {myAttendee && myAttendee.rsvpStatus === 'going' && (
+                <button
+                  onClick={() => handleRsvp('not_going')}
+                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 transition"
+                >
+                  Can&apos;t make it
+                </button>
+              )}
+            </>
           )}
           {isHost && canManageEvent && (
             <>
@@ -452,6 +466,7 @@ export default function EventDetailPage() {
                 .map((c) => c.game)
                 .filter((g): g is Game => Boolean(g))}
               isHost={isHost}
+              isGoingAttendee={isGoingAttendee}
               eventDateTime={event.dateTime}
               eventTimezone={eventTimeZone}
               eventDurationMinutes={event.durationMinutes}

@@ -167,7 +167,6 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 ## Execution Status Snapshot (Mar 2026)
 
 - Must ship next
-  - Live provider expansion beyond webhook-only notifications (email/push channels)
   - Closed-beta validation with real groups and tracked retention metrics
 - Next bets after stability
   - Monetization experiments (soft limits, trial prompts, affiliate link placement)
