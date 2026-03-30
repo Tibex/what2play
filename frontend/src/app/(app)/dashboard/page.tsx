@@ -30,11 +30,11 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 sm:mb-8">
         <h1 className="text-xl sm:text-2xl font-bold">Your Game Nights</h1>
         <Link
           href="/events/new"
-          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          className="inline-flex self-start bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
           + New Night
         </Link>
@@ -118,8 +118,10 @@ function EventCard({ event }: Readonly<{ event: GameEvent }>) {
     <Link href={`/events/${event.id}`}>
       <div className={`bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-shadow ${isPast ? 'opacity-75' : ''}`}>
         <div className="flex items-start justify-between mb-3">
-          <h3 className="font-semibold text-gray-900 truncate">{event.title}</h3>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[event.status] || 'bg-gray-100'}`}>
+          <h3 className="min-w-0 flex-1 pr-2 font-semibold text-gray-900 truncate">
+            {event.title}
+          </h3>
+          <span className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[event.status] || 'bg-gray-100'}`}>
             {event.status}
           </span>
         </div>

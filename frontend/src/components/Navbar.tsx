@@ -42,12 +42,12 @@ export default function Navbar() {
   if (!isAuthenticated) return null;
 
   return (
-    <nav className="bg-indigo-700 text-white shadow-lg">
+    <nav className="bg-indigo-700 text-white shadow-lg overflow-x-clip">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center justify-between py-3">
           <Link
             href="/dashboard"
-            className="text-lg sm:text-xl font-bold tracking-tight leading-tight"
+            className="min-w-0 pr-2 text-base sm:text-xl font-bold tracking-tight leading-tight truncate"
           >
             Board Game Night
           </Link>

@@ -203,7 +203,11 @@ export default function AdminPage() {
               <tbody>
                 {(eventsData?.items || []).map((item) => (
                   <tr key={item.id} className="border-t">
-                    <td className="px-4 py-2">{item.title}</td>
+                    <td className="px-4 py-2">
+                      <div className="max-w-[11rem] sm:max-w-[16rem] truncate" title={item.title}>
+                        {item.title}
+                      </div>
+                    </td>
                     <td className="px-4 py-2">{item.host?.name || item.hostId}</td>
                     <td className="px-4 py-2">{item.status}</td>
                     <td className="px-4 py-2">

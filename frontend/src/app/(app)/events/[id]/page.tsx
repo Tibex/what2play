@@ -286,9 +286,11 @@ export default function EventDetailPage() {
     <div>
       <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{event.title}</h1>
+              <h1 className="min-w-0 max-w-[14rem] sm:max-w-[28rem] lg:max-w-[36rem] truncate text-xl sm:text-2xl font-bold" title={event.title}>
+                {event.title}
+              </h1>
               {isHost && canManageEvent && (
                 <Link
                   href={`/events/${id}/edit`}
