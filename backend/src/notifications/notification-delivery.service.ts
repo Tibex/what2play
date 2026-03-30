@@ -272,7 +272,7 @@ export class NotificationDeliveryService {
     const transporter = this.getEmailTransporter();
     const from =
       this.config.get<string>('SMTP_FROM') ??
-      'Board Game Night <no-reply@board-game-night.local>';
+      'What2Play <no-reply@what2play.games>';
     const html = this.renderEmailHtml(payload);
 
     await transporter.sendMail({

@@ -51,7 +51,7 @@ export class PushController {
     }
 
     webpush.setVapidDetails(
-      `mailto:${this.config.get<string>('SMTP_FROM') ?? 'no-reply@board-game-night.local'}`,
+      `mailto:${this.config.get<string>('SMTP_FROM') ?? 'no-reply@what2play.games'}`,
       publicKey,
       privateKey,
     );
@@ -216,7 +216,7 @@ export class PushController {
     }
 
     const notificationPayload = {
-      title: dto.title ?? 'Board Game Night',
+      title: dto.title ?? 'What2Play',
       body: dto.body ?? 'Test notification',
       url: dto.url ?? '/',
     };

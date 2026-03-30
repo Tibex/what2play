@@ -1,5 +1,5 @@
 {
-  "name": "board-game-night",
+  "name": "what2play",
   "private": true,
   "scripts": {
     "prepare": "husky"

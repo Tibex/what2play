@@ -71,7 +71,7 @@ export class BggService {
   async createVerificationChallenge(
     userId: string,
   ): Promise<BggVerificationChallenge> {
-    const token = `BGN-VERIFY-${uuid().slice(0, 8).toUpperCase()}`;
+    const token = `W2P-VERIFY-${uuid().slice(0, 8).toUpperCase()}`;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const challenge = this.verifyRepo.create({ userId, token, expiresAt });
     return this.verifyRepo.save(challenge);

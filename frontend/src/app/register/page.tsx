@@ -50,7 +50,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-700">Board Game Night</h1>
+          <h1 className="text-3xl font-bold text-indigo-700">What2Play</h1>
           <p className="text-gray-500 mt-2">Create your account</p>
         </div>
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5">

@@ -1,4 +1,4 @@
-# Board Game Night — V1 Product Spec
+# What2Play — V1 Product Spec
 
 ## Overview
 

@@ -61,7 +61,7 @@ globalThis.addEventListener('fetch', (event) => {
 
 globalThis.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
-  const title = data.title || 'Board Game Night';
+  const title = data.title || 'What2Play';
   const body = data.body || '';
   const url = data.url || data.eventUrl || '/';
 

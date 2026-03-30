@@ -49,7 +49,7 @@ export default function Navbar() {
             href="/dashboard"
             className="min-w-0 pr-2 text-base sm:text-xl font-bold tracking-tight leading-tight truncate"
           >
-            Board Game Night
+            What2Play
           </Link>
 
           <div className="hidden sm:flex items-center gap-6">

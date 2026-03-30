@@ -7,12 +7,12 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Board Game Night',
+  title: 'What2Play',
   description: 'Plan game nights, vote on games, and track your collection',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'Board Game Night',
+    title: 'What2Play',
     statusBarStyle: 'default',
   },
   icons: {

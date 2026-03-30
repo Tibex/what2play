@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Board Game Night',
-    short_name: 'BGN',
+    name: 'What2Play',
+    short_name: 'What2Play',
     description: 'Plan game nights, vote on games, and track your collection.',
     start_url: '/',
     display: 'standalone',

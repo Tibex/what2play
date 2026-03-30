@@ -1,4 +1,4 @@
-# Board Game Night
+# What2Play
 
 A web-first, mobile-responsive app for organizing board game nights with friends. Plan events, discover the best game for your group, vote on options, and improve recommendations from past sessions.
 
@@ -85,7 +85,7 @@ npm run db:migration:revert
 ## Project Structure
 
 ```
-board-game-night/
+what2play/
 ├── backend/
 │   └── src/
 │       ├── auth/           # Authentication (register, login, JWT, guards)

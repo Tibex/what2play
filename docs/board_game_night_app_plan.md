@@ -1,5 +1,5 @@
 ---
-name: Board Game Night App
+name: What2Play App
 overview: Define and execute a full-featured V1 web-first app (mobile-responsive/PWA) for organizing board game nights, including ownership-based suggestions, voting, and post-event feedback loops.
 todos:
   - id: product-spec
@@ -32,7 +32,7 @@ todos:
 isProject: false
 ---
 
-# Build Plan: Board Game Night App (Full V1)
+# Build Plan: What2Play App (Full V1)
 
 ## Product Goal
 

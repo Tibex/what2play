@@ -18,7 +18,7 @@ describeIfDb('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Board Game Night API')
+      .setTitle('What2Play API')
       .setVersion('1.0')
       .addBearerAuth()
       .build();

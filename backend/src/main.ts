@@ -15,7 +15,7 @@ async function bootstrap() {
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://[::1]:3000',
-    'https://board-game-night.vercel.app',
+    'https://what2play.games',
     ...(frontendUrl ? [frontendUrl] : []),
   ]);
 
@@ -49,7 +49,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Board Game Night API')
+    .setTitle('What2Play API')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
