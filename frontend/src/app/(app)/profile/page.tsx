@@ -166,9 +166,7 @@ export default function ProfilePage() {
         scopes: ['calendar.read', 'calendar.write'],
       });
       await refreshCalendarAccounts();
-      toast.success(
-        `${provider === 'google' ? 'Google' : 'Apple'} calendar connected`,
-      );
+      toast.success('Apple calendar connected');
     } finally {
       setCalendarBusyProvider(null);
     }
