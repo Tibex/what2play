@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import ConfirmModal from '@/components/ConfirmModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { formatEventDateTime } from '@/lib/datetime';
@@ -46,6 +47,12 @@ export default function EventDetailPage() {
   const [savingFallback, setSavingFallback] = useState(false);
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
   const [eventTab, setEventTab] = useState<'results' | 'fallback'>('results');
+  const [pendingAttendeeRemovalId, setPendingAttendeeRemovalId] = useState<string | null>(
+    null,
+  );
+  const [removingAttendeeId, setRemovingAttendeeId] = useState<string | null>(null);
+  const [confirmDeleteEventOpen, setConfirmDeleteEventOpen] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState(false);
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -154,13 +161,21 @@ export default function EventDetailPage() {
 
   const handleRemoveAttendee = async (attendeeId: string) => {
     if (!isHost) return;
-    if (!confirm('Remove this attendee from the event?')) return;
+    setPendingAttendeeRemovalId(attendeeId);
+  };
+
+  const handleConfirmRemoveAttendee = async () => {
+    if (!pendingAttendeeRemovalId) return;
+    setRemovingAttendeeId(pendingAttendeeRemovalId);
     try {
-      await api.delete(`/events/${id}/attendees/${attendeeId}`);
+      await api.delete(`/events/${id}/attendees/${pendingAttendeeRemovalId}`);
       toast.success('Attendee removed');
       loadEvent();
     } catch {
       /* toast auto-shown */
+    } finally {
+      setRemovingAttendeeId(null);
+      setPendingAttendeeRemovalId(null);
     }
   };
 
@@ -274,12 +289,20 @@ export default function EventDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this event? This cannot be undone.')) return;
+    setConfirmDeleteEventOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeletingEvent(true);
     try {
       await api.delete(`/events/${id}`);
       toast.success('Event deleted');
       router.push('/dashboard');
     } catch { /* toast auto-shown */ }
+    finally {
+      setDeletingEvent(false);
+      setConfirmDeleteEventOpen(false);
+    }
   };
 
   return (
@@ -533,6 +556,30 @@ export default function EventDetailPage() {
           />
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={pendingAttendeeRemovalId !== null}
+        title="Remove attendee?"
+        message="Remove this attendee from the event?"
+        confirmLabel="Remove attendee"
+        isConfirming={removingAttendeeId === pendingAttendeeRemovalId}
+        onCancel={() => setPendingAttendeeRemovalId(null)}
+        onConfirm={() => {
+          void handleConfirmRemoveAttendee();
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={confirmDeleteEventOpen}
+        title="Delete event?"
+        message="Are you sure you want to delete this event? This cannot be undone."
+        confirmLabel="Delete event"
+        isConfirming={deletingEvent}
+        onCancel={() => setConfirmDeleteEventOpen(false)}
+        onConfirm={() => {
+          void handleConfirmDelete();
+        }}
+      />
 
     </div>
   );

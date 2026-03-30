@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import ConfirmModal from '@/components/ConfirmModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import type { GameEvent, PaginatedResponse, User } from '@/lib/types';
@@ -20,6 +21,8 @@ export default function AdminPage() {
   const [eventsPage, setEventsPage] = useState(1);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [pendingUserDelete, setPendingUserDelete] = useState<User | null>(null);
+  const [pendingEventDelete, setPendingEventDelete] = useState<GameEvent | null>(null);
 
   const loadUsers = useCallback(async () => {
     const data = await api.get<PaginatedResponse<User>>(
@@ -37,13 +40,6 @@ export default function AdminPage() {
 
   const deleteUser = useCallback(
     async (targetUser: User) => {
-      if (
-        !globalThis.confirm(
-          `Delete user "${targetUser.name || targetUser.email}"? This also deletes events hosted by this user.`,
-        )
-      ) {
-        return;
-      }
       setDeletingUserId(targetUser.id);
       setError('');
       try {
@@ -60,13 +56,6 @@ export default function AdminPage() {
 
   const deleteEvent = useCallback(
     async (event: GameEvent) => {
-      if (
-        !globalThis.confirm(
-          `Delete event "${event.title}" scheduled for ${new Date(event.dateTime).toLocaleString()}?`,
-        )
-      ) {
-        return;
-      }
       setDeletingEventId(event.id);
       setError('');
       try {
@@ -166,7 +155,7 @@ export default function AdminPage() {
                     <td className="px-4 py-2">
                       <button
                         type="button"
-                        onClick={() => void deleteUser(item)}
+                        onClick={() => setPendingUserDelete(item)}
                         disabled={deletingUserId === item.id || item.id === user.id}
                         className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
                       >
@@ -216,7 +205,7 @@ export default function AdminPage() {
                     <td className="px-4 py-2">
                       <button
                         type="button"
-                        onClick={() => void deleteEvent(item)}
+                        onClick={() => setPendingEventDelete(item)}
                         disabled={deletingEventId === item.id}
                         className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
                       >
@@ -236,6 +225,44 @@ export default function AdminPage() {
           />
         </section>
       ) : null}
+
+      <ConfirmModal
+        isOpen={pendingUserDelete !== null}
+        title="Delete user?"
+        message={
+          pendingUserDelete
+            ? `Delete user "${pendingUserDelete.name || pendingUserDelete.email}"? This also deletes events hosted by this user.`
+            : ''
+        }
+        confirmLabel="Delete user"
+        isConfirming={pendingUserDelete ? deletingUserId === pendingUserDelete.id : false}
+        onCancel={() => setPendingUserDelete(null)}
+        onConfirm={() => {
+          if (!pendingUserDelete) return;
+          void deleteUser(pendingUserDelete).finally(() => {
+            setPendingUserDelete(null);
+          });
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={pendingEventDelete !== null}
+        title="Delete event?"
+        message={
+          pendingEventDelete
+            ? `Delete event "${pendingEventDelete.title}" scheduled for ${new Date(pendingEventDelete.dateTime).toLocaleString()}?`
+            : ''
+        }
+        confirmLabel="Delete event"
+        isConfirming={pendingEventDelete ? deletingEventId === pendingEventDelete.id : false}
+        onCancel={() => setPendingEventDelete(null)}
+        onConfirm={() => {
+          if (!pendingEventDelete) return;
+          void deleteEvent(pendingEventDelete).finally(() => {
+            setPendingEventDelete(null);
+          });
+        }}
+      />
     </div>
   );
 }

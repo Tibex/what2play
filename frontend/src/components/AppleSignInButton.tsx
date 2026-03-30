@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { redirectPathAfterAuth } from '@/lib/auth-flow';
@@ -83,7 +84,7 @@ export default function AppleSignInButton({
       globalThis.window.location.href = redirectPathAfterAuth();
     } catch (error) {
       console.error(error);
-      alert('Apple sign-in failed');
+      toast.error('Apple sign-in failed. Please try again.');
     } finally {
       setLoading(false);
     }
