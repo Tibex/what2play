@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { User, Friendship } from '@/lib/types';
 
@@ -21,23 +21,29 @@ export default function FriendsPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    const {
-      friends: loadedFriends,
-      pendingIncoming: loadedPendingIncoming,
-      pendingSent: loadedPendingSent,
-    } = await loadFriendsData();
-    setFriends(loadedFriends);
-    setPendingIncoming(loadedPendingIncoming);
-    setPendingSent(loadedPendingSent);
-    setLoading(false);
-  };
+  const loadData = useCallback(async () => {
+    try {
+      const {
+        friends: loadedFriends,
+        pendingIncoming: loadedPendingIncoming,
+        pendingSent: loadedPendingSent,
+      } = await loadFriendsData();
+      setFriends(loadedFriends);
+      setPendingIncoming(loadedPendingIncoming);
+      setPendingSent(loadedPendingSent);
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : 'Failed to load friends');
+      setFriends([]);
+      setPendingIncoming([]);
+      setPendingSent([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void loadData();
-    });
-  }, []);
+    void loadData();
+  }, [loadData]);
 
   const sendRequest = async () => {
     if (!email.trim()) return;
@@ -53,17 +59,17 @@ export default function FriendsPage() {
 
   const acceptRequest = async (id: string) => {
     await api.post(`/friends/${id}/accept`);
-    loadData();
+    await loadData();
   };
 
   const rejectRequest = async (id: string) => {
     await api.post(`/friends/${id}/reject`);
-    loadData();
+    await loadData();
   };
 
   const removeFriend = async (friendId: string) => {
     await api.delete(`/friends/${friendId}`);
-    loadData();
+    await loadData();
   };
 
   const sentPendingUsers: User[] = pendingSent
@@ -132,10 +138,10 @@ export default function FriendsPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-soft)] font-bold text-[var(--primary)]">
-                    {f.name.charAt(0).toUpperCase()}
+                    {(f.name || f.email || '?').charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-medium text-sm">{f.name}</p>
+                    <p className="font-medium text-sm">{f.name || f.email}</p>
                     <p className="text-xs text-gray-500">{f.email}</p>
                   </div>
                 </div>
