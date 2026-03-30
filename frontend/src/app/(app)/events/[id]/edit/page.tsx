@@ -46,7 +46,6 @@ export default function EditEventPage() {
     title: event.title,
     description: event.description || '',
     dateTime: localDateTime,
-    eventTimezone: eventTimeZone,
     durationMinutes: event.durationMinutes || 180,
     location: event.location || '',
     capacity: event.capacity || 8,

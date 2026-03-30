@@ -5,6 +5,8 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "@tailwindcss/postcss": "^4.2.2",
+    "husky": "^9.1.7",
+    "tailwindcss": "^4.2.2"
   }
 }

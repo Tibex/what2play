@@ -18,7 +18,6 @@ export default function NewEventPage() {
     title: '',
     description: '',
     dateTime: localDateTime,
-    eventTimezone: browserTimeZone,
     durationMinutes: 180,
     location: '',
     capacity: 8,
@@ -29,6 +28,7 @@ export default function NewEventPage() {
   const handleSubmit = async (data: EventFormData) => {
     const event = await api.post<{ id: string }>('/events', {
       ...data,
+      eventTimezone: browserTimeZone,
       durationMinutes: Number(data.durationMinutes),
       capacity: Number(data.capacity),
     });

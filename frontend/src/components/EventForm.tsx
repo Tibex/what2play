@@ -6,7 +6,6 @@ export interface EventFormData {
   title: string;
   description: string;
   dateTime: string;
-  eventTimezone: string;
   durationMinutes: number;
   location: string;
   capacity: number;
@@ -38,6 +37,11 @@ export default function EventForm({
   const [form, setForm] = useState<EventFormData>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [datePart, timePart = '19:00'] = form.dateTime.split('T');
+
+  const setDateTime = (nextDate: string, nextTime: string) => {
+    setForm({ ...form, dateTime: `${nextDate}T${nextTime}` });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,27 +72,26 @@ export default function EventForm({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
-          <input
-            type="datetime-local"
-            value={form.dateTime}
-            onChange={(e) => setForm({ ...form, dateTime: e.target.value })}
-            required
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Time zone</label>
-          <input
-            type="text"
-            value={form.eventTimezone}
-            onChange={(e) => setForm({ ...form, eventTimezone: e.target.value })}
-            required
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-            placeholder="Europe/Budapest"
-          />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
+        <div className="rounded-xl border border-gray-200 p-3 sm:p-4 bg-gray-50/60 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input
+              type="date"
+              value={datePart}
+              onChange={(e) => setDateTime(e.target.value, timePart)}
+              required
+              className="w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            />
+            <input
+              type="time"
+              value={timePart}
+              onChange={(e) => setDateTime(datePart, e.target.value)}
+              step={900}
+              required
+              className="w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            />
+          </div>
         </div>
       </div>
 

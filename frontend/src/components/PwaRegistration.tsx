@@ -24,6 +24,18 @@ export default function PwaRegistration() {
       return;
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+      // In local dev, service worker cache can serve stale chunks/pages.
+      const disableForDev = async () => {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+      };
+      void disableForDev();
+      return;
+    }
+
     const register = async () => {
       try {
         await navigator.serviceWorker.register('/sw.js');
