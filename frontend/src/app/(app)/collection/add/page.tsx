@@ -143,7 +143,7 @@ export default function CollectionAddPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Add Games</h1>
+      <h1 className="text-xl sm:text-2xl font-bold mb-4">Add Games</h1>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
         <h2 className="font-semibold mb-3">Search & Add</h2>
@@ -159,9 +159,9 @@ export default function CollectionAddPage() {
           <button
             onClick={() => void handleSearch()}
             disabled={searching}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
           >
-            {searching ? 'Searching...' : 'Search'}
+            {searching ? 'Searching...' : 'Find'}
           </button>
         </div>
 

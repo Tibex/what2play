@@ -47,13 +47,13 @@ export default function CollectionPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">My Collection</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">My Collection</h1>
 
         <Link
           href="/collection/add"
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
         >
-          + Add Games
+          + Add
         </Link>
       </div>
 

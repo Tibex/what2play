@@ -187,7 +187,7 @@ export default function EventForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm sm:text-base font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
       >
         {loading ? submittingLabel : submitLabel}
       </button>

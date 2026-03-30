@@ -71,12 +71,12 @@ export default function FriendsPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Friends</h1>
+    <div className="max-w-2xl mx-auto px-4">
+      <h1 className="text-xl sm:text-2xl font-bold mb-4">Friends</h1>
 
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 mb-6">
         <h2 className="font-semibold mb-3">Add Friend</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="email"
             value={email}
@@ -84,7 +84,7 @@ export default function FriendsPage() {
             placeholder="Friend's email address"
             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
           />
-          <button onClick={sendRequest} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+          <button onClick={sendRequest} className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
             Send Request
           </button>
         </div>
@@ -92,13 +92,13 @@ export default function FriendsPage() {
       </div>
 
       {pendingIncoming.length > 0 && (
-        <div className="bg-yellow-50 rounded-2xl border border-yellow-100 p-6 mb-6">
+        <div className="bg-yellow-50 rounded-2xl border border-yellow-100 p-4 sm:p-6 mb-6">
           <h2 className="font-semibold mb-3">Incoming Requests ({pendingIncoming.length})</h2>
           <div className="space-y-3">
             {pendingIncoming.map((f) => (
               <div key={f.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-yellow-200">
                 <span className="font-medium">{f.requester?.name || f.requester?.email}</span>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   <button onClick={() => acceptRequest(f.id)} className="bg-green-100 text-green-700 px-3 py-1 rounded text-sm hover:bg-green-200 transition">
                     Accept
                   </button>
@@ -113,7 +113,7 @@ export default function FriendsPage() {
       )}
 
       {pendingSent.length > 0 && (
-        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-6 mb-6">
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 sm:p-6 mb-6">
           <h2 className="font-semibold mb-3">Sent Requests ({pendingSent.length})</h2>
           <div className="space-y-3">
             {pendingSent.map((f) => (

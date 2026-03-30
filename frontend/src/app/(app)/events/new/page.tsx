@@ -37,10 +37,10 @@ export default function NewEventPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">New Game Night</h1>
+      <h1 className="text-xl sm:text-2xl font-bold mb-4">New Game Night</h1>
       <EventForm
         initial={initial}
-        submitLabel="Create Game Night"
+        submitLabel="Create Night"
         submittingLabel="Creating..."
         onSubmit={handleSubmit}
       />

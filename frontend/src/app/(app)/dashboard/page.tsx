@@ -31,12 +31,12 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold">Your Game Nights</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Your Game Nights</h1>
         <Link
           href="/events/new"
-          className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
-          + New Game Night
+          + New Night
         </Link>
       </div>
 
@@ -47,9 +47,9 @@ export default function DashboardPage() {
           <p className="text-gray-500 mb-6">Create your first game night in under 60 seconds</p>
           <Link
             href="/events/new"
-            className="inline-block bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+            className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
           >
-            Create Game Night
+            Create Night
           </Link>
         </div>
       ) : (

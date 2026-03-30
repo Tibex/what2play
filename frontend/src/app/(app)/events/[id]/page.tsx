@@ -284,8 +284,8 @@ export default function EventDetailPage() {
 
   return (
     <div>
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-        <div className="flex items-start justify-between mb-4">
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{event.title}</h1>
@@ -718,7 +718,7 @@ function AttendeesSection({
                   +
                 </button>
                 {inviteDropdownOpen && (
-                  <div className="absolute z-20 mt-2 right-0 w-72 rounded-lg border border-gray-200 bg-white shadow-lg p-2">
+                  <div className="absolute z-20 mt-2 right-0 w-[calc(100vw-2rem)] sm:w-72 rounded-lg border border-gray-200 bg-white shadow-lg p-2">
                     <input
                       type="text"
                       value={inviteQuery}
