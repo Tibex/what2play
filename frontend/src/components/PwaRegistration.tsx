@@ -61,13 +61,13 @@ export default function PwaRegistration() {
 
         if (subscription) return;
 
-        const applicationServerKey = urlBase64ToUint8Array(
-          vapid.publicKey,
-        ) as unknown as Uint8Array;
+        const applicationServerKey = urlBase64ToUint8Array(vapid.publicKey);
+        const applicationServerKeyBuffer =
+          applicationServerKey.buffer as ArrayBuffer;
 
         const newSubscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey,
+          applicationServerKey: applicationServerKeyBuffer,
         });
 
         const subscriptionJson = newSubscription.toJSON();
