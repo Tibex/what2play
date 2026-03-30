@@ -22,8 +22,29 @@ export class SyncAccount {
   @Column({ default: 'bgg' })
   provider: string;
 
-  @Column()
-  externalUsername: string;
+  @Column({ type: 'varchar', nullable: true })
+  externalUsername: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  externalAccountId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  encryptedAccessToken: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  encryptedRefreshToken: string | null;
+
+  @Column({ type: 'simple-array', nullable: true })
+  scopes: string[] | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  tokenExpiresAt: Date | null;
+
+  @Column({ nullable: true, type: 'text' })
+  syncCursor: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  lastError: string | null;
 
   @Column({ nullable: true, type: 'timestamptz' })
   lastSyncedAt: Date;

@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 import ConfirmModal from '@/components/ConfirmModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
-import { formatEventDateTime } from '@/lib/datetime';
 import GameCard from '@/components/GameCard';
 import FeedbackSection from './feedback-section';
 import type {
@@ -115,7 +114,17 @@ export default function EventDetailPage() {
   const canRsvp = !isPastEvent && event.status !== 'cancelled';
   const isGoingAttendee = myAttendee?.rsvpStatus === 'going';
   const eventTimeZone = event.eventTimezone || 'UTC';
-  const formattedEventDateTime = formatEventDateTime(event.dateTime, eventTimeZone);
+  const eventDate = new Date(event.dateTime);
+  const shortEventDate = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: eventTimeZone,
+  }).format(eventDate);
+  const shortEventTime = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: eventTimeZone,
+  }).format(eventDate);
   const eventEndsAt =
     new Date(event.dateTime).getTime() +
     (event.durationMinutes ?? 0) * 60_000;
@@ -360,11 +369,9 @@ export default function EventDetailPage() {
             <p className="text-gray-500 mt-1">
               Hosted by {event.host?.name || 'Unknown'}
               {' · '}
-              {formattedEventDateTime.date}
+              {shortEventDate}
               {' at '}
-              {formattedEventDateTime.time}
-              {' · '}
-              {eventTimeZone}
+              {shortEventTime}
             </p>
           </div>
           <StatusBadge status={event.status} />

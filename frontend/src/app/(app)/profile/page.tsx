@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
-import type { SyncAccount, User } from '@/lib/types';
+import type { CalendarAccount, SyncAccount, User } from '@/lib/types';
 
 const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
 const WEIGHT_OPTIONS = ['1', '2', '3', '4', '5'];
@@ -18,14 +19,19 @@ function durationLabel(mins: number): string {
 }
 
 export default function ProfilePage() {
+  const params = useSearchParams();
+  const router = useRouter();
   const [profile, setProfile] = useState<User | null>(null);
   const [bggAccount, setBggAccount] = useState<SyncAccount | null>(null);
   const [bggUsername, setBggUsername] = useState('');
+  const [calendarAccounts, setCalendarAccounts] = useState<CalendarAccount[]>([]);
+  const [calendarBusyProvider, setCalendarBusyProvider] = useState<
+    'google' | 'apple' | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -40,8 +46,13 @@ export default function ProfilePage() {
           api.get<User>('/users/me'),
           api.get<SyncAccount | null>('/bgg/link', { showErrorToast: false }),
         ]);
+        const connectedCalendars = await api.get<CalendarAccount[]>(
+          '/calendar/accounts',
+          { showErrorToast: false },
+        );
         setProfile(u);
         setBggAccount(linked);
+        setCalendarAccounts(connectedCalendars);
         setBggUsername(linked?.externalUsername || '');
         setForm({
           name: u.name || '',
@@ -56,18 +67,36 @@ export default function ProfilePage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    const status = params.get('calendarConnect');
+    const provider = params.get('provider');
+    if (!status || provider !== 'google') return;
+    if (status === 'success') {
+      toast.success('Google Calendar connected');
+      void refreshCalendarAccounts();
+    } else {
+      const reason = params.get('reason') || 'unknown';
+      toast.error(`Google Calendar connect failed (${reason})`);
+    }
+    const clean = new URLSearchParams(params.toString());
+    clean.delete('calendarConnect');
+    clean.delete('provider');
+    clean.delete('reason');
+    const next = clean.toString();
+    router.replace(next ? `/profile?${next}` : '/profile');
+  }, [params, router]);
+
   const handleSave = async () => {
     setSaving(true);
-    setMessage('');
     try {
       await api.patch('/users/me', {
         ...form,
         preferredDuration: Number(form.preferredDuration),
         preferredWeight: Number(form.preferredWeight),
       });
-      setMessage('Profile updated!');
+      toast.success('Profile updated');
     } catch {
-      setMessage('Failed to update');
+      toast.error('Failed to update profile');
     } finally {
       setSaving(false);
     }
@@ -103,6 +132,67 @@ export default function ProfilePage() {
       setSyncing(false);
     }
   };
+
+  const isProviderConnected = (provider: 'google' | 'apple') =>
+    calendarAccounts.some(
+      (account) => account.provider === provider && account.status === 'linked',
+    );
+
+  const refreshCalendarAccounts = async () => {
+    const connected = await api.get<CalendarAccount[]>('/calendar/accounts', {
+      showErrorToast: false,
+    });
+    setCalendarAccounts(connected);
+  };
+
+  const connectCalendar = async (provider: 'google' | 'apple') => {
+    if (provider === 'google') {
+      setCalendarBusyProvider(provider);
+      try {
+        const response = await api.get<{ url: string }>('/calendar/google/auth-url');
+        if (!response.url) {
+          toast.error('Failed to start Google calendar connect');
+          return;
+        }
+        window.location.href = response.url;
+      } finally {
+        setCalendarBusyProvider(null);
+      }
+      return;
+    }
+    setCalendarBusyProvider(provider);
+    try {
+      await api.post(`/calendar/connect/${provider}`, {
+        scopes: ['calendar.read', 'calendar.write'],
+      });
+      await refreshCalendarAccounts();
+      toast.success(
+        `${provider === 'google' ? 'Google' : 'Apple'} calendar connected`,
+      );
+    } finally {
+      setCalendarBusyProvider(null);
+    }
+  };
+
+  const disconnectCalendar = async (provider: 'google' | 'apple') => {
+    setCalendarBusyProvider(provider);
+    try {
+      await api.post(`/calendar/disconnect/${provider}`);
+      await refreshCalendarAccounts();
+      toast.success(
+        `${provider === 'google' ? 'Google' : 'Apple'} calendar disconnected`,
+      );
+    } finally {
+      setCalendarBusyProvider(null);
+    }
+  };
+
+  const availableProviders = (() => {
+    const provider = profile?.socialProvider;
+    if (provider === 'google') return ['google'] as const;
+    if (provider === 'apple') return ['apple'] as const;
+    return ['google', 'apple'] as const;
+  })();
 
   if (loading) {
     return (
@@ -227,13 +317,55 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {message && (
-          <p
-            className={`text-sm ${message.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}
-          >
-            {message}
+        <div className="border-t border-gray-100 pt-5 space-y-3">
+          <h2 className="font-semibold text-gray-800">Calendar sync</h2>
+          <p className="text-sm text-gray-500">
+            Connect your calendar account for automatic event sync.
           </p>
-        )}
+          <div className="grid grid-cols-1 gap-3">
+            {availableProviders.map((provider) => {
+              const connected = isProviderConnected(provider);
+              const busy = calendarBusyProvider === provider;
+              return (
+                <div
+                  key={provider}
+                  className="rounded-lg border border-gray-200 p-3 flex items-center justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-gray-800">
+                      <span className="mr-1" aria-hidden="true">
+                        {provider === 'google' ? '🗓️' : '📆'}
+                      </span>
+                      {provider === 'google' ? 'Google Calendar' : 'Apple Calendar'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {connected ? 'Connected' : 'Not connected'}
+                    </p>
+                  </div>
+                  {connected ? (
+                    <button
+                      type="button"
+                      onClick={() => void disconnectCalendar(provider)}
+                      disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {busy ? '...' : 'Disconnect'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void connectCalendar(provider)}
+                      disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-sm border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      {busy ? '...' : 'Connect'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         <button
           onClick={() => void handleSave()}

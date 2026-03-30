@@ -33,6 +33,22 @@ export default function PwaRegistration() {
         await Promise.all(cacheKeys.map((key) => caches.delete(key)));
       };
       void disableForDev();
+
+      // Optional: mimic incognito-like clean auth session on every local load.
+      // Enable by setting NEXT_PUBLIC_DEV_FRESH_SESSION=true in frontend/.env.local.
+      const freshSessionEnabled =
+        process.env.NEXT_PUBLIC_DEV_FRESH_SESSION === 'true';
+      if (freshSessionEnabled) {
+        const markerKey = '__bgn_dev_fresh_session_applied__';
+        const alreadyApplied = localStorage.getItem(markerKey) === 'true';
+        if (!alreadyApplied) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          sessionStorage.clear();
+          localStorage.setItem(markerKey, 'true');
+        }
+      }
       return;
     }
 

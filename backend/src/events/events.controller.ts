@@ -21,6 +21,7 @@ import { RecommendationsService } from '../recommendations/recommendations.servi
 import { NotificationsService } from '../notifications/notifications.service';
 import { FeedbackService } from '../feedback/feedback.service';
 import { VotingService } from '../voting/voting.service';
+import { CalendarSyncService } from '../calendar/calendar-sync.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
@@ -37,14 +38,21 @@ export class EventsController {
     private readonly votingService: VotingService,
     private readonly notificationsService: NotificationsService,
     private readonly feedbackService: FeedbackService,
+    private readonly calendarSyncService: CalendarSyncService,
   ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new event' })
-  create(@Request() req, @Body() dto: CreateEventDto) {
-    return this.eventsService.create(req.user.id, dto);
+  async create(@Request() req, @Body() dto: CreateEventDto) {
+    const created = await this.eventsService.create(req.user.id, dto);
+    this.calendarSyncService
+      .queueEventSync(created.id, 'event_created')
+      .catch(() => {
+        /* non-critical */
+      });
+    return created;
   }
 
   @Get()
@@ -120,6 +128,9 @@ export class EventsController {
         /* non-critical */
       });
     }
+    this.calendarSyncService.queueEventSync(id, 'event_updated').catch(() => {
+      /* non-critical */
+    });
 
     return updated;
   }
@@ -147,6 +158,11 @@ export class EventsController {
           dto.status,
           dto.cancellationReason,
         )
+        .catch(() => {
+          /* non-critical */
+        });
+      this.calendarSyncService
+        .queueEventSync(id, 'attendance_changed')
         .catch(() => {
           /* non-critical */
         });
@@ -219,7 +235,10 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete event' })
-  delete(@Param('id') id: string, @Request() req) {
+  async delete(@Param('id') id: string, @Request() req) {
+    this.calendarSyncService.queueEventSync(id, 'event_cancelled').catch(() => {
+      /* non-critical */
+    });
     return this.eventsService.delete(id, req.user.id);
   }
 
@@ -228,7 +247,10 @@ export class EventsController {
   @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin delete event' })
-  deleteForAdmin(@Param('id') id: string) {
+  async deleteForAdmin(@Param('id') id: string) {
+    this.calendarSyncService.queueEventSync(id, 'event_cancelled').catch(() => {
+      /* non-critical */
+    });
     return this.eventsService.deleteForAdmin(id);
   }
 
@@ -247,6 +269,11 @@ export class EventsController {
 
     if (goingBefore !== goingAfter) {
       await this.maybeRegenerateFallbackOptions(id, goingAfter);
+      this.calendarSyncService
+        .queueEventSync(id, 'attendance_changed')
+        .catch(() => {
+          /* non-critical */
+        });
     }
 
     return { ok: true };

@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   avatarUrl?: string;
+  socialProvider?: 'google' | 'apple' | string;
   timezone?: string;
   preferredDuration?: number;
   preferredWeight?: number;
@@ -208,4 +209,32 @@ export interface InviteFriendsResponse {
   invitedUserIds: string[];
   alreadyAttendingUserIds: string[];
   notFriendsUserIds: string[];
+}
+
+export interface CalendarAccount {
+  id: string;
+  userId: string;
+  provider: 'google' | 'apple' | string;
+  status: string;
+  scopes?: string[] | null;
+  tokenExpiresAt?: string | null;
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface EventCalendarSyncItem {
+  id: string;
+  eventId: string;
+  userId: string;
+  provider: 'google' | 'apple' | string;
+  syncState: string;
+  remoteEventId?: string | null;
+  lastError?: string | null;
+  lastSyncedAt?: string | null;
+}
+
+export interface EventCalendarSyncState {
+  eventId: string;
+  canManage: boolean;
+  items: EventCalendarSyncItem[];
 }

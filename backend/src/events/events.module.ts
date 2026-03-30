@@ -12,6 +12,7 @@ import { VotingModule } from '../voting/voting.module';
 import { FriendsModule } from '../friends/friends.module';
 import { EventsLifecycleService } from './events-lifecycle.service';
 import { RolesGuard } from '../auth/roles.guard';
+import { CalendarModule } from '../calendar/calendar.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RolesGuard } from '../auth/roles.guard';
     NotificationsModule,
     FeedbackModule,
     FriendsModule,
+    CalendarModule,
   ],
   providers: [EventsService, EventsLifecycleService, RolesGuard],
   controllers: [EventsController],

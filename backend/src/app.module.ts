@@ -12,6 +12,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { BggModule } from './bgg/bgg.module';
 import { FriendsModule } from './friends/friends.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CalendarModule } from './calendar/calendar.module';
 import { createTypeOrmOptions } from './database/typeorm.config';
 
 @Module({
@@ -34,6 +35,7 @@ import { createTypeOrmOptions } from './database/typeorm.config';
     BggModule,
     FriendsModule,
     NotificationsModule,
+    CalendarModule,
   ],
 })
 export class AppModule {}

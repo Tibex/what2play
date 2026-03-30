@@ -84,6 +84,9 @@ export class BggService {
       where: { userId, provider: 'bgg' },
     });
     if (!account) throw new NotFoundException('No BGG account linked');
+    if (!account.externalUsername) {
+      throw new BadRequestException('BGG account is missing a linked username');
+    }
 
     const bggGames = await this.fetchBggCollection(account.externalUsername);
     let imported = 0;
