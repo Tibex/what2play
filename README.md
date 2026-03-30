@@ -30,7 +30,7 @@ A web-first, mobile-responsive app for organizing board game nights with friends
 ## Planning Docs
 
 - Product specification: `PRODUCT_SPEC.md`
-- Execution plan: `docs/board_game_night_app_plan.md`
+- Execution plan: `docs/what2play_app_plan.md`
 
 ## Getting Started
 
