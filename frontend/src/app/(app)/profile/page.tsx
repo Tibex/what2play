@@ -7,6 +7,7 @@ import type { SyncAccount, User } from '@/lib/types';
 
 const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
 const WEIGHT_OPTIONS = ['1', '2', '3', '4', '5'];
+const BGG_CONTROL_HEIGHT_CLASS = 'h-[46px]';
 
 function durationLabel(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -28,7 +29,6 @@ export default function ProfilePage() {
 
   const [form, setForm] = useState({
     name: '',
-    timezone: '',
     preferredDuration: 180,
     preferredWeight: '2.5',
   });
@@ -45,7 +45,6 @@ export default function ProfilePage() {
         setBggUsername(linked?.externalUsername || '');
         setForm({
           name: u.name || '',
-          timezone: u.timezone || '',
           preferredDuration: u.preferredDuration || 180,
           preferredWeight: String(u.preferredWeight || '2.5'),
         });
@@ -138,17 +137,6 @@ export default function ProfilePage() {
             className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
           />
         </div>
-        <div>
-          <label htmlFor="profile-timezone" className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-          <input
-            id="profile-timezone"
-            type="text"
-            value={form.timezone}
-            onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-            placeholder="e.g., Europe/Budapest"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
-        </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="profile-duration" className="block text-sm font-medium text-gray-700 mb-1">Preferred Game Duration (min)</label>
@@ -197,14 +185,14 @@ export default function ProfilePage() {
                 value={bggUsername}
                 onChange={(e) => setBggUsername(e.target.value)}
                 placeholder="your_bgg_username"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                className={`w-full border border-gray-300 rounded-lg px-3 ${BGG_CONTROL_HEIGHT_CLASS} focus:ring-2 focus:ring-indigo-500 outline-none transition`}
               />
             </div>
             <button
               type="button"
               onClick={() => void syncNow()}
               disabled={syncing}
-              className="h-[42px] px-4 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:border-indigo-300 disabled:opacity-50 transition"
+              className={`${BGG_CONTROL_HEIGHT_CLASS} px-4 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:border-indigo-300 disabled:opacity-50 transition`}
             >
               {syncing ? 'Syncing...' : 'Sync now'}
             </button>

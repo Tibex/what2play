@@ -14,11 +14,6 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  timezone?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
   @IsNumber()
   preferredDuration?: number;
 
