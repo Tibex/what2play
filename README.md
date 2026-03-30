@@ -65,6 +65,12 @@ npm run dev
 
 The app runs at `http://localhost:3000`.
 
+To enable Google Places autocomplete in the event location field, set:
+
+```bash
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_browser_key
+```
+
 ### Database migrations
 
 Use migrations for all schema changes (do not rely on `synchronize` in production):

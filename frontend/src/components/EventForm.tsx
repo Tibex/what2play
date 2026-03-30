@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface EventFormData {
   title: string;
@@ -14,6 +14,68 @@ export interface EventFormData {
 }
 
 const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
+const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-places-script';
+
+let googleMapsPlacesLoader: Promise<void> | null = null;
+type GoogleGlobal = typeof globalThis & {
+  google?: {
+    maps?: {
+      places?: {
+        Autocomplete: new (
+          input: HTMLInputElement,
+          options?: Record<string, unknown>,
+        ) => {
+          addListener: (
+            eventName: string,
+            handler: () => void,
+          ) => { remove: () => void };
+          getPlace: () => { formatted_address?: string; name?: string };
+        };
+      };
+    };
+  };
+};
+
+function getGoogleGlobal() {
+  return globalThis as GoogleGlobal;
+}
+
+function loadGoogleMapsPlaces(apiKey: string): Promise<void> {
+  if (typeof globalThis.window === 'undefined') return Promise.resolve();
+
+  if (getGoogleGlobal().google?.maps?.places) return Promise.resolve();
+  if (googleMapsPlacesLoader) return googleMapsPlacesLoader;
+
+  googleMapsPlacesLoader = new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById(GOOGLE_MAPS_SCRIPT_ID) as
+      | HTMLScriptElement
+      | null;
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener(
+        'error',
+        () => reject(new Error('Failed to load Google Maps Places script')),
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = GOOGLE_MAPS_SCRIPT_ID;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.addEventListener('load', () => resolve(), { once: true });
+    script.addEventListener(
+      'error',
+      () => reject(new Error('Failed to load Google Maps Places script')),
+      { once: true },
+    );
+    document.head.appendChild(script);
+  });
+
+  return googleMapsPlacesLoader;
+}
 
 function durationLabel(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -37,11 +99,51 @@ export default function EventForm({
   const [form, setForm] = useState<EventFormData>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [placesReady, setPlacesReady] = useState(false);
+  const locationInputRef = useRef<HTMLInputElement | null>(null);
   const [datePart, timePart = '19:00'] = form.dateTime.split('T');
 
   const setDateTime = (nextDate: string, nextTime: string) => {
     setForm({ ...form, dateTime: `${nextDate}T${nextTime}` });
   };
+
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey || !locationInputRef.current) return;
+
+    let cancelled = false;
+    let listener: { remove: () => void } | undefined;
+
+    loadGoogleMapsPlaces(apiKey)
+      .then(() => {
+        const google = getGoogleGlobal().google;
+        if (cancelled || !locationInputRef.current || !google?.maps?.places)
+          return;
+
+        const autocomplete = new google.maps.places.Autocomplete(
+          locationInputRef.current,
+          {
+            fields: ['formatted_address', 'name'],
+            types: ['geocode', 'establishment'],
+          },
+        );
+        listener = autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          const nextLocation =
+            place.formatted_address || place.name || locationInputRef.current?.value || '';
+          setForm((prev) => ({ ...prev, location: nextLocation }));
+        });
+        setPlacesReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPlacesReady(false);
+      });
+
+    return () => {
+      cancelled = true;
+      listener?.remove();
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,12 +201,16 @@ export default function EventForm({
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
           <input
+            ref={locationInputRef}
             type="text"
             value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
             className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition"
-            placeholder="123 Main St or Online"
+            placeholder={placesReady ? 'Search for a place or type manually' : '123 Main St or Online'}
           />
+          {placesReady && (
+            <p className="mt-1 text-xs text-gray-500">Google Places autocomplete enabled.</p>
+          )}
         </div>
       </div>
 
