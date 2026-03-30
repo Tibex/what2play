@@ -66,6 +66,13 @@ export default function FriendsPage() {
     loadData();
   };
 
+  const sentPendingUsers: User[] = pendingSent
+    .map((f) => f.addressee)
+    .filter((user): user is User => Boolean(user));
+  const acceptedFriendIds = new Set(friends.map((f) => f.id));
+  const pendingOnlyUsers = sentPendingUsers.filter((u) => !acceptedFriendIds.has(u.id));
+  const hasAnyConnections = friends.length > 0 || pendingOnlyUsers.length > 0;
+
   if (loading) {
     return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
   }
@@ -112,36 +119,17 @@ export default function FriendsPage() {
         </div>
       )}
 
-      {pendingSent.length > 0 && (
-        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 sm:p-6 mb-6">
-          <h2 className="font-semibold mb-3">Sent Requests ({pendingSent.length})</h2>
-          <div className="space-y-3">
-            {pendingSent.map((f) => (
-              <div key={f.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-blue-200">
-                <span className="font-medium">
-                  {f.addressee?.name || f.addressee?.email}
-                </span>
-                <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
-                  Pending
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {friends.length === 0 ? (
-        <p className="text-gray-500 text-center py-10">
-          {pendingIncoming.length > 0 || pendingSent.length > 0
-            ? 'No accepted friends yet.'
-            : 'No friends yet. Send a friend request above.'}
-        </p>
-      ) : (
+      {hasAnyConnections ? (
         <div>
-          <h2 className="font-semibold text-gray-700 mb-4">Your Friends ({friends.length})</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="font-semibold text-gray-700 mb-4">
+            Your Friends ({friends.length + pendingOnlyUsers.length})
+          </h2>
+          <div className="space-y-3">
             {friends.map((f) => (
-              <div key={f.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between">
+              <div
+                key={f.id}
+                className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
                     {f.name.charAt(0).toUpperCase()}
@@ -151,13 +139,60 @@ export default function FriendsPage() {
                     <p className="text-xs text-gray-500">{f.email}</p>
                   </div>
                 </div>
-                <button onClick={() => removeFriend(f.id)} className="text-xs text-red-500 hover:text-red-700 transition">
-                  Remove
+                <button
+                  type="button"
+                  onClick={() => removeFriend(f.id)}
+                  className="text-lg leading-none text-red-500 hover:text-red-700 transition"
+                  title="Remove friend"
+                  aria-label="Remove friend"
+                >
+                  ×
                 </button>
+              </div>
+            ))}
+            {pendingOnlyUsers.map((u) => (
+              <div
+                key={`pending-${u.id}`}
+                className="bg-white rounded-xl border border-blue-100 p-4 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
+                    {(u.name || u.email).charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{u.name || u.email}</p>
+                    <p className="text-xs text-gray-500">{u.email}</p>
+                  </div>
+                </div>
+                <span
+                  className="inline-flex items-center justify-center text-amber-600"
+                  title="Request pending"
+                  aria-label="Request pending"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-5 w-5"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Zm.75 3.25a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 .3.6l2.5 1.875a.75.75 0 1 0 .9-1.2l-2.2-1.65V5.75Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </span>
               </div>
             ))}
           </div>
         </div>
+      ) : (
+        <p className="text-gray-500 text-center py-10">
+          {pendingIncoming.length > 0 || pendingSent.length > 0
+            ? 'No accepted friends yet.'
+            : 'No friends yet. Send a friend request above.'}
+        </p>
       )}
     </div>
   );
