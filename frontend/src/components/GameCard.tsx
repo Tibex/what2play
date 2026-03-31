@@ -60,16 +60,22 @@ export default function GameCard({
     while (pills.length < 3) pills.push('Fit');
     return (
       <div className="wt-card overflow-hidden transition-shadow hover:shadow-[var(--shadow-raised)] rounded-lg">
-        <div className="flex h-14 items-stretch">
+        <div className="flex min-h-14 items-stretch">
           {game.thumbnailUrl &&
             (bggUrl ? (
-              <a href={bggUrl} target="_blank" rel="noreferrer" className="shrink-0" onClick={onOpenExternal}>
-                <img src={game.thumbnailUrl} alt={game.title} className="h-14 w-14 object-cover" />
+              <a
+                href={bggUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 self-stretch"
+                onClick={onOpenExternal}
+              >
+                <img src={game.thumbnailUrl} alt={game.title} className="h-full w-14 object-cover" />
               </a>
             ) : (
-              <img src={game.thumbnailUrl} alt={game.title} className="h-14 w-14 shrink-0 object-cover" />
+              <img src={game.thumbnailUrl} alt={game.title} className="h-full w-14 shrink-0 object-cover" />
             ))}
-          <div className="flex h-14 min-w-0 flex-1 items-center gap-1 overflow-hidden px-2 py-0">
+          <div className="flex min-h-14 min-w-0 flex-1 items-center gap-1 overflow-hidden px-2 py-0.5">
             <div className="flex min-w-0 flex-1 flex-col justify-center gap-0 overflow-hidden">
               <div className="min-h-0 min-w-0">
                 {bggUrl ? (
@@ -86,11 +92,11 @@ export default function GameCard({
                   <h3 className={titleClass}>{game.title}</h3>
                 )}
               </div>
-              <div className="mt-1 flex min-h-0 w-full min-w-0 items-center gap-px overflow-hidden">
+              <div className="mt-1 flex min-h-0 w-full min-w-0 flex-wrap items-start gap-1">
                 {pills.map((label, i) => (
                   <span
                     key={`${label}-${i}`}
-                    className="inline-flex h-3.5 max-w-[31%] shrink-0 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-1 text-[0.34rem] font-semibold leading-none text-[var(--foreground)] truncate"
+                    className="inline-flex h-3.5 items-center whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-1 text-[0.34rem] font-semibold leading-none text-[var(--foreground)]"
                     title={label}
                   >
                     {label}
