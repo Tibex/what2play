@@ -146,7 +146,8 @@ export class RecommendationsService {
       const arr = ratingsByGame.get(r.gameId) || [];
       arr.push(Number(r.rating));
       ratingsByGame.set(r.gameId, arr);
-      const userRatings = ratingsByGameByUser.get(r.gameId) || new Map<string, number>();
+      const userRatings =
+        ratingsByGameByUser.get(r.gameId) || new Map<string, number>();
       userRatings.set(r.userId, Number(r.rating));
       ratingsByGameByUser.set(r.gameId, userRatings);
     });
@@ -188,7 +189,8 @@ export class RecommendationsService {
           gameRatings.length,
           ATTENDEE_FEEDBACK_SHRINKAGE_PIVOT,
         );
-        const contribution = shrunkenRatingFit * RECOMMENDATION_WEIGHTS.groupRating;
+        const contribution =
+          shrunkenRatingFit * RECOMMENDATION_WEIGHTS.groupRating;
         score += contribution;
         scoreBreakdown['group_rating'] = contribution;
         explanation['rating'] = `Group avg BGG rating: ${avg.toFixed(1)}`;
@@ -204,7 +206,8 @@ export class RecommendationsService {
               (1 - leastMisery) * RECOMMENDATION_WEIGHTS.leastMiseryPenalty;
             score -= miseryPenalty;
             scoreBreakdown['least_misery_penalty'] = -miseryPenalty;
-            explanation['fairness'] = `Least-misery guardrail: ${(leastMisery * 100).toFixed(0)}%`;
+            explanation['fairness'] =
+              `Least-misery guardrail: ${(leastMisery * 100).toFixed(0)}%`;
           }
         }
       }
@@ -281,7 +284,8 @@ export class RecommendationsService {
           `Attendees played: ${Math.round(attendeeFeedback.playRate * 100)}%`;
         if (attendeeFeedback.dislikeRate > 0.3) {
           const dislikePenalty =
-            attendeeFeedback.dislikeRate * RECOMMENDATION_WEIGHTS.dislikePenalty;
+            attendeeFeedback.dislikeRate *
+            RECOMMENDATION_WEIGHTS.dislikePenalty;
           score -= dislikePenalty;
           scoreBreakdown['dislike_penalty'] = -dislikePenalty;
           explanation['dislike_signal'] =
@@ -351,7 +355,10 @@ export class RecommendationsService {
 
       const confidence = this.getRecommendationConfidence(
         explanation,
-        this.getConfidenceSampleSize(feedback?.sampleSize, attendeeFeedback?.sampleSize),
+        this.getConfidenceSampleSize(
+          feedback?.sampleSize,
+          attendeeFeedback?.sampleSize,
+        ),
       );
       explanation['confidence'] = `Confidence: ${confidence}`;
 
@@ -398,7 +405,8 @@ export class RecommendationsService {
         }
         const consensusFit = this.getBggConsensusScore(game);
         if (consensusFit > 0) {
-          const contribution = consensusFit * RECOMMENDATION_WEIGHTS.bggConsensus;
+          const contribution =
+            consensusFit * RECOMMENDATION_WEIGHTS.bggConsensus;
           score += contribution;
           scoreBreakdown['bgg_consensus'] = contribution;
         }
@@ -590,7 +598,10 @@ export class RecommendationsService {
     complexity: 'light' | 'medium' | 'heavy',
     duration: 'short' | 'medium' | 'long',
   ): Promise<DemoRecommendationResult[]> {
-    const normalizedPlayerCount = Math.max(1, Math.min(12, Math.floor(playerCount)));
+    const normalizedPlayerCount = Math.max(
+      1,
+      Math.min(12, Math.floor(playerCount)),
+    );
     const budgetMinutes =
       duration === 'short' ? 60 : duration === 'long' ? 150 : 120;
     const preferredWeight =
@@ -603,12 +614,21 @@ export class RecommendationsService {
     );
     const scoredStrict: DemoRecommendationResult[] = [];
     const scoredRelaxed: DemoRecommendationResult[] = [];
-    const archetypeProfile = { likedTags: new Set<string>(), dislikedTags: new Set<string>() };
+    const archetypeProfile = {
+      likedTags: new Set<string>(),
+      dislikedTags: new Set<string>(),
+    };
     for (const game of pool) {
       if (game.isExpansion) continue;
       if (this.shouldExcludeByNotRecommendedPoll(game, normalizedPlayerCount))
         continue;
-      if (!this.isDemoDurationCompatible(game.playingTime, duration, budgetMinutes))
+      if (
+        !this.isDemoDurationCompatible(
+          game.playingTime,
+          duration,
+          budgetMinutes,
+        )
+      )
         continue;
       const strictComplexity = this.isDemoComplexityCompatible(
         game.weight,
@@ -657,15 +677,21 @@ export class RecommendationsService {
       }
 
       if (game.weight != null) {
-        const complexityDistance = Math.abs(Number(game.weight) - preferredWeight);
+        const complexityDistance = Math.abs(
+          Number(game.weight) - preferredWeight,
+        );
         const complexityFit = this.clamp(1 - complexityDistance / 4, 0, 1);
-        const contribution = complexityFit * RECOMMENDATION_WEIGHTS.complexityFit;
+        const contribution =
+          complexityFit * RECOMMENDATION_WEIGHTS.complexityFit;
         score += contribution;
         explanation['complexity'] =
           `Complexity fit: ${Number(game.weight).toFixed(2)} vs group pref ${preferredWeight.toFixed(2)}`;
       }
 
-      const bestPlayerFit = this.getBestPlayersFitScore(game, normalizedPlayerCount);
+      const bestPlayerFit = this.getBestPlayersFitScore(
+        game,
+        normalizedPlayerCount,
+      );
       const relaxedBestFitThreshold =
         normalizedPlayerCount === 1
           ? 0.15
@@ -678,7 +704,10 @@ export class RecommendationsService {
           : this.tuning.demoRelaxedMinBestPlayerRatio;
       const strictBestRatioThreshold =
         normalizedPlayerCount === 1 ? 0.06 : this.tuning.demoMinBestPlayerRatio;
-      if (normalizedPlayerCount !== 1 && bestPlayerFit < relaxedBestFitThreshold)
+      if (
+        normalizedPlayerCount !== 1 &&
+        bestPlayerFit < relaxedBestFitThreshold
+      )
         continue;
       score += bestPlayerFit * RECOMMENDATION_WEIGHTS.bggBestPlayersFit;
       explanation['best_players'] = this.getBestPlayersExplanation(
@@ -699,7 +728,8 @@ export class RecommendationsService {
         bestRatio < strictBestRatioThreshold
       ) {
         score -= 4;
-        explanation['best_players_guardrail'] = 'Lower best-vote support at this player count';
+        explanation['best_players_guardrail'] =
+          'Lower best-vote support at this player count';
       }
       if (normalizedPlayerCount === 1) {
         const soloRange = Math.max(0, game.maxPlayers - game.minPlayers);
@@ -721,7 +751,8 @@ export class RecommendationsService {
       );
       score += archetypeFit * RECOMMENDATION_WEIGHTS.discoveryArchetypeFit;
       if (archetypeFit >= 0.58) {
-        explanation['archetype'] = `Archetype fit: ${(archetypeFit * 100).toFixed(0)}%`;
+        explanation['archetype'] =
+          `Archetype fit: ${(archetypeFit * 100).toFixed(0)}%`;
       }
 
       const isStrictPick =
@@ -734,8 +765,7 @@ export class RecommendationsService {
             normalizedPlayerCount === 1 && duration === 'long'
               ? Math.round(budgetMinutes * SOLO_LONG_DURATION_RELAX_MULTIPLIER)
               : budgetMinutes,
-          ) >=
-            this.tuning.demoMinTimeFit);
+          ) >= this.tuning.demoMinTimeFit);
       if (isStrictPick) {
         scoredStrict.push({ game, score, explanation });
       } else {
@@ -753,11 +783,7 @@ export class RecommendationsService {
         explanation: entry.explanation,
       })),
     );
-    const reranked = this.rerankForDiversity(
-      deduped,
-      3,
-      1,
-    );
+    const reranked = this.rerankForDiversity(deduped, 3, 1);
     const bestScore = reranked[0]?.score ?? 0;
     const worstScore = reranked[reranked.length - 1]?.score ?? bestScore;
     const scoreSpan = Math.max(0.01, bestScore - worstScore);
@@ -782,7 +808,10 @@ export class RecommendationsService {
     complexity: 'light' | 'medium' | 'heavy',
     duration: 'short' | 'medium' | 'long',
   ): Promise<DemoRecommendationDebugResult> {
-    const normalizedPlayerCount = Math.max(1, Math.min(12, Math.floor(playerCount)));
+    const normalizedPlayerCount = Math.max(
+      1,
+      Math.min(12, Math.floor(playerCount)),
+    );
     const budgetMinutes =
       duration === 'short' ? 60 : duration === 'long' ? 150 : 120;
     const preferredWeight =
@@ -809,7 +838,11 @@ export class RecommendationsService {
 
     for (const game of pool) {
       if (game.isExpansion) {
-        rejected.push({ gameId: game.id, title: game.title, reason: 'is_expansion' });
+        rejected.push({
+          gameId: game.id,
+          title: game.title,
+          reason: 'is_expansion',
+        });
         continue;
       }
       if (this.shouldExcludeByNotRecommendedPoll(game, normalizedPlayerCount)) {
@@ -820,7 +853,13 @@ export class RecommendationsService {
         });
         continue;
       }
-      if (!this.isDemoDurationCompatible(game.playingTime, duration, budgetMinutes)) {
+      if (
+        !this.isDemoDurationCompatible(
+          game.playingTime,
+          duration,
+          budgetMinutes,
+        )
+      ) {
         rejected.push({
           gameId: game.id,
           title: game.title,
@@ -884,12 +923,17 @@ export class RecommendationsService {
       }
 
       if (game.weight != null) {
-        const complexityDistance = Math.abs(Number(game.weight) - preferredWeight);
+        const complexityDistance = Math.abs(
+          Number(game.weight) - preferredWeight,
+        );
         const complexityFit = this.clamp(1 - complexityDistance / 4, 0, 1);
         score += complexityFit * RECOMMENDATION_WEIGHTS.complexityFit;
       }
 
-      const bestPlayerFit = this.getBestPlayersFitScore(game, normalizedPlayerCount);
+      const bestPlayerFit = this.getBestPlayersFitScore(
+        game,
+        normalizedPlayerCount,
+      );
       const relaxedBestFitThreshold =
         normalizedPlayerCount === 1
           ? 0.15
@@ -903,7 +947,10 @@ export class RecommendationsService {
       const strictBestRatioThreshold =
         normalizedPlayerCount === 1 ? 0.06 : this.tuning.demoMinBestPlayerRatio;
 
-      if (normalizedPlayerCount !== 1 && bestPlayerFit < relaxedBestFitThreshold) {
+      if (
+        normalizedPlayerCount !== 1 &&
+        bestPlayerFit < relaxedBestFitThreshold
+      ) {
         rejected.push({
           gameId: game.id,
           title: game.title,
@@ -944,8 +991,7 @@ export class RecommendationsService {
             normalizedPlayerCount === 1 && duration === 'long'
               ? Math.round(budgetMinutes * SOLO_LONG_DURATION_RELAX_MULTIPLIER)
               : budgetMinutes,
-          ) >=
-            this.tuning.demoMinTimeFit);
+          ) >= this.tuning.demoMinTimeFit);
       explanation['bucket'] = isStrictPick ? 'strict' : 'relaxed';
 
       selected.push({
@@ -979,7 +1025,10 @@ export class RecommendationsService {
   private async getAverageFeedback(
     gameIds: string[],
   ): Promise<
-    Map<string, { avgEnjoyment: number; completionRate: number; sampleSize: number }>
+    Map<
+      string,
+      { avgEnjoyment: number; completionRate: number; sampleSize: number }
+    >
   > {
     if (!gameIds.length) return new Map();
     const feedback = await this.feedbackRepo
@@ -1015,7 +1064,12 @@ export class RecommendationsService {
   ): Promise<
     Map<
       string,
-      { avgEnjoyment: number; playRate: number; sampleSize: number; dislikeRate: number }
+      {
+        avgEnjoyment: number;
+        playRate: number;
+        sampleSize: number;
+        dislikeRate: number;
+      }
     >
   > {
     if (!userIds.length || !gameIds.length) return new Map();
@@ -1023,7 +1077,10 @@ export class RecommendationsService {
       .createQueryBuilder('f')
       .select('f.gameId', 'gameId')
       .addSelect('AVG(f.enjoymentRating)', 'avgEnjoyment')
-      .addSelect('AVG(CASE WHEN f.enjoymentRating <= 2 THEN 1 ELSE 0 END)', 'dislikeRate')
+      .addSelect(
+        'AVG(CASE WHEN f.enjoymentRating <= 2 THEN 1 ELSE 0 END)',
+        'dislikeRate',
+      )
       .addSelect('COUNT(*)', 'playCount')
       .addSelect('COUNT(DISTINCT f.userId)', 'distinctUsers')
       .where('f.userId IN (:...userIds)', { userIds })
@@ -1034,7 +1091,12 @@ export class RecommendationsService {
     const denominator = Math.max(userIds.length, 1);
     const map = new Map<
       string,
-      { avgEnjoyment: number; playRate: number; sampleSize: number; dislikeRate: number }
+      {
+        avgEnjoyment: number;
+        playRate: number;
+        sampleSize: number;
+        dislikeRate: number;
+      }
     >();
     rows.forEach((r) =>
       map.set(r.gameId, {
@@ -1154,7 +1216,9 @@ export class RecommendationsService {
   ): number {
     const fitScores: number[] = [];
     if (eventDurationMinutes != null && game.playingTime != null) {
-      fitScores.push(this.getTimeFitScore(game.playingTime, eventDurationMinutes));
+      fitScores.push(
+        this.getTimeFitScore(game.playingTime, eventDurationMinutes),
+      );
     }
     if (preferredDuration != null && game.playingTime != null) {
       fitScores.push(this.getTimeFitScore(game.playingTime, preferredDuration));
@@ -1176,8 +1240,12 @@ export class RecommendationsService {
   ): number {
     const tags = this.getGameTags(game);
     if (!tags.length) return 0.5;
-    const likedMatches = tags.filter((tag) => profile.likedTags.has(tag)).length;
-    const dislikedMatches = tags.filter((tag) => profile.dislikedTags.has(tag)).length;
+    const likedMatches = tags.filter((tag) =>
+      profile.likedTags.has(tag),
+    ).length;
+    const dislikedMatches = tags.filter((tag) =>
+      profile.dislikedTags.has(tag),
+    ).length;
     const raw = 0.5 + likedMatches * 0.12 - dislikedMatches * 0.16;
     return this.clamp(raw, 0, 1);
   }
@@ -1188,12 +1256,15 @@ export class RecommendationsService {
   ): string {
     const tags = this.getGameTags(game);
     const liked = tags.filter((tag) => profile.likedTags.has(tag)).slice(0, 2);
-    const disliked = tags.filter((tag) => profile.dislikedTags.has(tag)).slice(0, 1);
+    const disliked = tags
+      .filter((tag) => profile.dislikedTags.has(tag))
+      .slice(0, 1);
     if (liked.length && disliked.length) {
       return `Affinity: +${liked.join(', ')} / avoid ${disliked.join(', ')}`;
     }
     if (liked.length) return `Affinity: matches ${liked.join(', ')}`;
-    if (disliked.length) return `Affinity: conflicts with ${disliked.join(', ')}`;
+    if (disliked.length)
+      return `Affinity: conflicts with ${disliked.join(', ')}`;
     return 'Affinity: neutral';
   }
 
@@ -1206,7 +1277,10 @@ export class RecommendationsService {
     const pool = ranked.slice(0, Math.min(ranked.length, 30));
     const selected: ScoredCandidate[] = [];
     const available = [...pool];
-    while (selected.length < Math.max(0, limit - explorationSlots) && available.length) {
+    while (
+      selected.length < Math.max(0, limit - explorationSlots) &&
+      available.length
+    ) {
       let bestIdx = 0;
       let bestValue = Number.NEGATIVE_INFINITY;
       for (let idx = 0; idx < available.length; idx += 1) {
@@ -1214,7 +1288,9 @@ export class RecommendationsService {
         const relevance = candidate.score;
         const maxSimilarity = selected.length
           ? Math.max(
-              ...selected.map((picked) => this.getCandidateSimilarity(candidate, picked)),
+              ...selected.map((picked) =>
+                this.getCandidateSimilarity(candidate, picked),
+              ),
             )
           : 0;
         const mmr = relevance * 0.78 - maxSimilarity * 12;
@@ -1239,7 +1315,10 @@ export class RecommendationsService {
     return selected.slice(0, limit).sort((a, b) => b.score - a.score);
   }
 
-  private getCandidateSimilarity(a: ScoredCandidate, b: ScoredCandidate): number {
+  private getCandidateSimilarity(
+    a: ScoredCandidate,
+    b: ScoredCandidate,
+  ): number {
     const aTags = new Set(this.getGameTags(a.game));
     const bTags = new Set(this.getGameTags(b.game));
     const intersection = [...aTags].filter((tag) => bTags.has(tag)).length;
@@ -1258,34 +1337,44 @@ export class RecommendationsService {
         ? 0.35
         : 0;
     return this.clamp(
-      jaccard * 0.7 + (1 - weightPenalty) * 0.2 + (1 - timePenalty) * 0.1 + franchisePenalty,
+      jaccard * 0.7 +
+        (1 - weightPenalty) * 0.2 +
+        (1 - timePenalty) * 0.1 +
+        franchisePenalty,
       0,
       1,
     );
   }
 
   private getNoveltyScore(game: Game): number {
-    const weightVariety = game.weight == null ? 0.5 : Math.abs(Number(game.weight) - 2.7) / 2.7;
-    const durationVariety = game.playingTime == null ? 0.4 : Math.min(1, Math.abs(game.playingTime - 90) / 90);
+    const weightVariety =
+      game.weight == null ? 0.5 : Math.abs(Number(game.weight) - 2.7) / 2.7;
+    const durationVariety =
+      game.playingTime == null
+        ? 0.4
+        : Math.min(1, Math.abs(game.playingTime - 90) / 90);
     const mechanicRichness = Math.min(1, this.getGameTags(game).length / 5);
-    return this.clamp(weightVariety * 0.35 + durationVariety * 0.25 + mechanicRichness * 0.4, 0, 1);
+    return this.clamp(
+      weightVariety * 0.35 + durationVariety * 0.25 + mechanicRichness * 0.4,
+      0,
+      1,
+    );
   }
 
   private getGameTags(game: Game): string[] {
-    return [
-      ...(game.categories || []),
-      ...(game.mechanics || []),
-    ]
+    return [...(game.categories || []), ...(game.mechanics || [])]
       .map((tag) => tag.trim().toLowerCase())
       .filter(Boolean);
   }
 
   private getFranchiseKey(title: string): string {
-    return title
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9\s]/g, ' ')
-      .trim()
-      .split(/\s+/)[0] || title.toLowerCase();
+    return (
+      title
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9\s]/g, ' ')
+        .trim()
+        .split(/\s+/)[0] || title.toLowerCase()
+    );
   }
 
   private clamp(value: number, min: number, max: number): number {
@@ -1309,7 +1398,11 @@ export class RecommendationsService {
     const pollEntry = this.getPollEntryForPlayerCount(game, playerCount);
     if (pollEntry) {
       const fit = this.getPollFitScore(pollEntry);
-      return this.shrinkToNeutral(fit, pollEntry.totalVotes, POLL_SHRINKAGE_PIVOT);
+      return this.shrinkToNeutral(
+        fit,
+        pollEntry.totalVotes,
+        POLL_SHRINKAGE_PIVOT,
+      );
     }
 
     if (playerCount === 1 && game.minPlayers <= 1) {
@@ -1346,9 +1439,7 @@ export class RecommendationsService {
     const recommendedRatio = pollEntry.recommended / pollEntry.totalVotes;
     const notRecommendedRatio = pollEntry.notRecommended / pollEntry.totalVotes;
     const weighted =
-      bestRatio * 1.0 +
-      recommendedRatio * 0.18 -
-      notRecommendedRatio * 0.45;
+      bestRatio * 1.0 + recommendedRatio * 0.18 - notRecommendedRatio * 0.45;
     return this.clamp(weighted, 0, 1);
   }
 
@@ -1381,9 +1472,11 @@ export class RecommendationsService {
     const severity =
       (this.tuning.lowBestPlayerDampenerThreshold - bestRatio) /
       this.tuning.lowBestPlayerDampenerThreshold;
-    return severity *
+    return (
+      severity *
       RECOMMENDATION_WEIGHTS.bggBestPlayersFit *
-      this.tuning.lowBestPlayerDampenerFactor;
+      this.tuning.lowBestPlayerDampenerFactor
+    );
   }
 
   private shouldExcludeByNotRecommendedPoll(
@@ -1502,8 +1595,10 @@ export class RecommendationsService {
       return playingTime <= Math.round(budgetMinutes * 1.25);
     }
     if (duration === 'medium') {
-      return playingTime >= Math.round(budgetMinutes * 0.45) &&
-        playingTime <= Math.round(budgetMinutes * 1.2);
+      return (
+        playingTime >= Math.round(budgetMinutes * 0.45) &&
+        playingTime <= Math.round(budgetMinutes * 1.2)
+      );
     }
     return playingTime >= Math.round(budgetMinutes * 0.6);
   }
@@ -1581,5 +1676,4 @@ export class RecommendationsService {
     const parsed = Number(raw);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
-
 }

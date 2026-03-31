@@ -50,7 +50,10 @@ describe('BggService', () => {
           provide: getRepositoryToken(BggVerificationChallenge),
           useValue: mockVerifyRepo,
         },
-        { provide: getRepositoryToken(BggCatalogSync), useValue: mockCatalogSyncRepo },
+        {
+          provide: getRepositoryToken(BggCatalogSync),
+          useValue: mockCatalogSyncRepo,
+        },
         { provide: GamesService, useValue: mockGamesService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: DataSource, useValue: mockDataSource },

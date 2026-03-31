@@ -5,7 +5,9 @@ import { RecommendationsService } from './recommendations.service';
 @ApiTags('recommendations')
 @Controller('api/recommendations')
 export class RecommendationsPublicController {
-  constructor(private readonly recommendationsService: RecommendationsService) {}
+  constructor(
+    private readonly recommendationsService: RecommendationsService,
+  ) {}
 
   @Get('demo')
   @ApiOperation({ summary: 'Public demo recommendations from live catalog' })
@@ -33,7 +35,9 @@ export class RecommendationsPublicController {
   }
 
   @Get('demo/debug')
-  @ApiOperation({ summary: 'Debug public demo recommendation filtering and scoring' })
+  @ApiOperation({
+    summary: 'Debug public demo recommendation filtering and scoring',
+  })
   @ApiQuery({ name: 'players', required: true, type: Number })
   @ApiQuery({
     name: 'complexity',

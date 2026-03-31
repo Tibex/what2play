@@ -295,7 +295,9 @@ export class BggService {
 
     const lockAcquired = await this.tryAcquirePgLock(TOP_CATALOG_JOB_KEY);
     if (!lockAcquired) {
-      this.logger.log(`BGG top catalog import skipped (${trigger}): already running`);
+      this.logger.log(
+        `BGG top catalog import skipped (${trigger}): already running`,
+      );
       return { status: 'skipped', reason: 'already_running' };
     }
 
@@ -327,7 +329,9 @@ export class BggService {
         return { status: 'executed', ...result };
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : 'Unknown catalog import error';
+          error instanceof Error
+            ? error.message
+            : 'Unknown catalog import error';
         state.lastAttemptAt = new Date();
         state.lastAttemptStatus = 'failed';
         state.lastAttemptMessage = message;
@@ -347,7 +351,9 @@ export class BggService {
       where: { jobKey: TOP_CATALOG_JOB_KEY },
     });
     if (!state?.lastSuccessAt) return { shouldRun: true };
-    const nextEligibleAt = new Date(state.lastSuccessAt.getTime() + ONE_WEEK_MS);
+    const nextEligibleAt = new Date(
+      state.lastSuccessAt.getTime() + ONE_WEEK_MS,
+    );
     return {
       shouldRun: nextEligibleAt <= new Date(),
       nextEligibleAt: nextEligibleAt.toISOString(),
@@ -901,7 +907,8 @@ export class BggService {
         yearPublished: detail.yearPublished ?? game.yearPublished,
         bggRating: detail.bggRating ?? game.bggRating,
         weight: detail.weight ?? game.weight,
-        bggPlayerCountPoll: detail.bggPlayerCountPoll ?? game.bggPlayerCountPoll,
+        bggPlayerCountPoll:
+          detail.bggPlayerCountPoll ?? game.bggPlayerCountPoll,
       };
     });
   }

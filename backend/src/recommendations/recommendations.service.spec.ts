@@ -678,7 +678,12 @@ describe('RecommendationsService', () => {
         durationMinutes: 90,
         discoveryMode: true,
         status: 'planning',
-        attendees: [{ rsvpStatus: 'going', user: { preferredWeight: 2.8, preferredDuration: 75 } }],
+        attendees: [
+          {
+            rsvpStatus: 'going',
+            user: { preferredWeight: 2.8, preferredDuration: 75 },
+          },
+        ],
       });
       mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1']);
       mockGamesService.getGamesOwnedByUsers.mockResolvedValue([]);
