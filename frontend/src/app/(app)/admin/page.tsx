@@ -8,7 +8,7 @@ import type { GameEvent, PaginatedResponse, User } from '@/lib/types';
 
 type AdminTab = 'users' | 'events';
 type AdminCatalogSyncResult = {
-  status: 'executed' | 'skipped';
+  status: 'executed' | 'skipped' | 'queued';
   reason?: 'cooldown' | 'already_running';
   imported?: number;
   fetched?: number;
@@ -21,6 +21,7 @@ type AdminCatalogRepairResult = {
 };
 type AdminCatalogStats = {
   syncState: {
+    running: boolean;
     lastSuccessAt: string | null;
     lastAttemptAt: string | null;
     lastAttemptStatus: 'success' | 'failed' | null;
@@ -116,7 +117,11 @@ export default function AdminPage() {
       const result = await api.post<AdminCatalogSyncResult>(
         '/bgg/admin/import-top-catalog?limit=500',
       );
-      if (result.status === 'executed') {
+      if (result.status === 'queued') {
+        setCatalogSyncMessage(
+          'Catalog sync started in background. Check "Catalog sync state" for progress/status.',
+        );
+      } else if (result.status === 'executed') {
         setCatalogSyncMessage(
           `Catalog sync finished: imported ${result.imported ?? 0} games (fetched ${result.fetched ?? 0}).`,
         );
@@ -175,6 +180,14 @@ export default function AdminPage() {
     })();
   }, [loadCatalogStats, loadEvents, loadUsers, user?.role]);
 
+  useEffect(() => {
+    if (!catalogStats?.syncState.running) return;
+    const interval = setInterval(() => {
+      void loadCatalogStats();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [catalogStats?.syncState.running, loadCatalogStats]);
+
   if (user?.role !== 'admin') {
     return (
       <div className="rounded-xl border border-[#ddb5ae] bg-[var(--danger-soft)] p-4 text-[var(--danger)]">
@@ -232,7 +245,10 @@ export default function AdminPage() {
             {catalogStats.syncState.lastAttemptAt
               ? new Date(catalogStats.syncState.lastAttemptAt).toLocaleString()
               : 'never'}
-            {' | '}Status: {catalogStats.syncState.lastAttemptStatus || 'n/a'}
+            {' | '}Status:{' '}
+            {catalogStats.syncState.running
+              ? 'running'
+              : catalogStats.syncState.lastAttemptStatus || 'n/a'}
           </div>
         </div>
       ) : null}

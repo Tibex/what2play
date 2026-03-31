@@ -388,6 +388,7 @@ export class BggService {
 
   async getAdminCatalogStats(): Promise<{
     syncState: {
+      running: boolean;
       lastSuccessAt: string | null;
       lastAttemptAt: string | null;
       lastAttemptStatus: 'success' | 'failed' | null;
@@ -406,12 +407,14 @@ export class BggService {
     const state = await this.bggCatalogSyncRepo.findOne({
       where: { jobKey: TOP_CATALOG_JOB_KEY },
     });
+    const running = await this.isPgLockHeld(TOP_CATALOG_JOB_KEY);
     const quality = await this.gamesService.getCatalogQualityStats();
     const nextEligibleAt = state?.lastSuccessAt
       ? new Date(state.lastSuccessAt.getTime() + ONE_WEEK_MS).toISOString()
       : null;
     return {
       syncState: {
+        running,
         lastSuccessAt: state?.lastSuccessAt?.toISOString() || null,
         lastAttemptAt: state?.lastAttemptAt?.toISOString() || null,
         lastAttemptStatus: state?.lastAttemptStatus || null,
@@ -714,6 +717,13 @@ export class BggService {
     await this.dataSource.query('SELECT pg_advisory_unlock(hashtext($1))', [
       lockName,
     ]);
+  }
+
+  private async isPgLockHeld(lockName: string): Promise<boolean> {
+    const lockAcquired = await this.tryAcquirePgLock(lockName);
+    if (!lockAcquired) return true;
+    await this.releasePgLock(lockName);
+    return false;
   }
 
   private async fetchBggCollection(username: string): Promise<

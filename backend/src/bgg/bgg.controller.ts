@@ -9,6 +9,7 @@ import {
   Request,
   ParseIntPipe,
   DefaultValuePipe,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +30,8 @@ import { ImportOneGameDto } from './dto/import-one-game.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('api/bgg')
 export class BggController {
+  private readonly logger = new Logger(BggController.name);
+
   constructor(private readonly bggService: BggService) {}
 
   @Post('link')
@@ -92,11 +95,25 @@ export class BggController {
   importTopCatalogNow(
     @Query('limit', new DefaultValuePipe(500), ParseIntPipe) limit: number,
   ) {
-    return this.bggService.runTopRankedImportWithCooldown({
-      limit,
-      force: true,
-      trigger: 'manual',
-    });
+    // Run in background so HTTP request does not hit platform router timeout.
+    void this.bggService
+      .runTopRankedImportWithCooldown({
+        limit,
+        force: true,
+        trigger: 'manual',
+      })
+      .catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : 'Unknown catalog sync error';
+        this.logger.error(
+          `Background BGG top catalog import failed: ${message}`,
+        );
+      });
+
+    return {
+      status: 'queued',
+      requested: limit,
+    };
   }
 
   @Get('admin/catalog-stats')
