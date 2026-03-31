@@ -31,19 +31,54 @@ export class GamesService {
   }
 
   async findOrCreateByBggId(bggId: number, data: Partial<Game>): Promise<Game> {
+    const normalized = this.normalizeIncomingGameData(data);
     let game = await this.gamesRepo.findOne({ where: { bggId } });
     if (!game) {
-      game = this.gamesRepo.create({ ...data, bggId });
+      game = this.gamesRepo.create({ ...normalized, bggId });
       await this.gamesRepo.save(game);
     } else {
       Object.assign(game, {
         ...game,
-        ...data,
+        ...normalized,
         bggId,
       });
       await this.gamesRepo.save(game);
     }
     return game;
+  }
+
+  private normalizeIncomingGameData(input: Partial<Game>): Partial<Game> {
+    const output: Partial<Game> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (value === undefined || value === null) continue;
+
+      if (
+        (key === 'title' || key === 'imageUrl' || key === 'thumbnailUrl') &&
+        typeof value === 'string' &&
+        value.trim() === ''
+      ) {
+        continue;
+      }
+
+      if (key === 'bggRating' && typeof value === 'number') {
+        if (value < 0 || value > 10 || Number.isNaN(value)) continue;
+      }
+      if (key === 'weight' && typeof value === 'number') {
+        if (value < 0 || value > 5 || Number.isNaN(value)) continue;
+      }
+      if (
+        (key === 'minPlayers' ||
+          key === 'maxPlayers' ||
+          key === 'playingTime' ||
+          key === 'yearPublished') &&
+        typeof value === 'number'
+      ) {
+        if (value <= 0 || Number.isNaN(value)) continue;
+      }
+
+      (output as Record<string, unknown>)[key] = value;
+    }
+    return output;
   }
 
   async getUserCollection(
@@ -132,5 +167,51 @@ export class GamesService {
     }
 
     return qb.getMany();
+  }
+
+  async getCatalogQualityStats(): Promise<{
+    total: number;
+    missingRating: number;
+    missingWeight: number;
+    missingYear: number;
+    missingPoll: number;
+    missingPlayingTime: number;
+  }> {
+    const rows = await this.gamesRepo.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE "bggRating" IS NULL)::int AS "missingRating",
+        COUNT(*) FILTER (WHERE weight IS NULL)::int AS "missingWeight",
+        COUNT(*) FILTER (WHERE "yearPublished" IS NULL)::int AS "missingYear",
+        COUNT(*) FILTER (WHERE "bggPlayerCountPoll" IS NULL OR "bggPlayerCountPoll" = '')::int AS "missingPoll",
+        COUNT(*) FILTER (WHERE "playingTime" IS NULL OR "playingTime" <= 0)::int AS "missingPlayingTime"
+      FROM games
+    `);
+    return rows[0];
+  }
+
+  async getIncompleteBggIds(limit = 1000): Promise<number[]> {
+    const rows: Array<{ bggId: number }> = await this.gamesRepo.query(
+      `
+        SELECT "bggId"
+        FROM games
+        WHERE "bggId" IS NOT NULL
+          AND (
+            "bggRating" IS NULL
+            OR weight IS NULL
+            OR "yearPublished" IS NULL
+            OR "bggPlayerCountPoll" IS NULL
+            OR "bggPlayerCountPoll" = ''
+            OR "playingTime" IS NULL
+            OR "playingTime" <= 0
+          )
+        ORDER BY "updatedAt" DESC
+        LIMIT $1
+      `,
+      [Math.max(1, Math.floor(limit))],
+    );
+    return rows
+      .map((row) => Number(row.bggId))
+      .filter((id) => !Number.isNaN(id) && id > 0);
   }
 }

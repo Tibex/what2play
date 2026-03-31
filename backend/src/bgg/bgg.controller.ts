@@ -7,6 +7,8 @@ import {
   Query,
   UseGuards,
   Request,
+  ParseIntPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,6 +17,8 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { BggService } from './bgg.service';
 import { LinkBggDto } from './dto/link-bgg.dto';
 import { ImportBggXmlDto } from './dto/import-bgg-xml.dto';
@@ -25,7 +29,7 @@ import { ImportOneGameDto } from './dto/import-one-game.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('api/bgg')
 export class BggController {
-  constructor(private bggService: BggService) {}
+  constructor(private readonly bggService: BggService) {}
 
   @Post('link')
   @ApiOperation({ summary: 'Link BoardGameGeek account' })
@@ -76,5 +80,42 @@ export class BggController {
   })
   importOne(@Request() req, @Body() dto: ImportOneGameDto) {
     return this.bggService.importOneGame(req.user.id, dto.bggId);
+  }
+
+  @Post('admin/import-top-catalog')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({
+    summary:
+      'Admin: force import top BGG catalog immediately (ignores weekly cooldown)',
+  })
+  importTopCatalogNow(
+    @Query('limit', new DefaultValuePipe(500), ParseIntPipe) limit: number,
+  ) {
+    return this.bggService.runTopRankedImportWithCooldown({
+      limit,
+      force: true,
+      trigger: 'manual',
+    });
+  }
+
+  @Get('admin/catalog-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin: get BGG catalog sync and quality stats' })
+  getCatalogStats() {
+    return this.bggService.getAdminCatalogStats();
+  }
+
+  @Post('admin/repair-incomplete-catalog')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Admin: repair incomplete game metadata from BGG by bggId',
+  })
+  repairIncompleteCatalog(
+    @Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit: number,
+  ) {
+    return this.bggService.repairIncompleteCatalogData(limit);
   }
 }

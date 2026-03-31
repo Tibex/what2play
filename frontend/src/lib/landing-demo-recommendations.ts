@@ -429,7 +429,7 @@ function buildDemoExplanation(
   complexity: DemoComplexity,
 ): Record<string, string> {
   const explanation: Record<string, string> = {};
-  explanation.players = `Fits ${playerCount} players (${row.minPlayers}-${row.maxPlayers})`;
+  explanation.players = `Fits ${formatPlayerCountLabel(playerCount)} (${row.minPlayers}-${row.maxPlayers})`;
   if (row.playingTime) {
     explanation.time = `~${row.playingTime} min playtime`;
   }
@@ -443,6 +443,10 @@ function buildDemoExplanation(
   explanation.best_players = bestPlayersLine(row, playerCount);
   explanation.confidence = `Confidence: ${demoConfidence(explanation)}`;
   return explanation;
+}
+
+function formatPlayerCountLabel(playerCount: number): string {
+  return `${playerCount} player${playerCount === 1 ? '' : 's'}`;
 }
 
 function slugId(title: string, index: number): string {

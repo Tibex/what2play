@@ -45,6 +45,8 @@ export default function EventDetailPage() {
   const [nowTs] = useState(() => Date.now());
   const [savingFallback, setSavingFallback] = useState(false);
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStage, setGenerationStage] = useState(0);
   const [eventTab, setEventTab] = useState<'results' | 'fallback'>('results');
   const [pendingAttendeeRemovalId, setPendingAttendeeRemovalId] = useState<string | null>(
     null,
@@ -52,6 +54,20 @@ export default function EventDetailPage() {
   const [removingAttendeeId, setRemovingAttendeeId] = useState<string | null>(null);
   const [confirmDeleteEventOpen, setConfirmDeleteEventOpen] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState(false);
+
+  const sendRecommendationTelemetry = useCallback(
+    async (eventName: string, payload?: Record<string, unknown>) => {
+      try {
+        await api.post(`/events/${id}/recommendations/telemetry`, {
+          eventName,
+          payload: payload ?? {},
+        }, { showErrorToast: false });
+      } catch {
+        /* best effort telemetry */
+      }
+    },
+    [id],
+  );
 
   const loadEvent = useCallback(async () => {
     const ev = await api.get<GameEvent>(`/events/${id}`);
@@ -91,6 +107,35 @@ export default function EventDetailPage() {
       void loadEvent();
     });
   }, [loadEvent]);
+
+  useEffect(() => {
+    if (!generatingRecommendations) return;
+    const stageMessagesMs = 1100;
+    const stageTimer = window.setInterval(() => {
+      setGenerationStage((prev) => Math.min(prev + 1, 3));
+    }, stageMessagesMs);
+    const progressTimer = window.setInterval(() => {
+      setGenerationProgress((prev) => {
+        if (prev >= 89) return prev;
+        if (prev < 30) return Math.min(89, prev + 3);
+        if (prev < 60) return Math.min(89, prev + 1.8);
+        if (prev < 80) return Math.min(89, prev + 0.9);
+        return Math.min(89, prev + 0.35);
+      });
+    }, 180);
+    return () => {
+      window.clearInterval(stageTimer);
+      window.clearInterval(progressTimer);
+    };
+  }, [generatingRecommendations]);
+
+  useEffect(() => {
+    if (!candidates.length) return;
+    sendRecommendationTelemetry('recommendation_impression', {
+      count: candidates.length,
+      gameIds: candidates.map((candidate) => candidate.gameId),
+    }).catch(() => undefined);
+  }, [candidates, sendRecommendationTelemetry]);
 
   if (loading || !event) {
     return <div className="flex justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" /></div>;
@@ -190,21 +235,43 @@ export default function EventDetailPage() {
 
   const handleGenerateRecommendations = async () => {
     setGeneratingRecommendations(true);
+    setGenerationProgress(0);
+    setGenerationStage(0);
+    const startedAt = Date.now();
     try {
+      sendRecommendationTelemetry('recommendation_generate_started').catch(
+        () => undefined,
+      );
       await api.post<EventGameCandidate[]>(`/events/${id}/recommendations/generate`);
       const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
       setCandidates(c);
+      sendRecommendationTelemetry('recommendation_generate_succeeded', {
+        count: c.length,
+      }).catch(() => undefined);
+      const elapsed = Date.now() - startedAt;
+      const minDuration = 3200;
+      if (elapsed < minDuration) {
+        await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
+      }
+      setGenerationProgress(97);
       if (c.length === 0) {
         toast('No recommendations found for the current attendees');
       } else {
         toast.success('Recommendations generated');
       }
     } catch (err: unknown) {
+      sendRecommendationTelemetry('recommendation_generate_failed').catch(
+        () => undefined,
+      );
       toast.error(
         err instanceof Error ? err.message : 'Failed to generate recommendations',
       );
     } finally {
+      setGenerationProgress(100);
+      await new Promise((resolve) => setTimeout(resolve, 180));
       setGeneratingRecommendations(false);
+      setGenerationProgress(0);
+      setGenerationStage(0);
     }
   };
 
@@ -316,6 +383,35 @@ export default function EventDetailPage() {
 
   return (
     <div>
+      {generatingRecommendations && (
+        <div className="fixed inset-0 z-[70] bg-black/45 backdrop-blur-sm">
+          <div className="mx-auto mt-24 max-w-md rounded-2xl border border-white/20 bg-[#0f1b2d] p-6 text-white shadow-2xl">
+            <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">
+              Recommendation Engine
+            </div>
+            <h3 className="text-lg font-semibold">
+              {[
+                'Collecting attendee preferences...',
+                'Scoring game fit across your group...',
+                'Applying BGG player-count intelligence...',
+                'Ranking top candidates...',
+              ][generationStage]}
+            </h3>
+            <p className="mt-2 text-sm text-white/75">
+              This can take a few seconds for larger collections.
+            </p>
+            <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-[var(--primary)] transition-all duration-200"
+                style={{ width: `${Math.round(generationProgress)}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-xs text-white/70">
+              {Math.round(generationProgress)}%
+            </div>
+          </div>
+        </div>
+      )}
       <div className="wt-card mb-4 p-4 sm:mb-6 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
           <div className="min-w-0">
@@ -551,6 +647,7 @@ export default function EventDetailPage() {
                 status={event.status}
                 canSubmitVotes={myAttendee?.rsvpStatus === 'going'}
                 onVoted={loadEvent}
+                onTelemetry={sendRecommendationTelemetry}
               />
             )}
           </>
@@ -560,6 +657,7 @@ export default function EventDetailPage() {
             candidates={candidates}
             isPlanning={event.status === 'planning'}
             onChanged={loadEvent}
+            onTelemetry={sendRecommendationTelemetry}
           />
         )}
       </div>
@@ -820,11 +918,13 @@ function RecommendationsSection({
   candidates,
   isPlanning,
   onChanged,
+  onTelemetry,
 }: {
   eventId: string;
   candidates: EventGameCandidate[];
   isPlanning: boolean;
   onChanged: () => void;
+  onTelemetry: (eventName: string, payload?: Record<string, unknown>) => void;
 }) {
   type SearchResultItem = {
     key: string;
@@ -927,6 +1027,7 @@ function RecommendationsSection({
       if (!gameId) return;
 
       await api.post(`/events/${eventId}/recommendations/add`, { gameId });
+      onTelemetry('recommendation_manual_add', { gameId });
       toast.success('Game added to recommendations');
       setSearchResults((prev) =>
         prev.filter(
@@ -942,6 +1043,7 @@ function RecommendationsSection({
     setRemoving(candidateId);
     try {
       await api.delete(`/events/${eventId}/recommendations/${candidateId}`);
+      onTelemetry('recommendation_manual_remove', { candidateId });
       toast.success('Game removed from recommendations');
       onChanged();
     } catch { /* toast auto-shown */ }
@@ -1009,6 +1111,12 @@ function RecommendationsSection({
               explanation={c.explanation}
               showScore={Number(c.score)}
               bggUrl={c.game.bggId ? `https://boardgamegeek.com/boardgame/${c.game.bggId}` : undefined}
+              onOpenExternal={() =>
+                onTelemetry('recommendation_click', {
+                  gameId: c.gameId,
+                  source: c.source,
+                })
+              }
               actions={
                 isPlanning ? (
                   <button
@@ -1028,7 +1136,7 @@ function RecommendationsSection({
   );
 }
 
-function VotingSection({ eventId, candidates, results, myVotes, votingStatus, status, canSubmitVotes, onVoted }: {
+function VotingSection({ eventId, candidates, results, myVotes, votingStatus, status, canSubmitVotes, onVoted, onTelemetry }: {
   eventId: string;
   candidates: EventGameCandidate[];
   results: VoteResult[];
@@ -1037,6 +1145,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
   status: string;
   canSubmitVotes: boolean;
   onVoted: () => void;
+  onTelemetry: (eventName: string, payload?: Record<string, unknown>) => void;
 }) {
   const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -1087,6 +1196,10 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
     setSubmitting(true);
     try {
       await api.post(`/events/${eventId}/voting`, { rankings });
+      onTelemetry('vote_submit', {
+        rankingCount: rankings.length,
+        topGameIds: rankings.slice(0, 3).map((entry) => entry.gameId),
+      });
       onVoted();
     } finally {
       setSubmitting(false);
@@ -1103,6 +1216,11 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
     setRankings(next.map((r, i) => ({ ...r, rank: i + 1 })));
+    onTelemetry('vote_rank_changed', {
+      gameId: fromGameId,
+      fromRank: fromIndex + 1,
+      toRank: toIndex + 1,
+    });
   };
 
   const gameMap = new Map([

@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { RecommendationsService } from './recommendations.service';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { Event } from '../entities/event.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
+import { RecommendationTelemetry } from '../entities/recommendation-telemetry.entity';
 import { GamesService } from '../games/games.service';
 import { EventsService } from '../events/events.service';
 
@@ -46,6 +48,15 @@ describe('RecommendationsService', () => {
     getDiscoveryGames: jest.fn(),
   };
 
+  const mockTelemetryRepo = {
+    save: jest.fn((data) => data),
+    create: jest.fn((data) => data),
+  };
+
+  const mockConfigService = {
+    get: jest.fn(() => undefined),
+  };
+
   const mockEventsService = {
     findById: jest.fn(),
     getAttendeeUserIds: jest.fn(),
@@ -66,6 +77,14 @@ describe('RecommendationsService', () => {
         {
           provide: getRepositoryToken(EventFeedback),
           useValue: mockFeedbackRepo,
+        },
+        {
+          provide: getRepositoryToken(RecommendationTelemetry),
+          useValue: mockTelemetryRepo,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
         { provide: GamesService, useValue: mockGamesService },
         { provide: EventsService, useValue: mockEventsService },
@@ -487,8 +506,8 @@ describe('RecommendationsService', () => {
           bggPlayerCountPoll: {
             '3': {
               best: 100,
-              recommended: 200,
-              notRecommended: 700,
+              recommended: 350,
+              notRecommended: 550,
               totalVotes: 1000,
             },
           },
@@ -513,6 +532,66 @@ describe('RecommendationsService', () => {
       expect(disliked).toBeDefined();
       expect(Number(favored!.score)).toBeGreaterThan(Number(disliked!.score));
       expect(favored!.explanation.best_players).toContain('BGG 3p');
+    });
+
+    it('filters out games with 60% or more not-recommended votes for player count', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue([
+        'u1',
+        'u2',
+        'u3',
+      ]);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        {
+          id: 'g1',
+          title: 'Poll acceptable at 3',
+          minPlayers: 1,
+          maxPlayers: 6,
+          bggPlayerCountPoll: {
+            '3': {
+              best: 300,
+              recommended: 200,
+              notRecommended: 500,
+              totalVotes: 1000,
+            },
+          },
+        },
+        {
+          id: 'g2',
+          title: 'Poll rejected at 3',
+          minPlayers: 1,
+          maxPlayers: 6,
+          bggPlayerCountPoll: {
+            '3': {
+              best: 100,
+              recommended: 300,
+              notRecommended: 600,
+              totalVotes: 1000,
+            },
+          },
+        },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      const gameIds = result.map((r) => r.gameId);
+
+      expect(gameIds).toContain('g1');
+      expect(gameIds).not.toContain('g2');
     });
 
     it('adds external discovery candidates when discovery mode is enabled', async () => {
@@ -554,6 +633,81 @@ describe('RecommendationsService', () => {
       expect(result[0].source).toBe('external_catalog');
       expect(result[0].explanation).toHaveProperty('source');
       expect(result[0].explanation).toHaveProperty('source_detail');
+    });
+
+    it('applies least-misery penalty when one attendee strongly dislikes a game', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 120,
+        discoveryMode: false,
+        status: 'planning',
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1', 'u2']);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([
+        { id: 'g1', title: 'Polarizing game', minPlayers: 2, maxPlayers: 4 },
+        { id: 'g2', title: 'Stable game', minPlayers: 2, maxPlayers: 4 },
+      ]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([
+        { gameId: 'g1', userId: 'u1', rating: 10 },
+        { gameId: 'g1', userId: 'u2', rating: 2 },
+        { gameId: 'g2', userId: 'u1', rating: 6 },
+        { gameId: 'g2', userId: 'u2', rating: 6 },
+      ]);
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      const polarizing = result.find((r) => r.gameId === 'g1');
+      const stable = result.find((r) => r.gameId === 'g2');
+
+      expect(polarizing).toBeDefined();
+      expect(stable).toBeDefined();
+      expect(Number(stable!.score)).toBeGreaterThan(Number(polarizing!.score));
+    });
+
+    it('adds archetype explanation for sparse-signal discovery recommendations', async () => {
+      mockEventsService.findById.mockResolvedValue({
+        id: 'e1',
+        durationMinutes: 90,
+        discoveryMode: true,
+        status: 'planning',
+        attendees: [{ rsvpStatus: 'going', user: { preferredWeight: 2.8, preferredDuration: 75 } }],
+      });
+      mockEventsService.getAttendeeUserIds.mockResolvedValue(['u1']);
+      mockGamesService.getGamesOwnedByUsers.mockResolvedValue([]);
+      mockGamesService.getRatingsForGames.mockResolvedValue([]);
+      mockGamesService.getDiscoveryGames.mockResolvedValue([
+        {
+          id: 'x1',
+          title: 'Discovery Fit',
+          minPlayers: 1,
+          maxPlayers: 4,
+          bggRating: 7.8,
+          weight: 2.7,
+          playingTime: 80,
+          mechanics: ['Hand Management'],
+        },
+      ]);
+      jest
+        .spyOn(service as any, 'getAverageFeedback')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getAttendeeFeedbackSignals')
+        .mockResolvedValue(new Map());
+      jest
+        .spyOn(service as any, 'getRecentlyPlayedGameIds')
+        .mockResolvedValue(new Set());
+
+      const result = await service.generateCandidates('e1');
+      expect(result).toHaveLength(1);
+      expect(result[0].explanation.archetype).toBeDefined();
     });
 
     it('keeps fallback discovery below strongest owned candidate', async () => {

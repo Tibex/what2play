@@ -29,6 +29,12 @@
 
 - Database migrations: the app currently uses TypeORM `synchronize: true` in `app.module.ts` for local speed. For production, disable synchronize and run explicit migrations before deploys.
 - Notification delivery: cron jobs now dispatch reminder/feedback payloads through `NOTIFICATIONS_WEBHOOK_URL` with idempotency tracking in `notification_deliveries`.
+- BGG catalog seed: run `npm run bgg:import-top -- --limit=500` to import top-ranked BGG games into the local `games` table.
+  - Manual run respects a 7-day cooldown persisted in DB (`bgg_catalog_sync`) to avoid repeated imports.
+  - Check whether import is currently eligible: `npm run bgg:import-top -- --status`.
+  - To bypass cooldown intentionally, add `--force` (use sparingly): `npm run bgg:import-top -- --limit=500 --force`.
+  - Weekly production automation is always on at 500 games. Cron runs Mondays at 03:00 UTC and enforces the 7-day cooldown + DB advisory lock.
+  - Admin can force an immediate sync from UI/API via `POST /api/bgg/admin/import-top-catalog` (admin role required), which bypasses cooldown.
 
 ## Project setup
 

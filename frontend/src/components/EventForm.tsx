@@ -21,16 +21,7 @@ type GoogleGlobal = typeof globalThis & {
   google?: {
     maps?: {
       places?: {
-        Autocomplete: new (
-          input: HTMLInputElement,
-          options?: Record<string, unknown>,
-        ) => {
-          addListener: (
-            eventName: string,
-            handler: () => void,
-          ) => { remove: () => void };
-          getPlace: () => { formatted_address?: string; name?: string };
-        };
+        PlaceAutocompleteElement?: new (options?: Record<string, unknown>) => HTMLElement;
       };
     };
   };
@@ -62,7 +53,7 @@ function loadGoogleMapsPlaces(apiKey: string): Promise<void> {
 
     const script = document.createElement('script');
     script.id = GOOGLE_MAPS_SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     script.addEventListener('load', () => resolve(), { once: true });
@@ -101,6 +92,7 @@ export default function EventForm({
   const [error, setError] = useState('');
   const [placesReady, setPlacesReady] = useState(false);
   const locationInputRef = useRef<HTMLInputElement | null>(null);
+  const placesContainerRef = useRef<HTMLDivElement | null>(null);
   const [datePart, timePart = '19:00'] = form.dateTime.split('T');
 
   const setDateTime = (nextDate: string, nextTime: string) => {
@@ -109,30 +101,47 @@ export default function EventForm({
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey || !locationInputRef.current) return;
+    if (!apiKey || !placesContainerRef.current) return;
 
     let cancelled = false;
-    let listener: { remove: () => void } | undefined;
+    let autocompleteElement: HTMLElement | null = null;
+    let onPlaceSelect: ((event: Event) => Promise<void>) | null = null;
 
     loadGoogleMapsPlaces(apiKey)
       .then(() => {
         const google = getGoogleGlobal().google;
-        if (cancelled || !locationInputRef.current || !google?.maps?.places)
+        if (cancelled || !placesContainerRef.current || !google?.maps?.places)
           return;
 
-        const autocomplete = new google.maps.places.Autocomplete(
-          locationInputRef.current,
-          {
-            fields: ['formatted_address', 'name'],
-            types: ['geocode', 'establishment'],
-          },
-        );
-        listener = autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
-          const nextLocation =
-            place.formatted_address || place.name || locationInputRef.current?.value || '';
-          setForm((prev) => ({ ...prev, location: nextLocation }));
+        const PlaceAutocompleteElement = google.maps.places.PlaceAutocompleteElement;
+        if (!PlaceAutocompleteElement) {
+          setPlacesReady(false);
+          return;
+        }
+
+        const element = new PlaceAutocompleteElement({
+          types: ['geocode', 'establishment'],
         });
+        element.setAttribute('placeholder', 'Search for a place');
+        element.classList.add('wt-input');
+        placesContainerRef.current.replaceChildren(element);
+        autocompleteElement = element;
+        onPlaceSelect = async (event: Event) => {
+          const e = event as Event & {
+            placePrediction?: { toPlace?: () => { fetchFields?: (opts: { fields: string[] }) => Promise<void>; formattedAddress?: string; displayName?: string } };
+            prediction?: { toPlace?: () => { fetchFields?: (opts: { fields: string[] }) => Promise<void>; formattedAddress?: string; displayName?: string } };
+          };
+          const prediction = e.placePrediction || e.prediction;
+          const place = prediction?.toPlace?.();
+          if (!place) return;
+          if (place.fetchFields) {
+            await place.fetchFields({ fields: ['displayName', 'formattedAddress'] });
+          }
+          const nextLocation = place.formattedAddress || place.displayName || '';
+          if (nextLocation) setForm((prev) => ({ ...prev, location: nextLocation }));
+        };
+        element.addEventListener('gmp-select', onPlaceSelect as EventListener);
+        element.addEventListener('gmp-placeselect', onPlaceSelect as EventListener);
         setPlacesReady(true);
       })
       .catch(() => {
@@ -141,7 +150,19 @@ export default function EventForm({
 
     return () => {
       cancelled = true;
-      listener?.remove();
+      if (autocompleteElement && onPlaceSelect) {
+        autocompleteElement.removeEventListener(
+          'gmp-select',
+          onPlaceSelect as EventListener,
+        );
+        autocompleteElement.removeEventListener(
+          'gmp-placeselect',
+          onPlaceSelect as EventListener,
+        );
+      }
+      if (placesContainerRef.current) {
+        placesContainerRef.current.replaceChildren();
+      }
     };
   }, []);
 
@@ -200,16 +221,23 @@ export default function EventForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Location</label>
+          <div ref={placesContainerRef} className="mb-2" />
           <input
             ref={locationInputRef}
             type="text"
             value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
             className="wt-input"
-            placeholder={placesReady ? 'Search for a place or type manually' : '123 Main St or Online'}
+            placeholder={
+              placesReady
+                ? 'Selected place appears here (you can edit manually)'
+                : '123 Main St or Online'
+            }
           />
           {placesReady && (
-            <p className="wt-muted mt-1 text-xs">Google Places autocomplete enabled.</p>
+            <p className="wt-muted mt-1 text-xs">
+              Google Places autocomplete enabled (manual edit still available).
+            </p>
           )}
         </div>
       </div>

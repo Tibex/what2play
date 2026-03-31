@@ -1,18 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import GameCard from '@/components/GameCard';
-import {
-  getDemoRecommendations,
-  type DemoComplexity,
-  type DemoDuration,
-} from '@/lib/landing-demo-recommendations';
+import { api } from '@/lib/api';
+import { type DemoComplexity, type DemoDuration } from '@/lib/landing-demo-recommendations';
+import type { Game } from '@/lib/types';
 
 const DURATION_OPTIONS: { value: DemoDuration; label: string }[] = [
-  { value: 'short', label: 'Up to 45 min' },
-  { value: 'medium', label: '45–90 min' },
-  { value: 'long', label: '90+ min' },
+  { value: 'short', label: 'Up to 60 min' },
+  { value: 'medium', label: '60–120 min' },
+  { value: 'long', label: '120+ min' },
 ];
 
 const COMPLEXITY_OPTIONS: { value: DemoComplexity; label: string }[] = [
@@ -25,10 +23,74 @@ export function GuestRecommendationDemo() {
   const [players, setPlayers] = useState(4);
   const [complexity, setComplexity] = useState<DemoComplexity>('medium');
   const [duration, setDuration] = useState<DemoDuration>('medium');
-  const [results, setResults] = useState<ReturnType<typeof getDemoRecommendations> | null>(null);
+  const [results, setResults] = useState<
+    Array<{ game: Game; explanation: Record<string, string>; score: number }> | null
+  >(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingStage, setLoadingStage] = useState(0);
+  const [unavailableMessage, setUnavailableMessage] = useState('');
 
-  const runDemo = () => {
-    setResults(getDemoRecommendations(players, complexity, duration));
+  useEffect(() => {
+    if (!loading) return;
+    const stageTimer = globalThis.setInterval(() => {
+      setLoadingStage((prev) => Math.min(prev + 1, 2));
+    }, 1100);
+    const progressTimer = globalThis.setInterval(() => {
+      setLoadingProgress((prev) => {
+        if (prev >= 89) return prev;
+        if (prev < 30) return Math.min(89, prev + 3);
+        if (prev < 60) return Math.min(89, prev + 1.8);
+        return Math.min(89, prev + 0.8);
+      });
+    }, 180);
+
+    return () => {
+      globalThis.clearInterval(stageTimer);
+      globalThis.clearInterval(progressTimer);
+    };
+  }, [loading]);
+
+  const runDemo = async () => {
+    setLoading(true);
+    setLoadingProgress(0);
+    setLoadingStage(0);
+    setResults(null);
+    setUnavailableMessage('');
+    const startedAt = Date.now();
+    try {
+      const live = await api.get<
+        Array<{ game: Game; explanation: Record<string, string>; score: number }>
+      >(
+        `/recommendations/demo?players=${players}&complexity=${complexity}&duration=${duration}`,
+        { auth: false, showErrorToast: false },
+      );
+      const elapsed = Date.now() - startedAt;
+      const minVisibleLoading = 1400;
+      if (elapsed < minVisibleLoading) {
+        await new Promise((resolve) => setTimeout(resolve, minVisibleLoading - elapsed));
+      }
+      setLoadingProgress(97);
+      if (live.length === 0) {
+        setResults(null);
+        setUnavailableMessage(
+          'Recommendation demo is temporarily unavailable. Please try again in a moment.',
+        );
+      } else {
+        setResults(live);
+      }
+    } catch {
+      setResults(null);
+      setUnavailableMessage(
+        'We could not reach the recommendation engine. Please try again shortly.',
+      );
+    } finally {
+      setLoadingProgress(100);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      setLoading(false);
+      setLoadingProgress(0);
+      setLoadingStage(0);
+    }
   };
 
   return (
@@ -42,10 +104,10 @@ export function GuestRecommendationDemo() {
             <input
               id="demo-players"
               type="number"
-              min={2}
+              min={1}
               max={12}
               value={players}
-              onChange={(e) => setPlayers(Math.min(12, Math.max(2, Number(e.target.value) || 2)))}
+              onChange={(e) => setPlayers(Math.min(12, Math.max(1, Number(e.target.value) || 1)))}
               className="wt-input"
             />
           </div>
@@ -84,9 +146,14 @@ export function GuestRecommendationDemo() {
             </select>
           </div>
         </div>
-        <button type="button" onClick={runDemo} className="wt-btn wt-btn-primary w-full sm:w-auto px-6 py-2.5 font-semibold">
-          Get sample recommendations
+        <button type="button" onClick={() => void runDemo()} className="wt-btn wt-btn-primary w-full sm:w-auto px-6 py-2.5 font-semibold" disabled={loading}>
+          {loading ? 'Generating recommendations...' : 'Get sample recommendations'}
         </button>
+        {unavailableMessage ? (
+          <div className="rounded-xl border border-[#ddb5ae] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
+            {unavailableMessage}
+          </div>
+        ) : null}
 
         {results && (
           <div className="pt-2 border-t border-[var(--border)] space-y-4">
@@ -124,6 +191,34 @@ export function GuestRecommendationDemo() {
           </div>
         )}
       </div>
+      {loading ? (
+        <div className="fixed inset-0 z-[70] bg-black/45 backdrop-blur-sm">
+          <div className="mx-auto mt-24 max-w-md rounded-2xl border border-white/20 bg-[#0f1b2d] p-6 text-white shadow-2xl">
+            <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">
+              Recommendation Engine
+            </div>
+            <h3 className="text-lg font-semibold">
+              {[
+                'Collecting your constraints...',
+                'Scoring the best fits...',
+                'Ranking top recommendations...',
+              ][loadingStage]}
+            </h3>
+            <p className="mt-2 text-sm text-white/75">
+              Finding the best sample games for your settings.
+            </p>
+            <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-white/20">
+              <div
+                className="h-full rounded-full bg-[var(--primary)] transition-all duration-200"
+                style={{ width: `${Math.round(loadingProgress)}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-xs text-white/70">
+              {Math.round(loadingProgress)}%
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

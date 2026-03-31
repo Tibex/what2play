@@ -14,6 +14,7 @@ interface GameCardProps {
   explanationTreatment?: 'full' | 'none';
   /** Fixed thumbnail height row with tiny decoy pills (landing hero). */
   previewPills?: string[];
+  onOpenExternal?: () => void;
 }
 
 export default function GameCard({
@@ -25,6 +26,7 @@ export default function GameCard({
   size = 'default',
   explanationTreatment = 'full',
   previewPills,
+  onOpenExternal,
 }: GameCardProps) {
   const compact = size === 'compact';
   const heroStrip = compact && previewPills && previewPills.length > 0;
@@ -46,6 +48,9 @@ export default function GameCard({
     explanation &&
     Object.keys(explanation).length > 0;
   const actionsMt = compact ? 'mt-2' : 'mt-3';
+  const explanationChipClass = compact
+    ? 'wt-chip px-1.5 py-0.5 text-[0.62rem] leading-none'
+    : 'wt-chip px-1.5 py-0.5 text-[0.68rem] leading-none';
 
   if (heroStrip) {
     const pills = (previewPills ?? [])
@@ -58,7 +63,7 @@ export default function GameCard({
         <div className="flex h-14 items-stretch">
           {game.thumbnailUrl &&
             (bggUrl ? (
-              <a href={bggUrl} target="_blank" rel="noreferrer" className="shrink-0">
+              <a href={bggUrl} target="_blank" rel="noreferrer" className="shrink-0" onClick={onOpenExternal}>
                 <img src={game.thumbnailUrl} alt={game.title} className="h-14 w-14 object-cover" />
               </a>
             ) : (
@@ -73,6 +78,7 @@ export default function GameCard({
                     target="_blank"
                     rel="noreferrer"
                     className={`${titleClass} block truncate hover:underline`}
+                    onClick={onOpenExternal}
                   >
                     {game.title}
                   </a>
@@ -110,7 +116,7 @@ export default function GameCard({
       <div className="flex">
         {game.thumbnailUrl &&
           (bggUrl ? (
-            <a href={bggUrl} target="_blank" rel="noreferrer" className="shrink-0">
+            <a href={bggUrl} target="_blank" rel="noreferrer" className="shrink-0" onClick={onOpenExternal}>
               <img src={game.thumbnailUrl} alt={game.title} className={imgClass} />
             </a>
           ) : (
@@ -125,6 +131,7 @@ export default function GameCard({
                   target="_blank"
                   rel="noreferrer"
                   className={`${titleClass} block hover:underline`}
+                  onClick={onOpenExternal}
                 >
                   {game.title}
                 </a>
@@ -142,11 +149,11 @@ export default function GameCard({
             )}
           </div>
           {showFullExplanation && (
-            <div className={`flex flex-wrap gap-1.5 ${compact ? 'mt-1.5' : 'mt-2'}`}>
+            <div className={`flex flex-wrap gap-1 ${compact ? 'mt-1.5' : 'mt-2'}`}>
               {Object.entries(explanation)
                 .filter(([key]) => key !== 'score_breakdown')
                 .map(([key, val]) => (
-                  <span key={key} className="wt-chip">
+                  <span key={key} className={explanationChipClass}>
                     {val}
                   </span>
                 ))}

@@ -3,8 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BggService } from './bgg.service';
 import { SyncAccount } from '../entities/sync-account.entity';
 import { BggVerificationChallenge } from '../entities/bgg-verification-challenge.entity';
+import { BggCatalogSync } from '../entities/bgg-catalog-sync.entity';
 import { GamesService } from '../games/games.service';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 
 describe('BggService', () => {
   let service: BggService;
@@ -20,6 +22,11 @@ describe('BggService', () => {
     save: jest.fn((data) => data),
     create: jest.fn((data) => data),
   };
+  const mockCatalogSyncRepo = {
+    findOne: jest.fn(),
+    save: jest.fn((data) => data),
+    create: jest.fn((data) => data),
+  };
 
   const mockGamesService = {
     findOrCreateByBggId: jest.fn(),
@@ -29,6 +36,9 @@ describe('BggService', () => {
 
   const mockConfigService = {
     get: jest.fn(),
+  };
+  const mockDataSource = {
+    query: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -40,8 +50,10 @@ describe('BggService', () => {
           provide: getRepositoryToken(BggVerificationChallenge),
           useValue: mockVerifyRepo,
         },
+        { provide: getRepositoryToken(BggCatalogSync), useValue: mockCatalogSyncRepo },
         { provide: GamesService, useValue: mockGamesService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 

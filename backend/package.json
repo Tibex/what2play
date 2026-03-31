@@ -22,7 +22,8 @@
     "db:migration:create": "npm run typeorm -- migration:create src/database/migrations/NewMigration",
     "db:migration:generate": "npm run typeorm -- migration:generate src/database/migrations/AutoMigration",
     "db:migration:run": "npm run typeorm -- migration:run",
-    "db:migration:revert": "npm run typeorm -- migration:revert"
+    "db:migration:revert": "npm run typeorm -- migration:revert",
+    "bgg:import-top": "node -r ts-node/register -r tsconfig-paths/register src/scripts/import-bgg-top-games.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

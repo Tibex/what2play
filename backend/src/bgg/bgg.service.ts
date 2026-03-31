@@ -4,14 +4,20 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuid } from 'uuid';
 import { SyncAccount } from '../entities/sync-account.entity';
 import { BggVerificationChallenge } from '../entities/bgg-verification-challenge.entity';
 import { BggPlayerCountPollEntry } from '../entities/game.entity';
+import { BggCatalogSync } from '../entities/bgg-catalog-sync.entity';
 import { GamesService } from '../games/games.service';
+
+const TOP_CATALOG_JOB_KEY = 'bgg_top_catalog';
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const BGG_TOP_CSV_SNAPSHOT_URL =
+  'https://gist.githubusercontent.com/stungeye/358bf7e10e11e42224a483990f64eed5/raw/board_games.csv';
 
 @Injectable()
 export class BggService {
@@ -22,6 +28,10 @@ export class BggService {
     private syncRepo: Repository<SyncAccount>,
     @InjectRepository(BggVerificationChallenge)
     private verifyRepo: Repository<BggVerificationChallenge>,
+    @InjectRepository(BggCatalogSync)
+    private bggCatalogSyncRepo: Repository<BggCatalogSync>,
+    @InjectDataSource()
+    private dataSource: DataSource,
     private gamesService: GamesService,
     private config: ConfigService,
   ) {}
@@ -89,17 +99,20 @@ export class BggService {
     }
 
     const bggGames = await this.fetchBggCollection(account.externalUsername);
+    const enrichedGames = await this.enrichWithThingDetails(bggGames);
     let imported = 0;
 
-    for (const bg of bggGames) {
+    for (const bg of enrichedGames) {
       const game = await this.gamesService.findOrCreateByBggId(bg.bggId, {
         title: bg.title,
         imageUrl: bg.imageUrl,
         thumbnailUrl: bg.thumbnailUrl,
+        bggRating: bg.bggRating,
         minPlayers: bg.minPlayers,
         maxPlayers: bg.maxPlayers,
         playingTime: bg.playingTime,
         yearPublished: bg.yearPublished,
+        weight: bg.weight,
         isExpansion: bg.isExpansion,
         expansionForBggIds: bg.expansionForBggIds,
         bggPlayerCountPoll: bg.bggPlayerCountPoll,
@@ -113,7 +126,7 @@ export class BggService {
 
     account.lastSyncedAt = new Date();
     await this.syncRepo.save(account);
-    return { imported, fetched: bggGames.length };
+    return { imported, fetched: enrichedGames.length };
   }
 
   async importCollectionFromXml(
@@ -121,17 +134,20 @@ export class BggService {
     xml: string,
   ): Promise<{ imported: number; fetched: number }> {
     const bggGames = await this.enrichWithThingMetadata(this.parseBggXml(xml));
+    const enrichedGames = await this.enrichWithThingDetails(bggGames);
     let imported = 0;
 
-    for (const bg of bggGames) {
+    for (const bg of enrichedGames) {
       const game = await this.gamesService.findOrCreateByBggId(bg.bggId, {
         title: bg.title,
         imageUrl: bg.imageUrl,
         thumbnailUrl: bg.thumbnailUrl,
+        bggRating: bg.bggRating,
         minPlayers: bg.minPlayers,
         maxPlayers: bg.maxPlayers,
         playingTime: bg.playingTime,
         yearPublished: bg.yearPublished,
+        weight: bg.weight,
         isExpansion: bg.isExpansion,
         expansionForBggIds: bg.expansionForBggIds,
         bggPlayerCountPoll: bg.bggPlayerCountPoll,
@@ -143,7 +159,7 @@ export class BggService {
       imported++;
     }
 
-    return { imported, fetched: bggGames.length };
+    return { imported, fetched: enrichedGames.length };
   }
 
   private getBggHeaders(): Record<string, string> {
@@ -212,6 +228,8 @@ export class BggService {
       title: d.title,
       imageUrl: d.imageUrl,
       thumbnailUrl: d.thumbnailUrl,
+      bggRating: d.bggRating,
+      weight: d.weight,
       minPlayers: d.minPlayers,
       maxPlayers: d.maxPlayers,
       playingTime: d.playingTime,
@@ -220,6 +238,182 @@ export class BggService {
     });
     await this.gamesService.addToCollection(userId, game.id);
     return { game };
+  }
+
+  async importTopRankedGames(
+    limit = 500,
+  ): Promise<{ imported: number; fetched: number; requested: number }> {
+    const normalizedLimit = Math.max(1, Math.min(5000, Math.floor(limit)));
+    const rankedIds = await this.fetchTopRankedBggIds(normalizedLimit);
+    if (!rankedIds.length) {
+      throw new BadRequestException(
+        'Unable to fetch BGG ranked list (received no IDs). BGG browse pages are currently blocking server-side requests.',
+      );
+    }
+
+    const details = await this.fetchThingDetails(rankedIds);
+    let imported = 0;
+    for (const d of details) {
+      await this.gamesService.findOrCreateByBggId(d.bggId, {
+        title: d.title,
+        imageUrl: d.imageUrl,
+        thumbnailUrl: d.thumbnailUrl,
+        bggRating: d.bggRating,
+        weight: d.weight,
+        minPlayers: d.minPlayers,
+        maxPlayers: d.maxPlayers,
+        playingTime: d.playingTime,
+        yearPublished: d.yearPublished,
+        bggPlayerCountPoll: d.bggPlayerCountPoll,
+      });
+      imported++;
+    }
+
+    return {
+      imported,
+      fetched: details.length,
+      requested: normalizedLimit,
+    };
+  }
+
+  async runTopRankedImportWithCooldown(opts?: {
+    limit?: number;
+    force?: boolean;
+    trigger?: 'manual' | 'cron';
+  }): Promise<{
+    status: 'executed' | 'skipped';
+    reason?: 'cooldown' | 'already_running';
+    imported?: number;
+    fetched?: number;
+    requested?: number;
+    nextEligibleAt?: string;
+  }> {
+    const limit = opts?.limit ?? 500;
+    const force = opts?.force ?? false;
+    const trigger = opts?.trigger ?? 'manual';
+    const now = new Date();
+
+    const lockAcquired = await this.tryAcquirePgLock(TOP_CATALOG_JOB_KEY);
+    if (!lockAcquired) {
+      this.logger.log(`BGG top catalog import skipped (${trigger}): already running`);
+      return { status: 'skipped', reason: 'already_running' };
+    }
+
+    try {
+      const state = await this.getOrCreateTopCatalogState();
+      const cooldownUntil = state.lastSuccessAt
+        ? new Date(state.lastSuccessAt.getTime() + ONE_WEEK_MS)
+        : null;
+      if (!force && cooldownUntil && cooldownUntil > now) {
+        return {
+          status: 'skipped',
+          reason: 'cooldown',
+          nextEligibleAt: cooldownUntil.toISOString(),
+        };
+      }
+
+      state.lastAttemptAt = now;
+      state.lastAttemptStatus = null;
+      state.lastAttemptMessage = null;
+      await this.bggCatalogSyncRepo.save(state);
+
+      try {
+        const result = await this.importTopRankedGames(limit);
+        state.lastAttemptAt = new Date();
+        state.lastAttemptStatus = 'success';
+        state.lastAttemptMessage = `Imported ${result.imported} / fetched ${result.fetched}`;
+        state.lastSuccessAt = state.lastAttemptAt;
+        await this.bggCatalogSyncRepo.save(state);
+        return { status: 'executed', ...result };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown catalog import error';
+        state.lastAttemptAt = new Date();
+        state.lastAttemptStatus = 'failed';
+        state.lastAttemptMessage = message;
+        await this.bggCatalogSyncRepo.save(state);
+        throw error;
+      }
+    } finally {
+      await this.releasePgLock(TOP_CATALOG_JOB_KEY);
+    }
+  }
+
+  async shouldRunTopCatalogImportNow(): Promise<{
+    shouldRun: boolean;
+    nextEligibleAt?: string;
+  }> {
+    const state = await this.bggCatalogSyncRepo.findOne({
+      where: { jobKey: TOP_CATALOG_JOB_KEY },
+    });
+    if (!state?.lastSuccessAt) return { shouldRun: true };
+    const nextEligibleAt = new Date(state.lastSuccessAt.getTime() + ONE_WEEK_MS);
+    return {
+      shouldRun: nextEligibleAt <= new Date(),
+      nextEligibleAt: nextEligibleAt.toISOString(),
+    };
+  }
+
+  async repairIncompleteCatalogData(limit = 200): Promise<{
+    scanned: number;
+    repaired: number;
+  }> {
+    const ids = await this.gamesService.getIncompleteBggIds(limit);
+    if (!ids.length) return { scanned: 0, repaired: 0 };
+    const details = await this.fetchThingDetails(ids);
+    let repaired = 0;
+    for (const d of details) {
+      await this.gamesService.findOrCreateByBggId(d.bggId, {
+        title: d.title,
+        imageUrl: d.imageUrl,
+        thumbnailUrl: d.thumbnailUrl,
+        bggRating: d.bggRating,
+        weight: d.weight,
+        minPlayers: d.minPlayers,
+        maxPlayers: d.maxPlayers,
+        playingTime: d.playingTime,
+        yearPublished: d.yearPublished,
+        bggPlayerCountPoll: d.bggPlayerCountPoll,
+      });
+      repaired++;
+    }
+    return { scanned: ids.length, repaired };
+  }
+
+  async getAdminCatalogStats(): Promise<{
+    syncState: {
+      lastSuccessAt: string | null;
+      lastAttemptAt: string | null;
+      lastAttemptStatus: 'success' | 'failed' | null;
+      lastAttemptMessage: string | null;
+      nextEligibleAt: string | null;
+    };
+    quality: {
+      total: number;
+      missingRating: number;
+      missingWeight: number;
+      missingYear: number;
+      missingPoll: number;
+      missingPlayingTime: number;
+    };
+  }> {
+    const state = await this.bggCatalogSyncRepo.findOne({
+      where: { jobKey: TOP_CATALOG_JOB_KEY },
+    });
+    const quality = await this.gamesService.getCatalogQualityStats();
+    const nextEligibleAt = state?.lastSuccessAt
+      ? new Date(state.lastSuccessAt.getTime() + ONE_WEEK_MS).toISOString()
+      : null;
+    return {
+      syncState: {
+        lastSuccessAt: state?.lastSuccessAt?.toISOString() || null,
+        lastAttemptAt: state?.lastAttemptAt?.toISOString() || null,
+        lastAttemptStatus: state?.lastAttemptStatus || null,
+        lastAttemptMessage: state?.lastAttemptMessage || null,
+        nextEligibleAt,
+      },
+      quality,
+    };
   }
 
   private parseBggSearchXml(
@@ -261,6 +455,8 @@ export class BggService {
       title: string;
       thumbnailUrl?: string;
       imageUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
@@ -274,6 +470,8 @@ export class BggService {
       title: string;
       thumbnailUrl?: string;
       imageUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
@@ -306,6 +504,8 @@ export class BggService {
     title: string;
     thumbnailUrl?: string;
     imageUrl?: string;
+    bggRating?: number;
+    weight?: number;
     minPlayers?: number;
     maxPlayers?: number;
     playingTime?: number;
@@ -317,6 +517,8 @@ export class BggService {
       title: string;
       thumbnailUrl?: string;
       imageUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
@@ -343,6 +545,8 @@ export class BggService {
         : `Game ${bggId}`;
       const thumbnailUrl = this.extractTag(body, 'thumbnail');
       const imageUrl = this.extractTag(body, 'image');
+      const bggRating = this.extractAverageRating(body);
+      const weight = this.extractAverageWeight(body);
       const minPlayers = this.extractNumAttr(body, 'minplayers');
       const maxPlayers = this.extractNumAttr(body, 'maxplayers');
       const playingTime = this.extractNumAttr(body, 'playingtime');
@@ -354,6 +558,8 @@ export class BggService {
         title,
         thumbnailUrl,
         imageUrl,
+        bggRating,
+        weight,
         minPlayers,
         maxPlayers,
         playingTime,
@@ -365,12 +571,153 @@ export class BggService {
     return results;
   }
 
+  private async fetchTopRankedBggIds(limit: number): Promise<number[]> {
+    const fromBrowse = await this.fetchTopRankedBggIdsFromBrowsePages(limit);
+    if (fromBrowse.length > 0) return fromBrowse;
+
+    this.logger.warn(
+      'BGG browse rank pages unavailable; falling back to curated CSV snapshot',
+    );
+    return this.fetchTopRankedBggIdsFromCsvSnapshot(
+      BGG_TOP_CSV_SNAPSHOT_URL,
+      limit,
+    );
+  }
+
+  private extractRankedBggIdsFromBrowseHtml(html: string): number[] {
+    const ids: number[] = [];
+    const seen = new Set<number>();
+    const linkRegex = /href="\/boardgame\/(\d+)\/[^"]*"/g;
+    let linkMatch: RegExpExecArray | null;
+
+    while ((linkMatch = linkRegex.exec(html)) !== null) {
+      const id = Number.parseInt(linkMatch[1], 10);
+      if (Number.isNaN(id) || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+
+    return ids;
+  }
+
+  private async fetchTopRankedBggIdsFromBrowsePages(
+    limit: number,
+  ): Promise<number[]> {
+    const rankedIds: number[] = [];
+    const seen = new Set<number>();
+    const perPage = 100;
+    const maxPages = Math.ceil(limit / perPage);
+    const headers: Record<string, string> = {
+      ...this.getBggHeaders(),
+      'User-Agent': 'what2play-bot/1.0 (+https://what2play.games)',
+      Accept: 'text/html,application/xhtml+xml',
+    };
+
+    for (let page = 1; page <= maxPages && rankedIds.length < limit; page++) {
+      const url = `https://boardgamegeek.com/browse/boardgame/page/${page}`;
+      try {
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+          this.logger.warn(
+            `Failed fetching BGG top page ${page}: HTTP ${response.status}`,
+          );
+          continue;
+        }
+        const html = await response.text();
+        const pageIds = this.extractRankedBggIdsFromBrowseHtml(html);
+        for (const id of pageIds) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          rankedIds.push(id);
+          if (rankedIds.length >= limit) break;
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'unknown error';
+        this.logger.warn(`Failed fetching BGG top page ${page}: ${message}`);
+      }
+    }
+
+    return rankedIds.slice(0, limit);
+  }
+
+  private async fetchTopRankedBggIdsFromCsvSnapshot(
+    csvUrl: string,
+    limit: number,
+  ): Promise<number[]> {
+    const response = await fetch(csvUrl, {
+      headers: {
+        'User-Agent': 'what2play-bot/1.0 (+https://what2play.games)',
+        Accept: 'text/csv,text/plain',
+      },
+    });
+    if (!response.ok) {
+      throw new BadRequestException(
+        `Failed fetching fallback ranked snapshot (${response.status})`,
+      );
+    }
+    const csv = await response.text();
+    const lines = csv.split(/\r?\n/);
+    if (lines.length <= 1) return [];
+
+    const header = lines[0].split(',');
+    const gameIdIndex = header.indexOf('game_id');
+    if (gameIdIndex < 0) return [];
+
+    const output: number[] = [];
+    const seen = new Set<number>();
+    for (let i = 1; i < lines.length && output.length < limit; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const cols = line.split(',');
+      const raw = cols[gameIdIndex]?.trim();
+      if (!raw) continue;
+      const id = Number.parseInt(raw, 10);
+      if (Number.isNaN(id) || seen.has(id)) continue;
+      seen.add(id);
+      output.push(id);
+    }
+    return output;
+  }
+
+  private async getOrCreateTopCatalogState(): Promise<BggCatalogSync> {
+    const existing = await this.bggCatalogSyncRepo.findOne({
+      where: { jobKey: TOP_CATALOG_JOB_KEY },
+    });
+    if (existing) return existing;
+    return this.bggCatalogSyncRepo.save(
+      this.bggCatalogSyncRepo.create({
+        jobKey: TOP_CATALOG_JOB_KEY,
+        lastAttemptAt: null,
+        lastAttemptStatus: null,
+        lastAttemptMessage: null,
+        lastSuccessAt: null,
+      }),
+    );
+  }
+
+  private async tryAcquirePgLock(lockName: string): Promise<boolean> {
+    const rows: Array<{ locked: boolean }> = await this.dataSource.query(
+      'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+      [lockName],
+    );
+    return Boolean(rows?.[0]?.locked);
+  }
+
+  private async releasePgLock(lockName: string): Promise<void> {
+    await this.dataSource.query('SELECT pg_advisory_unlock(hashtext($1))', [
+      lockName,
+    ]);
+  }
+
   private async fetchBggCollection(username: string): Promise<
     Array<{
       bggId: number;
       title: string;
       imageUrl?: string;
       thumbnailUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
@@ -424,6 +771,8 @@ export class BggService {
     title: string;
     imageUrl?: string;
     thumbnailUrl?: string;
+    bggRating?: number;
+    weight?: number;
     minPlayers?: number;
     maxPlayers?: number;
     playingTime?: number;
@@ -438,6 +787,8 @@ export class BggService {
       title: string;
       imageUrl?: string;
       thumbnailUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
@@ -507,12 +858,62 @@ export class BggService {
     return m ? parseInt(m[1], 10) : undefined;
   }
 
+  private extractAverageRating(block: string): number | undefined {
+    const match = /<average[^>]*value="([\d.]+)"/.exec(block);
+    if (!match) return undefined;
+    const parsed = Number.parseFloat(match[1]);
+    if (Number.isNaN(parsed)) return undefined;
+    return parsed;
+  }
+
+  private extractAverageWeight(block: string): number | undefined {
+    const match = /<averageweight[^>]*value="([\d.]+)"/.exec(block);
+    if (!match) return undefined;
+    const parsed = Number.parseFloat(match[1]);
+    if (Number.isNaN(parsed)) return undefined;
+    return parsed;
+  }
+
+  private async enrichWithThingDetails<
+    T extends {
+      bggId: number;
+      minPlayers?: number;
+      maxPlayers?: number;
+      playingTime?: number;
+      yearPublished?: number;
+      bggRating?: number;
+      weight?: number;
+      bggPlayerCountPoll?: Record<string, BggPlayerCountPollEntry>;
+    },
+  >(games: T[]): Promise<T[]> {
+    if (!games.length) return games;
+    const details = await this.fetchThingDetails(games.map((g) => g.bggId));
+    if (!details.length) return games;
+    const byId = new Map(details.map((d) => [d.bggId, d]));
+    return games.map((game) => {
+      const detail = byId.get(game.bggId);
+      if (!detail) return game;
+      return {
+        ...game,
+        minPlayers: detail.minPlayers ?? game.minPlayers,
+        maxPlayers: detail.maxPlayers ?? game.maxPlayers,
+        playingTime: detail.playingTime ?? game.playingTime,
+        yearPublished: detail.yearPublished ?? game.yearPublished,
+        bggRating: detail.bggRating ?? game.bggRating,
+        weight: detail.weight ?? game.weight,
+        bggPlayerCountPoll: detail.bggPlayerCountPoll ?? game.bggPlayerCountPoll,
+      };
+    });
+  }
+
   private async enrichWithThingMetadata(
     games: Array<{
       bggId: number;
       title: string;
       imageUrl?: string;
       thumbnailUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
@@ -528,6 +929,8 @@ export class BggService {
       title: string;
       imageUrl?: string;
       thumbnailUrl?: string;
+      bggRating?: number;
+      weight?: number;
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;

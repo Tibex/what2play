@@ -7,6 +7,35 @@ import { useAuthStore } from '@/lib/store';
 import type { GameEvent, PaginatedResponse, User } from '@/lib/types';
 
 type AdminTab = 'users' | 'events';
+type AdminCatalogSyncResult = {
+  status: 'executed' | 'skipped';
+  reason?: 'cooldown' | 'already_running';
+  imported?: number;
+  fetched?: number;
+  requested?: number;
+  nextEligibleAt?: string;
+};
+type AdminCatalogRepairResult = {
+  scanned: number;
+  repaired: number;
+};
+type AdminCatalogStats = {
+  syncState: {
+    lastSuccessAt: string | null;
+    lastAttemptAt: string | null;
+    lastAttemptStatus: 'success' | 'failed' | null;
+    lastAttemptMessage: string | null;
+    nextEligibleAt: string | null;
+  };
+  quality: {
+    total: number;
+    missingRating: number;
+    missingWeight: number;
+    missingYear: number;
+    missingPoll: number;
+    missingPlayingTime: number;
+  };
+};
 
 export default function AdminPage() {
   const { user } = useAuthStore();
@@ -23,6 +52,10 @@ export default function AdminPage() {
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [pendingUserDelete, setPendingUserDelete] = useState<User | null>(null);
   const [pendingEventDelete, setPendingEventDelete] = useState<GameEvent | null>(null);
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [repairingCatalog, setRepairingCatalog] = useState(false);
+  const [catalogSyncMessage, setCatalogSyncMessage] = useState('');
+  const [catalogStats, setCatalogStats] = useState<AdminCatalogStats | null>(null);
 
   const loadUsers = useCallback(async () => {
     const data = await api.get<PaginatedResponse<User>>(
@@ -70,20 +103,77 @@ export default function AdminPage() {
     [loadEvents],
   );
 
+  const loadCatalogStats = useCallback(async () => {
+    const data = await api.get<AdminCatalogStats>('/bgg/admin/catalog-stats');
+    setCatalogStats(data);
+  }, []);
+
+  const syncTopCatalogNow = useCallback(async () => {
+    setSyncingCatalog(true);
+    setError('');
+    setCatalogSyncMessage('');
+    try {
+      const result = await api.post<AdminCatalogSyncResult>(
+        '/bgg/admin/import-top-catalog?limit=500',
+      );
+      if (result.status === 'executed') {
+        setCatalogSyncMessage(
+          `Catalog sync finished: imported ${result.imported ?? 0} games (fetched ${result.fetched ?? 0}).`,
+        );
+      } else {
+        const reason =
+          result.reason === 'already_running'
+            ? 'a sync is already running'
+            : 'cooldown active';
+        setCatalogSyncMessage(`Catalog sync skipped: ${reason}.`);
+      }
+      await loadCatalogStats();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to trigger top catalog sync',
+      );
+    } finally {
+      setSyncingCatalog(false);
+    }
+  }, [loadCatalogStats]);
+
+  const repairIncompleteCatalog = useCallback(async () => {
+    setRepairingCatalog(true);
+    setError('');
+    setCatalogSyncMessage('');
+    try {
+      const result = await api.post<AdminCatalogRepairResult>(
+        '/bgg/admin/repair-incomplete-catalog?limit=500',
+      );
+      setCatalogSyncMessage(
+        `Catalog repair finished: repaired ${result.repaired} of ${result.scanned} scanned incomplete games.`,
+      );
+      await loadCatalogStats();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to trigger incomplete catalog repair',
+      );
+    } finally {
+      setRepairingCatalog(false);
+    }
+  }, [loadCatalogStats]);
+
   useEffect(() => {
     if (user?.role !== 'admin') return;
     setLoading(true);
     setError('');
     void (async () => {
       try {
-        await Promise.all([loadUsers(), loadEvents()]);
+        await Promise.all([loadUsers(), loadEvents(), loadCatalogStats()]);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load admin data');
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadEvents, loadUsers, user?.role]);
+  }, [loadCatalogStats, loadEvents, loadUsers, user?.role]);
 
   if (user?.role !== 'admin') {
     return (
@@ -97,8 +187,55 @@ export default function AdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin</h1>
-        <p className="wt-muted text-sm">Users and events overview</p>
+        <div className="flex items-center gap-3">
+          <p className="wt-muted text-sm">Users and events overview</p>
+          <button
+            type="button"
+            onClick={() => void syncTopCatalogNow()}
+            disabled={syncingCatalog}
+            className="wt-btn rounded border px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            {syncingCatalog ? 'Syncing BGG Top 500...' : 'Sync BGG Top 500'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void repairIncompleteCatalog()}
+            disabled={repairingCatalog}
+            className="wt-btn rounded border px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            {repairingCatalog ? 'Repairing Metadata...' : 'Repair Incomplete'}
+          </button>
+        </div>
       </div>
+      {catalogSyncMessage ? (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 text-sm">
+          {catalogSyncMessage}
+        </div>
+      ) : null}
+      {catalogStats ? (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 text-sm">
+          <div className="font-medium">Catalog quality</div>
+          <div className="wt-muted">
+            Total: {catalogStats.quality.total} | Missing rating:{' '}
+            {catalogStats.quality.missingRating} | Missing weight:{' '}
+            {catalogStats.quality.missingWeight} | Missing year:{' '}
+            {catalogStats.quality.missingYear} | Missing poll:{' '}
+            {catalogStats.quality.missingPoll} | Missing playtime:{' '}
+            {catalogStats.quality.missingPlayingTime}
+          </div>
+          <div className="wt-muted">
+            Last success:{' '}
+            {catalogStats.syncState.lastSuccessAt
+              ? new Date(catalogStats.syncState.lastSuccessAt).toLocaleString()
+              : 'never'}
+            {' | '}Last attempt:{' '}
+            {catalogStats.syncState.lastAttemptAt
+              ? new Date(catalogStats.syncState.lastAttemptAt).toLocaleString()
+              : 'never'}
+            {' | '}Status: {catalogStats.syncState.lastAttemptStatus || 'n/a'}
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-2 border-b border-[var(--border)]">
         <button

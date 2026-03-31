@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, type TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { GamesModule } from './games/games.module';
@@ -15,11 +17,28 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { createTypeOrmOptions } from './database/typeorm.config';
 
+function resolveEnvFiles(): string[] {
+  const candidates = [
+    join(process.cwd(), '.env.local'),
+    join(process.cwd(), '.env'),
+    join(__dirname, '..', '.env.local'),
+    join(__dirname, '..', '.env'),
+  ];
+  const seen = new Set<string>();
+  const existing: string[] = [];
+  for (const file of candidates) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    if (existsSync(file)) existing.push(file);
+  }
+  return existing.length ? existing : ['.env.local', '.env'];
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: resolveEnvFiles(),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

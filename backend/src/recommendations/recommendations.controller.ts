@@ -6,8 +6,10 @@ import {
   Param,
   Body,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RecommendationsService } from './recommendations.service';
 
@@ -47,5 +49,22 @@ export class RecommendationsController {
     @Param('candidateId') candidateId: string,
   ) {
     return this.recommendationsService.removeCandidate(eventId, candidateId);
+  }
+
+  @Post('telemetry')
+  @ApiOperation({ summary: 'Track recommendation interaction telemetry' })
+  async trackTelemetry(
+    @Param('eventId') eventId: string,
+    @Req() req: Request & { user: { id: string } },
+    @Body()
+    body: { eventName: string; payload?: Record<string, unknown> },
+  ) {
+    await this.recommendationsService.trackTelemetry(
+      eventId,
+      req.user?.id,
+      body.eventName,
+      body.payload,
+    );
+    return { ok: true };
   }
 }

@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import type { CalendarAccount, SyncAccount, User } from '@/lib/types';
 
 const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
-const WEIGHT_OPTIONS = ['1', '2', '3', '4', '5'];
+const WEIGHT_OPTIONS = ['1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0'];
 const BGG_CONTROL_HEIGHT_CLASS = 'h-[46px]';
 
 function durationLabel(mins: number): string {
@@ -16,6 +16,13 @@ function durationLabel(mins: number): string {
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h${m}m`;
+}
+
+function normalizeWeightForForm(value: unknown): string {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '2.5';
+  const clamped = Math.min(5, Math.max(1, parsed));
+  return clamped.toFixed(1);
 }
 
 export default function ProfilePage() {
@@ -57,7 +64,7 @@ export default function ProfilePage() {
         setForm({
           name: u.name || '',
           preferredDuration: u.preferredDuration || 180,
-          preferredWeight: String(u.preferredWeight || '2.5'),
+          preferredWeight: normalizeWeightForForm(u.preferredWeight),
         });
       } finally {
         setLoading(false);
@@ -89,10 +96,16 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.patch('/users/me', {
+      const updated = await api.patch<User>('/users/me', {
         ...form,
         preferredDuration: Number(form.preferredDuration),
         preferredWeight: Number(form.preferredWeight),
+      });
+      setProfile(updated);
+      setForm({
+        name: updated.name || '',
+        preferredDuration: updated.preferredDuration || 180,
+        preferredWeight: normalizeWeightForForm(updated.preferredWeight),
       });
       toast.success('Profile updated');
     } catch {
@@ -253,7 +266,7 @@ export default function ProfilePage() {
             >
               {WEIGHT_OPTIONS.map((weight) => (
                 <option key={weight} value={weight}>
-                  {weight}
+                  {Number(weight).toFixed(1)}
                 </option>
               ))}
             </select>
