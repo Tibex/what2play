@@ -475,46 +475,74 @@ function rowToGame(row: DemoGameRow, index: number): Game {
 
 const HERO_PREVIEW_TITLES = ['Wingspan', 'Terraforming Mars', 'Azul'] as const;
 
-/** Short labels in the same voice as in-app recommendation pills (hero teaser only). */
-const HERO_PILL_POOL = [
-  '4p fit',
-  '70m',
-  'BGG 8.0',
-  'Weight fit',
-  'Best 4p',
-  'Group +',
-  'Time +',
-  'High conf',
-  'Owned',
-];
-
-function hashSeed(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+function toHeroPill(key: string, value: string): string | null {
+  if (!value) return null;
+  if (key === 'players') {
+    const match = value.match(/Fits (\d+) player/i);
+    if (match) return `${match[1]}p fit`;
+    return 'Player fit';
   }
-  return h >>> 0;
+  if (key === 'time') {
+    const match = value.match(/~(\d+)\s*min/i);
+    if (match) return 'Time fit';
+    return 'Time fit';
+  }
+  if (key === 'bgg') {
+    const match = value.match(/(\d+\.\d+)/);
+    if (match) return `BGG ${match[1]}`;
+    return 'BGG strong';
+  }
+  if (key === 'complexity') {
+    const match = value.match(/Complexity fit:\s*([\d.]+)\s*vs group pref\s*([\d.]+)/i);
+    if (!match) return 'Weight fit';
+    const gameWeight = Number(match[1]);
+    const preferredWeight = Number(match[2]);
+    if (!Number.isFinite(gameWeight) || !Number.isFinite(preferredWeight)) {
+      return 'Weight fit';
+    }
+    const delta = Math.abs(gameWeight - preferredWeight);
+    if (delta <= 0.3) return 'Weight match';
+    if (delta <= 0.8) return 'Near weight';
+    return gameWeight > preferredWeight ? 'Heavier pick' : 'Lighter pick';
+  }
+  if (key === 'best_players') {
+    const p = value.match(/(\d+)p/i);
+    if (p) return `Best ${p[1]}p`;
+    return 'Best count';
+  }
+  return null;
 }
 
-/** Three distinct pill strings per game, stable for SSR (seeded from game id). */
-function pickHeroPreviewPills(seed: string): string[] {
-  const out: string[] = [];
-  const used = new Set<string>();
-  let h = hashSeed(seed);
-  let guard = 0;
-  while (out.length < 3 && guard < 64) {
-    const item = HERO_PILL_POOL[h % HERO_PILL_POOL.length];
-    if (!used.has(item)) {
-      used.add(item);
-      out.push(item);
-    }
-    h = Math.imul(h, 1664525) + 1013904223;
-    guard++;
+/** 3-4 concise pills derived from recommendation explanation style. */
+function pickHeroPreviewPills(row: DemoGameRow): string[] {
+  const explanation = buildDemoExplanation(row, 4, 'medium');
+  const lowerTitle = row.title.toLowerCase();
+
+  // Explicit overrides for the hero trio to keep messaging stable.
+  if (lowerTitle.includes('wingspan')) {
+    return ['BGG 4p: Best 32%, Rec 54%', 'Group favorite', 'BGG 8.0'];
   }
-  while (out.length < 3) {
-    out.push(HERO_PILL_POOL[out.length % HERO_PILL_POOL.length]);
+  if (lowerTitle.includes('terraforming mars')) {
+    return ['BGG 4p: Best 39%, Rec 51%', 'Weight fit', 'BGG 8.4'];
   }
-  return out.slice(0, 3);
+  if (lowerTitle.includes('azul')) {
+    return ['BGG 4p: Best 26%, Rec 64%', 'Time fit', 'BGG 7.8'];
+  }
+
+  const isTerraformingMars = lowerTitle.includes('terraforming mars');
+  const orderedKeys: Array<keyof typeof explanation> = isTerraformingMars
+    ? ['players', 'complexity', 'bgg', 'time', 'best_players']
+    : ['players', 'time', 'bgg', 'best_players'];
+  let pills = orderedKeys
+    .map((key) => toHeroPill(key, explanation[key] ?? ''))
+    .filter((pill): pill is string => Boolean(pill));
+
+  if (isTerraformingMars) {
+    pills = pills.map((pill) => (pill === 'Near weight' ? 'Weight fit' : pill));
+  }
+
+  const unique = Array.from(new Set(pills));
+  return unique.slice(0, 4);
 }
 
 export type HeroPreviewRow = { game: Game; score: number; pills: string[] };
@@ -530,7 +558,7 @@ export function getHeroRecommendationPreview(): HeroPreviewRow[] {
     return {
       game,
       score: 92 - index * 4,
-      pills: pickHeroPreviewPills(game.id),
+      pills: pickHeroPreviewPills(row),
     };
   });
 }
