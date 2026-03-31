@@ -173,7 +173,7 @@ export function GuestRecommendationDemo() {
             <div className="mt-8 rounded-xl border border-[var(--primary)]/25 bg-[var(--primary-soft)]/80 p-4 sm:p-5">
               <p className="text-sm text-[var(--foreground)] leading-relaxed">
                 These picks are <strong>illustrative</strong> for your constraints.{' '}
-                <strong>Sign up</strong> to get recommendations from your group&apos;s libraries, RSVP-aware weighting, voting, and
+                <strong>Sign up</strong>{' '}to get recommendations from your group&apos;s libraries, RSVP-aware weighting, voting, and
                 feedback that improves the next night.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
