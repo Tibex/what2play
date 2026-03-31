@@ -11,9 +11,19 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#365fb3',
     icons: [
       {
-        src: '/meeple.svg',
+        src: '/meeple-photo-full-64.png',
+        sizes: '64x64',
+        type: 'image/png',
+      },
+      {
+        src: '/meeple-photo-full-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        src: '/meeple-photo-full.png',
         sizes: '512x512',
-        type: 'image/svg+xml',
+        type: 'image/png',
       },
     ],
   };

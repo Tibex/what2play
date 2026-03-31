@@ -1,6 +1,13 @@
-const CACHE_NAME = 'bgn-pwa-v1';
+const CACHE_NAME = 'bgn-pwa-v2';
 const OFFLINE_URL = '/offline.html';
-const ASSETS_TO_CACHE = [OFFLINE_URL, '/', '/manifest.webmanifest'];
+const ASSETS_TO_CACHE = [
+  OFFLINE_URL,
+  '/',
+  '/manifest.webmanifest',
+  '/meeple-photo-full.png',
+  '/meeple-photo-full-192.png',
+  '/meeple-photo-full-64.png',
+];
 
 globalThis.addEventListener('install', (event) => {
   event.waitUntil(
@@ -44,14 +51,13 @@ globalThis.addEventListener('fetch', (event) => {
 
       return fetch(request)
         .then((response) => {
-          if (response?.status !== 200 || response.type !== 'basic') {
-            return response;
+          if (response?.status === 200 && response.type === 'basic') {
+            const responseClone = response.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(request, responseClone))
+              .catch(() => {});
           }
-          const responseClone = response.clone();
-          caches
-            .open(CACHE_NAME)
-            .then((cache) => cache.put(request, responseClone))
-            .catch(() => undefined);
           return response;
         })
         .catch(() => caches.match(OFFLINE_URL));
@@ -68,12 +74,12 @@ globalThis.addEventListener('push', (event) => {
   const options = {
     body,
     data: { url },
-    icon: '/meeple.svg',
-    badge: '/meeple.svg',
+    icon: '/meeple-photo-full.png',
+    badge: '/meeple-photo-full-64.png',
   };
 
   event.waitUntil(
-    self.registration.showNotification(title, options),
+    globalThis.registration.showNotification(title, options),
   );
 });
 
@@ -81,5 +87,5 @@ globalThis.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification?.data?.url || '/';
 
-  event.waitUntil(self.clients.openWindow(url));
+  event.waitUntil(globalThis.clients.openWindow(url));
 });

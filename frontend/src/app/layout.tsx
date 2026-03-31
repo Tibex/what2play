@@ -16,8 +16,14 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: '/meeple.svg',
-    apple: '/meeple.svg',
+    shortcut: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
+      { url: '/meeple-photo-full-64.png', sizes: '64x64', type: 'image/png' },
+      { url: '/meeple-photo-full-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/meeple-photo-full.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/meeple-photo-full-192.png',
   },
 };
 
