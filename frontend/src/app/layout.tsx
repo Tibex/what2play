@@ -2,13 +2,53 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import ToastProvider from '@/components/ToastProvider';
 import PwaRegistration from '@/components/PwaRegistration';
+import { getSiteUrl } from '@/lib/seo';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
+const siteUrl = getSiteUrl();
+const googleVerification = process.env.GOOGLE_SITE_VERIFICATION;
+
 export const metadata: Metadata = {
-  title: 'What2Play',
-  description: 'Plan game nights, vote on games, and track your collection',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: 'What2Play | Board Game Night Planner',
+    template: '%s | What2Play',
+  },
+  description:
+    'Plan board game nights, gather your group, vote on options, and pick the best game for the table.',
+  applicationName: 'What2Play',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    title: 'What2Play | Board Game Night Planner',
+    description:
+      'Plan board game nights, gather your group, vote on options, and pick the best game for the table.',
+    siteName: 'What2Play',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'What2Play | Board Game Night Planner',
+    description:
+      'Plan board game nights, gather your group, vote on options, and pick the best game for the table.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
+  verification: googleVerification ? { google: googleVerification } : undefined,
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,

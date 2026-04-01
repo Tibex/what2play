@@ -5,6 +5,7 @@ import Image from 'next/image';
 import GameCard from '@/components/GameCard';
 import { GuestRecommendationDemo } from './GuestRecommendationDemo';
 import { getHeroRecommendationPreview } from '@/lib/landing-demo-recommendations';
+import { KEYWORD_CLUSTERS } from '@/lib/keyword-clusters';
 
 function HeroRecommendationPreview() {
   const rows = getHeroRecommendationPreview();
@@ -49,6 +50,12 @@ export function LandingMarketing() {
           </Link>
           <nav className="flex items-center gap-2 sm:gap-3">
             <Link
+              href="/resources"
+              className="hidden sm:inline-flex px-3 py-2 text-sm font-semibold no-underline text-[var(--muted)] hover:text-[var(--primary)]"
+            >
+              Resources
+            </Link>
+            <Link
               href="/login"
               className="wt-btn wt-btn-secondary px-3 py-2 text-sm font-semibold no-underline text-[var(--foreground)]"
             >
@@ -70,7 +77,7 @@ export function LandingMarketing() {
                 <span className="text-[var(--primary)]"> Start playing.</span>
               </h1>
               <p className="mt-5 text-lg sm:text-xl wt-muted max-w-xl">
-                Your group&apos;s collections, real constraints, and a fair vote—so you pick a game everyone can get to the table and ejoy.
+                Your group&apos;s collections, real constraints, and a fair vote—so you pick a game everyone can get to the table and enjoy.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/register" className="wt-btn wt-btn-primary px-5 py-3 text-base font-semibold no-underline text-white">
@@ -170,6 +177,35 @@ export function LandingMarketing() {
           </div>
         </section>
 
+        <section id="resources" className="border-t border-[var(--border)] bg-[var(--paper)]/65">
+          <div className="wt-page px-4 sm:px-6 py-14 sm:py-16">
+            <div className="max-w-3xl">
+              <h2 className="text-2xl sm:text-3xl font-bold">Board game planning resources</h2>
+              <p className="mt-3 wt-muted">
+                Explore practical guides for planning, voting, recommendations, and BoardGameGeek-based collection workflows.
+              </p>
+            </div>
+            <ul className="mt-8 grid md:grid-cols-2 lg:grid-cols-3 gap-4 list-none p-0">
+              {KEYWORD_CLUSTERS.map((cluster) => (
+                <li key={cluster.id} className="wt-card p-5">
+                  <p className="wt-chip mb-3">{cluster.primaryKeyword}</p>
+                  <h3 className="font-semibold text-[var(--foreground)]">
+                    <Link href={cluster.path} className="hover:text-[var(--primary)]">
+                      {cluster.pageTitle}
+                    </Link>
+                  </h3>
+                  <p className="mt-2 text-sm wt-muted leading-relaxed">{cluster.summary}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-8">
+              <Link href="/resources" className="wt-btn wt-btn-secondary px-5 py-2.5 text-sm no-underline text-[var(--foreground)]">
+                Browse all guides
+              </Link>
+            </div>
+          </div>
+        </section>
+
         <section>
           <div className="wt-page px-4 sm:px-6 py-14 sm:py-16">
             <div className="grid md:grid-cols-3 gap-6">
@@ -208,6 +244,32 @@ export function LandingMarketing() {
             </p>
           </div>
         </section>
+
+        <section className="border-t border-[var(--border)]">
+          <div className="wt-page px-4 sm:px-6 py-12 sm:py-14 max-w-3xl">
+            <h2 className="text-xl sm:text-2xl font-bold text-center">Frequently asked questions</h2>
+            <div className="mt-8 space-y-4">
+              <details className="wt-card p-5" open>
+                <summary className="font-semibold">How does What2Play choose board game recommendations?</summary>
+                <p className="mt-2 text-sm wt-muted">
+                  Recommendations consider your attendee count, preferred complexity, time budget, and which games people can actually bring.
+                </p>
+              </details>
+              <details className="wt-card p-5">
+                <summary className="font-semibold">Can groups vote on which board game to play?</summary>
+                <p className="mt-2 text-sm wt-muted">
+                  Yes. Run ranked voting rounds so everyone can submit preferences and the group can lock a fair outcome.
+                </p>
+              </details>
+              <details className="wt-card p-5">
+                <summary className="font-semibold">Can I sync my BoardGameGeek collection?</summary>
+                <p className="mt-2 text-sm wt-muted">
+                  Yes. Connect your BoardGameGeek username, sync owned games, and use that collection in recommendations and event planning.
+                </p>
+              </details>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer className="border-t border-[var(--border)] bg-[var(--paper)] mt-auto">
@@ -219,6 +281,9 @@ export function LandingMarketing() {
             </Link>
             <Link href="/register" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
               Register
+            </Link>
+            <Link href="/resources" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
+              Guides
             </Link>
           </div>
         </div>
