@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-const FALLBACK_SITE_URL = 'https://what2play.app';
+const FALLBACK_SITE_URL = 'https://what2play.games';
 
 function normalizeSiteUrl(rawUrl: string): string {
   const withProtocol =
