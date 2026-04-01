@@ -219,7 +219,9 @@ describeIfDb('Event lifecycle (e2e)', () => {
       .set('Authorization', `Bearer ${outsider.accessToken}`)
       .expect(200);
     expect(
-      openDiscovery.body.some((event: { id: string }) => event.id === openEventId),
+      openDiscovery.body.some(
+        (event: { id: string }) => event.id === openEventId,
+      ),
     ).toBe(true);
 
     await request(app.getHttpServer())
