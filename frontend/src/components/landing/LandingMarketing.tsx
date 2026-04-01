@@ -285,6 +285,18 @@ export function LandingMarketing() {
             <Link href="/resources" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
               Guides
             </Link>
+            <Link href="/about" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
+              About
+            </Link>
+            <Link href="/contact" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
+              Contact
+            </Link>
+            <Link href="/privacy" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
+              Terms
+            </Link>
           </div>
         </div>
       </footer>

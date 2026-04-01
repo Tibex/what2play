@@ -68,6 +68,10 @@ export const KEYWORD_CLUSTERS: KeywordCluster[] = [
 
 export const INDEXABLE_MARKETING_PATHS = [
   '/',
+  '/about',
+  '/contact',
+  '/privacy',
+  '/terms',
   '/resources',
   ...KEYWORD_CLUSTERS.map((cluster) => cluster.path),
 ];
