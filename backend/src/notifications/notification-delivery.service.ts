@@ -62,7 +62,7 @@ export class NotificationDeliveryService {
           endpoint: null,
           payload,
         });
-    row.attempts += 1;
+    row.attempts = Number.isFinite(row.attempts) ? row.attempts + 1 : 1;
     row.lastAttemptAt = new Date();
     row.payload = payload;
     const configuredChannels: string[] = [];

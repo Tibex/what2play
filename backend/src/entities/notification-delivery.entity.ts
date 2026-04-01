@@ -32,7 +32,7 @@ export class NotificationDelivery {
   delivered: boolean;
 
   @Column({ default: 0 })
-  attempts: number;
+  attempts: number = 0;
 
   @Column({ type: 'text', nullable: true })
   lastError: string | null;
