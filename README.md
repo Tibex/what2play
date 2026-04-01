@@ -121,9 +121,10 @@ what2play/
 | POST/GET/DELETE | `/api/bgg/link` | BGG account linking |
 | POST | `/api/bgg/sync` | Sync BGG collection |
 | POST/GET | `/api/events` | Create/list events |
-| GET | `/api/events/open` | Browse open events |
+| GET | `/api/events/open` | Browse open events (auth required) |
 | GET/PATCH/DELETE | `/api/events/:id` | Event CRUD |
 | POST | `/api/events/:id/rsvp` | RSVP to event |
+| POST | `/api/events/:id/report` | Report open event |
 | POST | `/api/events/:id/invite-link` | Create invite link |
 | POST | `/api/events/:id/recommendations/generate` | Generate recommendations |
 | GET | `/api/events/:id/recommendations` | Get recommendations |

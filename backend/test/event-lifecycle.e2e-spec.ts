@@ -198,6 +198,70 @@ describeIfDb('Event lifecycle (e2e)', () => {
     expect(outcomeAnalytics.body.outcomes.totalFeedbackEntries).toBe(2);
   });
 
+  it('enforces open-event discovery and invite-only visibility rules', async () => {
+    const host = await registerUser('host-open');
+    const outsider = await registerUser('outsider-open');
+
+    const openEventRes = await request(app.getHttpServer())
+      .post('/api/events')
+      .set('Authorization', `Bearer ${host.accessToken}`)
+      .send({
+        title: 'Open Sunday Session',
+        dateTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        durationMinutes: 180,
+        type: 'open',
+      })
+      .expect(201);
+    const openEventId = openEventRes.body.id as string;
+
+    const openDiscovery = await request(app.getHttpServer())
+      .get('/api/events/open')
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(200);
+    expect(
+      openDiscovery.body.some((event: { id: string }) => event.id === openEventId),
+    ).toBe(true);
+
+    await request(app.getHttpServer())
+      .post(`/api/events/${openEventId}/rsvp`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .send({ status: 'going' })
+      .expect(201);
+
+    const inviteEventRes = await request(app.getHttpServer())
+      .post('/api/events')
+      .set('Authorization', `Bearer ${host.accessToken}`)
+      .send({
+        title: 'Private Invite Session',
+        dateTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+        durationMinutes: 120,
+        type: 'invite',
+      })
+      .expect(201);
+    const inviteEventId = inviteEventRes.body.id as string;
+
+    await request(app.getHttpServer())
+      .get(`/api/events/${inviteEventId}`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(404);
+
+    const inviteLinkRes = await request(app.getHttpServer())
+      .post(`/api/events/${inviteEventId}/invite-link`)
+      .set('Authorization', `Bearer ${host.accessToken}`)
+      .expect(201);
+    const inviteToken = inviteLinkRes.body.token as string;
+
+    await request(app.getHttpServer())
+      .post(`/api/events/invite/${inviteToken}/join`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .get(`/api/events/${inviteEventId}`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(200);
+  });
+
   async function registerUser(alias: string) {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')

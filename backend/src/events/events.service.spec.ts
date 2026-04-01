@@ -1,10 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { EventsService } from './events.service';
 import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
 import { EventInvite } from '../entities/event-invite.entity';
+import { EventReport } from '../entities/event-report.entity';
 import { FriendsService } from '../friends/friends.service';
 
 describe('EventsService', () => {
@@ -35,6 +41,12 @@ describe('EventsService', () => {
     create: jest.fn((value) => value),
   };
 
+  const mockEventReportsRepo = {
+    findOne: jest.fn(),
+    save: jest.fn((value) => Promise.resolve(value)),
+    create: jest.fn((value) => value),
+  };
+
   const mockFriendsService = {
     getFriendIds: jest.fn(),
   };
@@ -49,6 +61,10 @@ describe('EventsService', () => {
           useValue: mockAttendeesRepo,
         },
         { provide: getRepositoryToken(EventInvite), useValue: mockInvitesRepo },
+        {
+          provide: getRepositoryToken(EventReport),
+          useValue: mockEventReportsRepo,
+        },
         { provide: FriendsService, useValue: mockFriendsService },
       ],
     }).compile();
@@ -98,6 +114,157 @@ describe('EventsService', () => {
         }),
       );
       expect(mockAttendeesRepo.save).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('findByIdForUser', () => {
+    it('hides invite-only events from non-members', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e-private',
+        hostId: 'host-1',
+        type: 'invite',
+        attendees: [{ userId: 'u2' }],
+      });
+
+      await expect(
+        service.findByIdForUser('e-private', 'stranger'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('allows open events for authenticated users', async () => {
+      const event = {
+        id: 'e-open',
+        hostId: 'host-1',
+        type: 'open',
+        attendees: [],
+      };
+      mockEventsRepo.findOne.mockResolvedValue(event);
+
+      await expect(service.findByIdForUser('e-open', 'u2')).resolves.toEqual(
+        event,
+      );
+    });
+  });
+
+  describe('rsvp', () => {
+    it('blocks direct RSVP to invite-only event for non-attendees', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e1',
+        hostId: 'host-1',
+        type: 'invite',
+        status: 'planning',
+      });
+      mockAttendeesRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.rsvp('e1', 'u2', 'going')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(mockAttendeesRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('blocks joining open event outside planning status', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e-open',
+        hostId: 'host-1',
+        type: 'open',
+        status: 'voting',
+        capacity: 8,
+      });
+      mockAttendeesRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.rsvp('e-open', 'u2', 'going'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(mockAttendeesRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('returns conflict when open event is at capacity', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e-open',
+        hostId: 'host-1',
+        type: 'open',
+        status: 'planning',
+        capacity: 2,
+      });
+      mockAttendeesRepo.findOne.mockResolvedValue(null);
+      mockAttendeesRepo.count.mockResolvedValue(2);
+
+      await expect(
+        service.rsvp('e-open', 'u2', 'going'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(mockAttendeesRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('allows invite-link flow to join invite-only events', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e-invite',
+        hostId: 'host-1',
+        type: 'invite',
+        status: 'planning',
+        capacity: null,
+      });
+      mockAttendeesRepo.findOne.mockResolvedValue(null);
+      mockAttendeesRepo.count.mockResolvedValue(1);
+
+      await expect(
+        service.rsvp('e-invite', 'u2', 'going', undefined, 'invite_link'),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          eventId: 'e-invite',
+          userId: 'u2',
+          rsvpStatus: 'going',
+        }),
+      );
+      expect(mockAttendeesRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes non-host attendee when RSVP changes to not_going', async () => {
+      const event = {
+        id: 'e-open',
+        hostId: 'host-1',
+        type: 'open',
+        status: 'planning',
+        capacity: 6,
+      };
+      const attendee = {
+        id: 'attendee-1',
+        eventId: 'e-open',
+        userId: 'u2',
+        rsvpStatus: 'going',
+      };
+      mockEventsRepo.findOne.mockResolvedValue(event);
+      mockAttendeesRepo.findOne.mockResolvedValue(attendee);
+      mockAttendeesRepo.remove.mockResolvedValue(attendee);
+
+      const result = await service.rsvp('e-open', 'u2', 'not_going');
+
+      expect(mockAttendeesRepo.remove).toHaveBeenCalledWith(attendee);
+      expect(mockAttendeesRepo.save).not.toHaveBeenCalled();
+      expect(result.rsvpStatus).toBe('not_going');
+    });
+  });
+
+  describe('reportOpenEvent', () => {
+    it('deduplicates repeated reports by the same reporter', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e-open',
+        type: 'open',
+      });
+      mockEventReportsRepo.findOne.mockResolvedValue({
+        id: 'report-1',
+        createdAt: new Date('2026-03-01T10:00:00.000Z'),
+      });
+
+      const result = await service.reportOpenEvent('e-open', 'u2', {
+        reason: 'spam',
+      });
+
+      expect(result).toEqual({
+        reported: true,
+        deduped: true,
+        reportedAt: new Date('2026-03-01T10:00:00.000Z'),
+      });
+      expect(mockEventReportsRepo.save).not.toHaveBeenCalled();
     });
   });
 

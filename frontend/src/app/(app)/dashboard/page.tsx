@@ -72,6 +72,7 @@ function toMondayFirstIndex(day: number): number {
 
 export default function DashboardPage() {
   const [events, setEvents] = useState<GameEvent[]>([]);
+  const [openEvents, setOpenEvents] = useState<GameEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<DashboardView>('cards');
   const [monthCursor, setMonthCursor] = useState(() => {
@@ -82,12 +83,27 @@ export default function DashboardPage() {
   const [showPastEvents, setShowPastEvents] = useState(false);
 
   useEffect(() => {
-    api.get<GameEvent[]>('/events').then(setEvents).finally(() => setLoading(false));
+    void (async () => {
+      try {
+        const [userEvents, discoverable] = await Promise.all([
+          api.get<GameEvent[]>('/events'),
+          api.get<GameEvent[]>('/events/open', { showErrorToast: false }),
+        ]);
+        setEvents(userEvents);
+        setOpenEvents(discoverable);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const now = new Date();
   const isPastEvent = (event: GameEvent) =>
     event.status === 'completed' || new Date(event.dateTime) < now;
+  const userEventIds = useMemo(() => new Set(events.map((event) => event.id)), [events]);
+  const discoverableOpenEvents = openEvents.filter(
+    (event) => !userEventIds.has(event.id) && !isPastEvent(event),
+  );
   const upcoming = events.filter((event) => !isPastEvent(event));
   const past = events.filter((event) => isPastEvent(event));
   const eventsByDate = useMemo(() => {
@@ -144,7 +160,8 @@ export default function DashboardPage() {
   const selectedDayEvents = selectedDateKey ? eventsByDate.get(selectedDateKey) || [] : [];
   const selectedUpcoming = selectedDayEvents.filter((event) => !isPastEvent(event));
   const selectedPast = selectedDayEvents.filter((event) => isPastEvent(event));
-  const shouldShowEmptyState = events.length === 0;
+  const shouldShowEmptyState =
+    events.length === 0 && discoverableOpenEvents.length === 0;
   const shouldShowCards = !shouldShowEmptyState && view === 'cards';
   let content: React.ReactNode;
 
@@ -170,6 +187,21 @@ export default function DashboardPage() {
             <h2 className="wt-muted mb-4 text-lg font-semibold">Upcoming</h2>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
               {upcoming.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </section>
+        )}
+        {discoverableOpenEvents.length > 0 && (
+          <section className="mb-10">
+            <div className="mb-4">
+              <h2 className="wt-muted text-lg font-semibold">Open Events</h2>
+              <p className="wt-muted text-sm">
+                Public game nights you can preview before joining.
+              </p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
+              {discoverableOpenEvents.map((event) => (
                 <EventCard key={event.id} event={event} />
               ))}
             </div>

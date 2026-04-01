@@ -12,6 +12,7 @@ import { EventAttendee } from './event-attendee.entity';
 import { EventVote } from './event-vote.entity';
 import { EventFeedback } from './event-feedback.entity';
 import { SyncAccount } from './sync-account.entity';
+import { EventReport } from './event-report.entity';
 
 export const USER_ROLES = ['user', 'admin'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -77,4 +78,7 @@ export class User {
 
   @OneToMany(() => SyncAccount, (s) => s.user)
   syncAccounts: SyncAccount[];
+
+  @OneToMany(() => EventReport, (r) => r.reporter)
+  eventReports: EventReport[];
 }

@@ -13,6 +13,7 @@ import { EventInvite } from './event-invite.entity';
 import { EventGameCandidate } from './event-game-candidate.entity';
 import { EventVote } from './event-vote.entity';
 import { EventFeedback } from './event-feedback.entity';
+import { EventReport } from './event-report.entity';
 
 @Entity('events')
 export class Event {
@@ -102,4 +103,7 @@ export class Event {
 
   @OneToMany(() => EventFeedback, (f) => f.event)
   feedbacks: EventFeedback[];
+
+  @OneToMany(() => EventReport, (r) => r.event)
+  reports: EventReport[];
 }

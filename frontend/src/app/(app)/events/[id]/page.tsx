@@ -188,14 +188,10 @@ export default function EventDetailPage() {
       return;
     }
     try {
-      const cancellationReason =
-        status === 'not_going'
-          ? window.prompt(
-              'Optional: why are you cancelling? (transport, sick, conflict...)',
-            ) || undefined
-          : undefined;
-      await api.post(`/events/${id}/rsvp`, { status, cancellationReason });
-      toast.success(`RSVP updated to ${status}`);
+      await api.post(`/events/${id}/rsvp`, { status });
+      toast.success(
+        status === 'not_going' ? 'You left this event' : `RSVP updated to ${status}`,
+      );
       loadEvent();
     } catch { /* toast auto-shown */ }
   };

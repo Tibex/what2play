@@ -27,6 +27,7 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
 import { InviteFriendsDto } from './dto/invite-friends.dto';
 import { AdminListEventsQueryDto } from './dto/admin-list-events-query.dto';
+import { ReportEventDto } from './dto/report-event.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -64,6 +65,8 @@ export class EventsController {
   }
 
   @Get('open')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get public open events' })
   getOpenEvents() {
     return this.eventsService.findOpenEvents();
@@ -103,12 +106,24 @@ export class EventsController {
     return this.recommendationsService.getCandidates(inviteEvent.id);
   }
 
+  @Post(':id/report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Report open event for moderation review' })
+  reportEvent(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: ReportEventDto,
+  ) {
+    return this.eventsService.reportOpenEvent(id, req.user.id, dto);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get event details' })
-  getEvent(@Param('id') id: string) {
-    return this.eventsService.findById(id);
+  getEvent(@Param('id') id: string, @Request() req) {
+    return this.eventsService.findByIdForUser(id, req.user.id);
   }
 
   @Patch(':id')

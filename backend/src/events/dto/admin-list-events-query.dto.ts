@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsBooleanString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 const EVENT_STATUSES = [
   'planning',
@@ -32,4 +40,8 @@ export class AdminListEventsQueryDto {
   @IsOptional()
   @IsString()
   hostId?: string;
+
+  @IsOptional()
+  @IsBooleanString()
+  reportedOnly?: string;
 }

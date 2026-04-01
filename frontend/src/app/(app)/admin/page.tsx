@@ -49,6 +49,7 @@ export default function AdminPage() {
   );
   const [usersPage, setUsersPage] = useState(1);
   const [eventsPage, setEventsPage] = useState(1);
+  const [reportedOnly, setReportedOnly] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [pendingUserDelete, setPendingUserDelete] = useState<User | null>(null);
@@ -66,11 +67,18 @@ export default function AdminPage() {
   }, [usersPage]);
 
   const loadEvents = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: String(eventsPage),
+      pageSize: '20',
+    });
+    if (reportedOnly) {
+      params.set('reportedOnly', 'true');
+    }
     const data = await api.get<PaginatedResponse<GameEvent>>(
-      `/events/admin/all?page=${eventsPage}&pageSize=20`,
+      `/events/admin/all?${params.toString()}`,
     );
     setEventsData(data);
-  }, [eventsPage]);
+  }, [eventsPage, reportedOnly]);
 
   const deleteUser = useCallback(
     async (targetUser: User) => {
@@ -276,6 +284,22 @@ export default function AdminPage() {
         >
           Events
         </button>
+        {activeTab === 'events' ? (
+          <button
+            type="button"
+            onClick={() => {
+              setEventsPage(1);
+              setReportedOnly((prev) => !prev);
+            }}
+            className={`ml-auto mb-2 rounded border px-2 py-1 text-xs ${
+              reportedOnly
+                ? 'border-[var(--primary)] text-[var(--primary)]'
+                : 'border-[var(--border)] text-[var(--muted)]'
+            }`}
+          >
+            {reportedOnly ? 'Showing reported only' : 'Filter: reported only'}
+          </button>
+        ) : null}
       </div>
 
       {loading ? <p className="wt-muted">Loading...</p> : null}
@@ -339,6 +363,8 @@ export default function AdminPage() {
                   <th className="px-4 py-2 text-left">Host</th>
                   <th className="px-4 py-2 text-left">Status</th>
                   <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Reports</th>
+                  <th className="px-4 py-2 text-left">Last report</th>
                   <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
@@ -354,6 +380,12 @@ export default function AdminPage() {
                     <td className="px-4 py-2">{item.status}</td>
                     <td className="px-4 py-2">
                       {new Date(item.dateTime).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2">{item.openReportCount ?? 0}</td>
+                    <td className="px-4 py-2">
+                      {item.lastReportedAt
+                        ? new Date(item.lastReportedAt).toLocaleString()
+                        : '—'}
                     </td>
                     <td className="px-4 py-2">
                       <button
