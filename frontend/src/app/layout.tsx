@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import ToastProvider from '@/components/ToastProvider';
 import PwaRegistration from '@/components/PwaRegistration';
+import PublicHeader from '@/components/PublicHeader';
+import SiteFooter from '@/components/SiteFooter';
 import { getSiteUrl } from '@/lib/seo';
 import './globals.css';
 
@@ -75,7 +77,9 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased`}>
         <ToastProvider />
         <PwaRegistration />
+        <PublicHeader />
         {children}
+        <SiteFooter />
       </body>
     </html>
   );

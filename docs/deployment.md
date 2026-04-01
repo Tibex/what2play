@@ -12,6 +12,8 @@ This project is easiest to deploy as:
 2. Set root directory to `frontend`.
 3. Add environment variable:
    - `NEXT_PUBLIC_API_URL` = your backend URL (for example `https://api.what2play.games`)
+   - `NEXT_PUBLIC_SITE_URL` = your frontend canonical URL (for example `https://what2play.games`)
+   - `NEXT_PUBLIC_SUPPORT_EMAIL` = public support inbox shown on the contact page (for example `support@what2play.games`)
 4. Deploy.
 
 ## 2) Backend on Render
@@ -28,6 +30,7 @@ This project is easiest to deploy as:
    - `GOOGLE_CLIENT_ID` – Google OAuth client ID (optional, for Google login)
    - `GOOGLE_CLIENT_SECRET` – Google OAuth client secret
    - `GOOGLE_CALLBACK_URL` – e.g. `https://api.what2play.games/api/auth/google/callback`
+   - `SUPPORT_TICKET_TO` – destination inbox for public support tickets (for example `support@what2play.games`)
    - any other app-specific envs you use in `@nestjs/config`
 6. Deploy.
 
@@ -53,4 +56,3 @@ How to get them:
 - Render: Service Settings -> Deploy Hook
 
 Once set, every push to `main` triggers deployments automatically.
-

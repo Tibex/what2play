@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import GameCard from '@/components/GameCard';
 import { GuestRecommendationDemo } from './GuestRecommendationDemo';
 import { getHeroRecommendationPreview } from '@/lib/landing-demo-recommendations';
@@ -42,32 +41,6 @@ function HeroRecommendationPreview() {
 export function LandingMarketing() {
   return (
     <div className="min-h-screen flex flex-col text-[var(--foreground)]">
-      <header className="border-b border-[var(--border)] bg-[var(--paper)]/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="wt-page px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-[var(--primary)]">
-            <Image src="/meeple-photo-full-64.png" alt="" width={28} height={28} className="shrink-0" />
-            What2Play
-          </Link>
-          <nav className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/resources"
-              className="hidden sm:inline-flex px-3 py-2 text-sm font-semibold no-underline text-[var(--muted)] hover:text-[var(--primary)]"
-            >
-              Resources
-            </Link>
-            <Link
-              href="/login"
-              className="wt-btn wt-btn-secondary px-3 py-2 text-sm font-semibold no-underline text-[var(--foreground)]"
-            >
-              Sign in
-            </Link>
-            <Link href="/register" className="wt-btn wt-btn-primary px-3 py-2 text-sm font-semibold no-underline text-white">
-              Get started
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       <main className="flex-1">
         <section className="wt-page px-4 sm:px-6 py-14 sm:py-20 lg:py-24">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
@@ -272,34 +245,6 @@ export function LandingMarketing() {
         </section>
       </main>
 
-      <footer className="border-t border-[var(--border)] bg-[var(--paper)] mt-auto">
-        <div className="wt-page px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm wt-muted">
-          <span className="font-semibold text-[var(--foreground)]">What2Play</span>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-            <Link href="/login" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              Sign in
-            </Link>
-            <Link href="/register" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              Register
-            </Link>
-            <Link href="/resources" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              Guides
-            </Link>
-            <Link href="/about" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              About
-            </Link>
-            <Link href="/contact" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              Contact
-            </Link>
-            <Link href="/privacy" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              Privacy
-            </Link>
-            <Link href="/terms" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
-              Terms
-            </Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
