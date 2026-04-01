@@ -72,17 +72,20 @@ describeIfDb('Event lifecycle (e2e)', () => {
       })
       .expect(201);
     const eventId = createdEvent.body.id as string;
+    const inviteLink = await request(app.getHttpServer())
+      .post(`/api/events/${eventId}/invite-link`)
+      .set('Authorization', `Bearer ${host.accessToken}`)
+      .expect(201);
+    const inviteToken = inviteLink.body.token as string;
 
     await request(app.getHttpServer())
-      .post(`/api/events/${eventId}/rsvp`)
+      .post(`/api/events/invite/${inviteToken}/join`)
       .set('Authorization', `Bearer ${guestA.accessToken}`)
-      .send({ status: 'going' })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/api/events/${eventId}/rsvp`)
+      .post(`/api/events/invite/${inviteToken}/join`)
       .set('Authorization', `Bearer ${guestB.accessToken}`)
-      .send({ status: 'going' })
       .expect(201);
 
     const generated = await request(app.getHttpServer())
