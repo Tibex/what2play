@@ -21,7 +21,19 @@ type GoogleGlobal = typeof globalThis & {
   google?: {
     maps?: {
       places?: {
-        PlaceAutocompleteElement?: new (options?: Record<string, unknown>) => HTMLElement;
+        Autocomplete?: new (
+          inputField: HTMLInputElement,
+          options?: Record<string, unknown>,
+        ) => {
+          addListener?: (
+            eventName: string,
+            handler: () => void,
+          ) => { remove?: () => void };
+          getPlace?: () => {
+            formatted_address?: string;
+            name?: string;
+          };
+        };
       };
     };
   };
@@ -90,9 +102,7 @@ export default function EventForm({
   const [form, setForm] = useState<EventFormData>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [placesReady, setPlacesReady] = useState(false);
   const locationInputRef = useRef<HTMLInputElement | null>(null);
-  const placesContainerRef = useRef<HTMLDivElement | null>(null);
   const [datePart, timePart = '19:00'] = form.dateTime.split('T');
 
   const setDateTime = (nextDate: string, nextTime: string) => {
@@ -101,68 +111,40 @@ export default function EventForm({
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey || !placesContainerRef.current) return;
+    if (!apiKey || !locationInputRef.current) return;
 
     let cancelled = false;
-    let autocompleteElement: HTMLElement | null = null;
-    let onPlaceSelect: ((event: Event) => Promise<void>) | null = null;
+    let removeListener: (() => void) | null = null;
 
     loadGoogleMapsPlaces(apiKey)
       .then(() => {
         const google = getGoogleGlobal().google;
-        if (cancelled || !placesContainerRef.current || !google?.maps?.places)
+        if (cancelled || !locationInputRef.current || !google?.maps?.places)
           return;
 
-        const PlaceAutocompleteElement = google.maps.places.PlaceAutocompleteElement;
-        if (!PlaceAutocompleteElement) {
-          setPlacesReady(false);
-          return;
-        }
-
-        const element = new PlaceAutocompleteElement({
+        const Autocomplete = google.maps.places.Autocomplete;
+        if (!Autocomplete) return;
+        const autocomplete = new Autocomplete(locationInputRef.current, {
           types: ['geocode', 'establishment'],
+          fields: ['formatted_address', 'name'],
         });
-        element.setAttribute('placeholder', 'Search for a place');
-        element.classList.add('wt-input');
-        placesContainerRef.current.replaceChildren(element);
-        autocompleteElement = element;
-        onPlaceSelect = async (event: Event) => {
-          const e = event as Event & {
-            placePrediction?: { toPlace?: () => { fetchFields?: (opts: { fields: string[] }) => Promise<void>; formattedAddress?: string; displayName?: string } };
-            prediction?: { toPlace?: () => { fetchFields?: (opts: { fields: string[] }) => Promise<void>; formattedAddress?: string; displayName?: string } };
-          };
-          const prediction = e.placePrediction || e.prediction;
-          const place = prediction?.toPlace?.();
+        const handlePlaceChanged = () => {
+          const place = autocomplete.getPlace?.();
           if (!place) return;
-          if (place.fetchFields) {
-            await place.fetchFields({ fields: ['displayName', 'formattedAddress'] });
-          }
-          const nextLocation = place.formattedAddress || place.displayName || '';
+          const nextLocation = place.formatted_address || place.name || '';
           if (nextLocation) setForm((prev) => ({ ...prev, location: nextLocation }));
         };
-        element.addEventListener('gmp-select', onPlaceSelect as EventListener);
-        element.addEventListener('gmp-placeselect', onPlaceSelect as EventListener);
-        setPlacesReady(true);
+        const listener = autocomplete.addListener?.(
+          'place_changed',
+          handlePlaceChanged,
+        );
+        removeListener = () => listener?.remove?.();
       })
-      .catch(() => {
-        if (!cancelled) setPlacesReady(false);
-      });
+      .catch(() => undefined);
 
     return () => {
       cancelled = true;
-      if (autocompleteElement && onPlaceSelect) {
-        autocompleteElement.removeEventListener(
-          'gmp-select',
-          onPlaceSelect as EventListener,
-        );
-        autocompleteElement.removeEventListener(
-          'gmp-placeselect',
-          onPlaceSelect as EventListener,
-        );
-      }
-      if (placesContainerRef.current) {
-        placesContainerRef.current.replaceChildren();
-      }
+      removeListener?.();
     };
   }, []);
 
@@ -221,24 +203,14 @@ export default function EventForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Location</label>
-          <div ref={placesContainerRef} className="mb-2" />
           <input
             ref={locationInputRef}
             type="text"
             value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
             className="wt-input"
-            placeholder={
-              placesReady
-                ? 'Selected place appears here (you can edit manually)'
-                : '123 Main St or Online'
-            }
+            placeholder="123 Main St or Online"
           />
-          {placesReady && (
-            <p className="wt-muted mt-1 text-xs">
-              Google Places autocomplete enabled (manual edit still available).
-            </p>
-          )}
         </div>
       </div>
 
