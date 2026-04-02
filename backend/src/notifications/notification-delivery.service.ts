@@ -70,118 +70,121 @@ export class NotificationDeliveryService {
     const scopeLockKey = `${normalizedPayload.eventId}:${normalizedPayload.type}`;
     const idempotencyLockKey = normalizedPayload.idempotencyKey;
 
-    await this.withAdvisoryLocks([scopeLockKey, idempotencyLockKey], async () => {
-      const existing = await this.deliveryRepo.findOne({
-        where: { idempotencyKey: normalizedPayload.idempotencyKey },
-        select: ['id', 'delivered'],
-      });
-      if (existing?.delivered) return;
+    await this.withAdvisoryLocks(
+      [scopeLockKey, idempotencyLockKey],
+      async () => {
+        const existing = await this.deliveryRepo.findOne({
+          where: { idempotencyKey: normalizedPayload.idempotencyKey },
+          select: ['id', 'delivered'],
+        });
+        if (existing?.delivered) return;
 
-      const recipients = await this.filterRecipientsNotYetDelivered(
-        normalizedPayload.eventId,
-        normalizedPayload.type,
-        normalizedPayload.recipients,
-      );
-      const dispatchPayload: NotificationPayload = {
-        ...normalizedPayload,
-        recipients,
-        recipientCount: recipients.length,
-      };
-
-      const row = existing
-        ? await this.deliveryRepo.findOneByOrFail({ id: existing.id })
-        : this.deliveryRepo.create({
-            eventId: normalizedPayload.eventId,
-            type: normalizedPayload.type,
-            idempotencyKey: normalizedPayload.idempotencyKey,
-            endpoint: null,
-            payload: dispatchPayload,
-          });
-      row.attempts = Number.isFinite(row.attempts) ? row.attempts + 1 : 1;
-      row.lastAttemptAt = new Date();
-      row.payload = dispatchPayload;
-
-      if (!dispatchPayload.recipients.length) {
-        row.endpoint = 'dedupe';
-        row.delivered = true;
-        row.deliveredAt = new Date();
-        row.lastError = null;
-        await this.deliveryRepo.save(row);
-        return;
-      }
-
-      const configuredChannels: string[] = [];
-      const successfulChannels: string[] = [];
-      const channelErrors: string[] = [];
-
-      const webhookEndpoint = this.config.get<string>(
-        'NOTIFICATIONS_WEBHOOK_URL',
-      );
-      if (webhookEndpoint) {
-        configuredChannels.push('webhook');
-        try {
-          await this.sendWebhook(webhookEndpoint, dispatchPayload);
-          successfulChannels.push('webhook');
-        } catch (error) {
-          channelErrors.push(
-            `webhook: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-        }
-      }
-
-      const pushEndpoint = this.config.get<string>(
-        'NOTIFICATIONS_PUSH_WEBHOOK_URL',
-      );
-      if (pushEndpoint) {
-        configuredChannels.push('push');
-        try {
-          await this.sendPushWebhook(pushEndpoint, dispatchPayload);
-          successfulChannels.push('push');
-        } catch (error) {
-          channelErrors.push(
-            `push: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-        }
-      }
-
-      if (this.shouldSendEmailChannel(webhookEndpoint)) {
-        configuredChannels.push('email');
-        try {
-          await this.sendEmail(dispatchPayload);
-          successfulChannels.push('email');
-        } catch (error) {
-          channelErrors.push(
-            `email: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          );
-        }
-      }
-
-      if (!configuredChannels.length) {
-        row.delivered = false;
-        row.lastError =
-          'No notification channels configured (set NOTIFICATIONS_WEBHOOK_URL, NOTIFICATIONS_PUSH_WEBHOOK_URL, or SMTP_*)';
-        row.endpoint = null;
-        await this.deliveryRepo.save(row);
-        this.logger.warn(
-          `Skipped notification delivery (${dispatchPayload.type}) - no channels configured`,
+        const recipients = await this.filterRecipientsNotYetDelivered(
+          normalizedPayload.eventId,
+          normalizedPayload.type,
+          normalizedPayload.recipients,
         );
-        return;
-      }
+        const dispatchPayload: NotificationPayload = {
+          ...normalizedPayload,
+          recipients,
+          recipientCount: recipients.length,
+        };
 
-      row.endpoint = configuredChannels.join(',');
-      row.delivered = successfulChannels.length > 0;
-      row.deliveredAt = successfulChannels.length > 0 ? new Date() : null;
-      row.lastError = channelErrors.length ? channelErrors.join(' | ') : null;
-      await this.deliveryRepo.save(row);
+        const row = existing
+          ? await this.deliveryRepo.findOneByOrFail({ id: existing.id })
+          : this.deliveryRepo.create({
+              eventId: normalizedPayload.eventId,
+              type: normalizedPayload.type,
+              idempotencyKey: normalizedPayload.idempotencyKey,
+              endpoint: null,
+              payload: dispatchPayload,
+            });
+        row.attempts = Number.isFinite(row.attempts) ? row.attempts + 1 : 1;
+        row.lastAttemptAt = new Date();
+        row.payload = dispatchPayload;
 
-      if (row.delivered) {
-        await this.recordRecipientDeliveries(dispatchPayload);
-      } else {
-        this.logger.error(
-          `Notification delivery failed (${dispatchPayload.idempotencyKey}): ${row.lastError}`,
+        if (!dispatchPayload.recipients.length) {
+          row.endpoint = 'dedupe';
+          row.delivered = true;
+          row.deliveredAt = new Date();
+          row.lastError = null;
+          await this.deliveryRepo.save(row);
+          return;
+        }
+
+        const configuredChannels: string[] = [];
+        const successfulChannels: string[] = [];
+        const channelErrors: string[] = [];
+
+        const webhookEndpoint = this.config.get<string>(
+          'NOTIFICATIONS_WEBHOOK_URL',
         );
-      }
-    });
+        if (webhookEndpoint) {
+          configuredChannels.push('webhook');
+          try {
+            await this.sendWebhook(webhookEndpoint, dispatchPayload);
+            successfulChannels.push('webhook');
+          } catch (error) {
+            channelErrors.push(
+              `webhook: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+          }
+        }
+
+        const pushEndpoint = this.config.get<string>(
+          'NOTIFICATIONS_PUSH_WEBHOOK_URL',
+        );
+        if (pushEndpoint) {
+          configuredChannels.push('push');
+          try {
+            await this.sendPushWebhook(pushEndpoint, dispatchPayload);
+            successfulChannels.push('push');
+          } catch (error) {
+            channelErrors.push(
+              `push: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+          }
+        }
+
+        if (this.shouldSendEmailChannel(webhookEndpoint)) {
+          configuredChannels.push('email');
+          try {
+            await this.sendEmail(dispatchPayload);
+            successfulChannels.push('email');
+          } catch (error) {
+            channelErrors.push(
+              `email: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+          }
+        }
+
+        if (!configuredChannels.length) {
+          row.delivered = false;
+          row.lastError =
+            'No notification channels configured (set NOTIFICATIONS_WEBHOOK_URL, NOTIFICATIONS_PUSH_WEBHOOK_URL, or SMTP_*)';
+          row.endpoint = null;
+          await this.deliveryRepo.save(row);
+          this.logger.warn(
+            `Skipped notification delivery (${dispatchPayload.type}) - no channels configured`,
+          );
+          return;
+        }
+
+        row.endpoint = configuredChannels.join(',');
+        row.delivered = successfulChannels.length > 0;
+        row.deliveredAt = successfulChannels.length > 0 ? new Date() : null;
+        row.lastError = channelErrors.length ? channelErrors.join(' | ') : null;
+        await this.deliveryRepo.save(row);
+
+        if (row.delivered) {
+          await this.recordRecipientDeliveries(dispatchPayload);
+        } else {
+          this.logger.error(
+            `Notification delivery failed (${dispatchPayload.idempotencyKey}): ${row.lastError}`,
+          );
+        }
+      },
+    );
   }
 
   async retryFailedDeliveries(): Promise<number> {

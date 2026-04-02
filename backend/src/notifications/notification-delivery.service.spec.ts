@@ -186,7 +186,8 @@ describe('NotificationDeliveryService', () => {
     mockRepo.create.mockReturnValue(newRow);
     mockRepo.save.mockResolvedValue(newRow);
     mockConfigService.get.mockImplementation((key: string) => {
-      if (key === 'NOTIFICATIONS_WEBHOOK_URL') return 'https://example.com/hook';
+      if (key === 'NOTIFICATIONS_WEBHOOK_URL')
+        return 'https://example.com/hook';
       if (key === 'SMTP_HOST') return 'smtp.example.com';
       return undefined;
     });
@@ -303,7 +304,9 @@ describe('NotificationDeliveryService', () => {
     };
 
     mockRepo.findOne.mockResolvedValue(null);
-    mockRepo.create.mockReturnValueOnce(firstRow).mockReturnValueOnce(secondRow);
+    mockRepo.create
+      .mockReturnValueOnce(firstRow)
+      .mockReturnValueOnce(secondRow);
     mockRepo.save.mockResolvedValue(firstRow);
     mockConfigService.get.mockImplementation((key: string) => {
       if (key === 'SMTP_HOST') return 'smtp.example.com';
