@@ -427,13 +427,17 @@ describe('NotificationDeliveryService', () => {
     expect(sendMail).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        text: expect.stringContaining('Provide feedback: http://localhost:3000/events/event-1#feedback'),
+        text: expect.stringContaining(
+          'Provide feedback: http://localhost:3000/events/event-1#feedback',
+        ),
       }),
     );
     expect(sendMail).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        text: expect.not.stringContaining('Event: http://localhost:3000/events/event-1'),
+        text: expect.not.stringContaining(
+          'Event: http://localhost:3000/events/event-1',
+        ),
       }),
     );
     for (let i = 0; i < nonFeedbackTypes.length; i += 1) {
@@ -446,7 +450,9 @@ describe('NotificationDeliveryService', () => {
       expect(sendMail).toHaveBeenNthCalledWith(
         i + 2,
         expect.objectContaining({
-          text: expect.stringContaining('Event: http://localhost:3000/events/event-1'),
+          text: expect.stringContaining(
+            'Event: http://localhost:3000/events/event-1',
+          ),
         }),
       );
     }

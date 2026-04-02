@@ -522,7 +522,9 @@ export class NotificationDeliveryService {
     `;
   }
 
-  private shouldIncludeFeedbackLink(type: NotificationPayload['type']): boolean {
+  private shouldIncludeFeedbackLink(
+    type: NotificationPayload['type'],
+  ): boolean {
     return type === 'feedback_prompt';
   }
 
