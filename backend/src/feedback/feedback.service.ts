@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventFeedback } from '../entities/event-feedback.entity';
@@ -52,15 +56,15 @@ export class FeedbackService {
     userId: string,
     dto: SubmitFeedbackDto,
   ): Promise<EventFeedback[]> {
-    const status = await this.getFeedbackStatus(eventId, userId);
-    if (!status.eventEnded) {
-      throw new BadRequestException(
-        'Feedback can only be submitted after the event date',
+    const event = await this.requireEventForMemberAccess(eventId, userId);
+    if (!this.canUserSubmitFeedback(event, userId)) {
+      throw new ForbiddenException(
+        'Only host or attendees marked as going can submit feedback',
       );
     }
-    if (status.alreadySubmitted) {
+    if (!this.hasEventEnded(event)) {
       throw new BadRequestException(
-        'Feedback already submitted for this event',
+        'Feedback can only be submitted after the event date',
       );
     }
 
@@ -122,24 +126,28 @@ export class FeedbackService {
     eventId: string,
     userId: string,
   ): Promise<FeedbackStatus> {
-    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
-    if (!event) throw new BadRequestException('Event not found');
+    const event = await this.requireEventForMemberAccess(eventId, userId);
 
     const existing = await this.feedbackRepo.findOne({
       where: { eventId, userId },
       select: ['id'],
     });
 
-    const eventEnded = new Date(event.dateTime).getTime() <= Date.now();
+    const eventEnded = this.hasEventEnded(event);
     const alreadySubmitted = !!existing;
+    const eligibleSubmitter = this.canUserSubmitFeedback(event, userId);
     return {
-      canSubmit: eventEnded && !alreadySubmitted,
+      canSubmit: eligibleSubmitter && eventEnded && !alreadySubmitted,
       alreadySubmitted,
       eventEnded,
     };
   }
 
-  async getEventFeedback(eventId: string): Promise<EventFeedback[]> {
+  async getEventFeedback(
+    eventId: string,
+    userId: string,
+  ): Promise<EventFeedback[]> {
+    await this.requireEventForMemberAccess(eventId, userId);
     return this.feedbackRepo.find({
       where: { eventId },
       relations: ['user', 'game'],
@@ -148,9 +156,18 @@ export class FeedbackService {
 
   async getEventFeedbackAnalytics(
     eventId: string,
+    userId?: string,
   ): Promise<EventFeedbackAnalytics> {
-    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
-    if (!event) throw new BadRequestException('Event not found');
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees'],
+    });
+    if (!event) {
+      throw new BadRequestException('Event not found');
+    }
+    if (userId && event.hostId !== userId) {
+      throw new ForbiddenException('Only host can access feedback analytics');
+    }
 
     const [recommended, votes, feedbacks] = await Promise.all([
       this.candidatesRepo.find({ where: { eventId }, relations: ['game'] }),
@@ -257,5 +274,36 @@ export class FeedbackService {
       avgEnjoyment,
       completionRate,
     };
+  }
+
+  private async requireEventForMemberAccess(
+    eventId: string,
+    userId: string,
+  ): Promise<Event> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees'],
+    });
+    if (!event) {
+      throw new BadRequestException('Event not found');
+    }
+    if (
+      event.hostId !== userId &&
+      !(event.attendees || []).some((attendee) => attendee.userId === userId)
+    ) {
+      throw new ForbiddenException('You do not have access to this event');
+    }
+    return event;
+  }
+
+  private canUserSubmitFeedback(event: Event, userId: string): boolean {
+    if (event.hostId === userId) return true;
+    return (event.attendees || []).some(
+      (attendee) => attendee.userId === userId && attendee.rsvpStatus === 'going',
+    );
+  }
+
+  private hasEventEnded(event: Event): boolean {
+    return new Date(event.dateTime).getTime() <= Date.now();
   }
 }

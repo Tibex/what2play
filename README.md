@@ -11,19 +11,20 @@ A web-first, mobile-responsive app for organizing board game nights with friends
 - **Invite Links** — share links so friends can join without an account upfront
 - **Smart Recommendations** — auto-generate game suggestions based on attendee collections, ratings, play history, time budget, and group fit
 - **Ranked Voting** — attendees rank games; Borda count aggregation with tie-breaks and host override
-- **Real-time Updates** — WebSocket-powered live voting results
+- **Voting Lifecycle Automation** — voting deadline support, all-voted auto-close, and host fallback controls
 - **Post-Event Feedback** — enjoyment rating, completion tracking, and duration feel for improving future suggestions
 - **PWA Support** — installable web app with offline fallback
 - **Multi-channel Notifications** — webhook, push webhook, and SMTP email delivery paths
+- **Calendar Sync** — Google Calendar sync for host events (Apple Calendar currently disabled while beta implementation is in progress)
 - **Friends** — add friends, accept requests, build your gaming group
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 15 + TypeScript + Tailwind CSS |
+| Frontend | Next.js 16 + React 19 + TypeScript + Tailwind CSS |
 | Backend | NestJS + TypeORM + PostgreSQL |
-| Real-time | Socket.io (WebSockets) |
+| Real-time | Socket.io gateway (backend available; app currently uses API polling for vote/status refresh) |
 | Auth | JWT with refresh tokens (passport-jwt) |
 | API Docs | Swagger (OpenAPI) at `/api/docs` |
 

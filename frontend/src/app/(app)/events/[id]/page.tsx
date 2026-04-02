@@ -763,25 +763,42 @@ function AttendeesSection({
     );
   });
 
-  const groups = {
-    going: attendees.filter((a) => a.rsvpStatus === 'going'),
-    maybe: attendees.filter((a) => a.rsvpStatus === 'maybe'),
-    not_going: attendees.filter((a) => a.rsvpStatus === 'not_going'),
-  };
-  const total =
-    groups.going.length +
-    groups.maybe.length +
-    groups.not_going.length;
+  const knownStatusGroups = [
+    {
+      key: 'going',
+      label: 'going',
+      list: attendees.filter((a) => a.rsvpStatus === 'going'),
+    },
+    {
+      key: 'not_going',
+      label: 'not going',
+      list: attendees.filter((a) => a.rsvpStatus === 'not_going'),
+    },
+  ];
+  const knownStatuses = new Set(knownStatusGroups.map((group) => group.key));
+  const unknownStatusAttendees = attendees.filter(
+    (attendee) => !knownStatuses.has(attendee.rsvpStatus),
+  );
+  const groups =
+    unknownStatusAttendees.length > 0
+      ? [
+          ...knownStatusGroups,
+          { key: 'other', label: 'other', list: unknownStatusAttendees },
+        ]
+      : knownStatusGroups;
+  const total = groups.reduce((sum, group) => sum + group.list.length, 0);
   if (total === 0) {
     return <div className="wt-muted text-sm">No attendees yet.</div>;
   }
   return (
     <div className="space-y-4">
-      {Object.entries(groups).map(([status, list]) => list.length > 0 && (
-        <div key={status}>
-          <h3 className="wt-muted mb-2 text-sm font-semibold uppercase">{status.replace('_', ' ')} ({list.length})</h3>
+      {groups.map((group) => group.list.length > 0 && (
+        <div key={group.key}>
+          <h3 className="wt-muted mb-2 text-sm font-semibold uppercase">
+            {group.label} ({group.list.length})
+          </h3>
           <div className="flex flex-wrap gap-2">
-            {list.map((a) => (
+            {group.list.map((a) => (
               <span key={a.id} className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] px-3 py-1 text-sm">
                 <span>{a.user?.name || 'Unknown attendee'}</span>
                 {a.userId &&
@@ -850,7 +867,7 @@ function AttendeesSection({
                 )}
               </span>
             ))}
-            {isHost && status === 'going' && (
+            {isHost && group.key === 'going' && (
               <div ref={inviteDropdownRef} className="relative">
                 <button
                   type="button"

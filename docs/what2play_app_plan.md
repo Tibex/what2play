@@ -53,7 +53,7 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - Events and attendance
   - Create private invite-only events and public/open events
   - Account-based joins and RSVP via secure invite links
-  - RSVP states: going/maybe/not going
+  - RSVP states: going/not going
   - Capacity, date/time, location (or online), host controls
 - Recommendation engine
   - Candidate games based on attendee ownership
@@ -115,7 +115,7 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
 - Optionally expand candidate set with external discovery suggestions when owned pool is too small or host enables it
 - Exclude games incompatible with attendee count or constraints
 - Score each game using:
-  - attendee average rating (weighted by RSVP certainty)
+  - attendee average rating from confirmed going attendees
   - historical completion rate in similar group size
   - time-fit score based on learned real session durations vs event time budget
   - freshness penalty (avoid repeating too often)

@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# What2Play Frontend
 
-## Getting Started
+Next.js 16 + React 19 web client for What2Play.
 
-First, run the development server:
+## Local Development
 
 ```bash
+cd frontend
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App URL: `http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `frontend/.env.local` with the values you need.
 
-## Learn More
+Core:
 
-To learn more about Next.js, take a look at the following resources:
+- `NEXT_PUBLIC_API_URL` (optional, defaults to `/api`)
+- `BACKEND_PROXY_ORIGIN` (optional, used by Next.js rewrite when `NEXT_PUBLIC_API_URL=/api`)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Common optional values:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `NEXT_PUBLIC_SITE_URL` (canonical site URL for SEO metadata)
+- `NEXT_PUBLIC_SUPPORT_EMAIL` (public support contact shown in the app)
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (Google Places autocomplete in event forms)
+- `GOOGLE_SITE_VERIFICATION` (Google Search Console verification token)
+- `NEXT_PUBLIC_APPLE_CLIENT_ID` (Apple sign-in client ID)
+- `NEXT_PUBLIC_DEV_FRESH_SESSION=true` (dev-only PWA session reset helper)
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run dev     # start dev server
+npm run build   # production build
+npm run start   # start production server
+npm run lint    # run eslint
+npm run test    # run vitest
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Wiring
+
+- `src/lib/api.ts` uses `NEXT_PUBLIC_API_URL`.
+- If it is not set, requests go to `/api/*`.
+- `next.config.ts` rewrites `/api/*` to `BACKEND_PROXY_ORIGIN` (default `http://127.0.0.1:3001`).
+
+## Notes
+
+- This app is mobile-responsive and installable as a PWA.
+- Google Calendar connection is currently available; Apple Calendar sync is intentionally disabled until beta implementation is completed.

@@ -9,6 +9,7 @@ import type { CalendarAccount, SyncAccount, User } from '@/lib/types';
 const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
 const WEIGHT_OPTIONS = ['1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0'];
 const BGG_CONTROL_HEIGHT_CLASS = 'h-[46px]';
+const APPLE_CALENDAR_AVAILABLE = false;
 
 function durationLabel(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -159,6 +160,10 @@ export default function ProfilePage() {
   };
 
   const connectCalendar = async (provider: 'google' | 'apple') => {
+    if (provider === 'apple') {
+      toast('Apple Calendar sync is not available yet');
+      return;
+    }
     if (provider === 'google') {
       setCalendarBusyProvider(provider);
       try {
@@ -172,16 +177,6 @@ export default function ProfilePage() {
         setCalendarBusyProvider(null);
       }
       return;
-    }
-    setCalendarBusyProvider(provider);
-    try {
-      await api.post(`/calendar/connect/${provider}`, {
-        scopes: ['calendar.read', 'calendar.write'],
-      });
-      await refreshCalendarAccounts();
-      toast.success('Apple calendar connected');
-    } finally {
-      setCalendarBusyProvider(null);
     }
   };
 
@@ -198,12 +193,7 @@ export default function ProfilePage() {
     }
   };
 
-  const availableProviders = (() => {
-    const provider = profile?.socialProvider;
-    if (provider === 'google') return ['google'] as const;
-    if (provider === 'apple') return ['apple'] as const;
-    return ['google', 'apple'] as const;
-  })();
+  const availableProviders = ['google', 'apple'] as const;
 
   if (loading) {
     return (
@@ -331,12 +321,15 @@ export default function ProfilePage() {
         <div className="space-y-3 border-t border-[var(--border)] pt-5">
           <h2 className="font-semibold text-gray-800">Calendar sync</h2>
           <p className="wt-muted text-sm">
-            Connect your calendar account for automatic event sync.
+            Google Calendar is available now. Apple Calendar sync is currently
+            disabled until beta implementation is completed.
           </p>
           <div className="grid grid-cols-1 gap-3">
             {availableProviders.map((provider) => {
               const connected = isProviderConnected(provider);
-              const busy = calendarBusyProvider === provider;
+              const providerDisabled =
+                provider === 'apple' && !APPLE_CALENDAR_AVAILABLE;
+              const busy = calendarBusyProvider === provider || providerDisabled;
               return (
                 <div
                   key={provider}
@@ -350,7 +343,11 @@ export default function ProfilePage() {
                       {provider === 'google' ? 'Google Calendar' : 'Apple Calendar'}
                     </p>
                     <p className="wt-muted text-xs">
-                      {connected ? 'Connected' : 'Not connected'}
+                      {connected
+                        ? 'Connected'
+                        : providerDisabled
+                          ? 'Coming soon'
+                          : 'Not connected'}
                     </p>
                   </div>
                   {connected ? (
@@ -369,7 +366,7 @@ export default function ProfilePage() {
                       disabled={busy}
                       className="wt-btn wt-btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
                     >
-                      {busy ? '...' : 'Connect'}
+                      {providerDisabled ? 'Coming soon' : busy ? '...' : 'Connect'}
                     </button>
                   )}
                 </div>

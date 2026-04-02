@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { SyncAccount } from '../entities/sync-account.entity';
@@ -32,18 +33,23 @@ export class CalendarSyncService {
     @InjectRepository(Event)
     private readonly eventRepo: Repository<Event>,
     private readonly tokenCryptoService: TokenCryptoService,
+    private readonly config: ConfigService,
     private readonly googleAdapter: GoogleCalendarAdapter,
     private readonly appleAdapter: AppleCalendarAdapter,
   ) {}
 
   async getAccounts(userId: string): Promise<SyncAccount[]> {
-    return this.syncAccountRepo.find({
+    const accounts = await this.syncAccountRepo.find({
       where: {
         userId,
         provider: In([...CALENDAR_PROVIDERS]),
       },
       order: { updatedAt: 'DESC' },
     });
+    if (this.isAppleCalendarEnabled()) {
+      return accounts;
+    }
+    return accounts.filter((account) => account.provider !== 'apple');
   }
 
   async connectAccount(
@@ -52,6 +58,12 @@ export class CalendarSyncService {
     dto: ConnectCalendarDto,
   ): Promise<SyncAccount> {
     this.assertProvider(provider);
+    if (provider === 'apple' && !this.isAppleCalendarEnabled()) {
+      throw new BadRequestException(
+        'Apple Calendar sync is currently disabled while beta implementation is in progress',
+      );
+    }
+
     const existing = await this.syncAccountRepo.findOne({
       where: { userId, provider },
     });
@@ -245,6 +257,9 @@ export class CalendarSyncService {
     if (!accounts.length) return;
 
     for (const account of accounts) {
+      if (account.provider === 'apple' && !this.isAppleCalendarEnabled()) {
+        continue;
+      }
       const row = await this.eventCalendarSyncRepo.findOne({
         where: { eventId, userId: event.hostId, provider: account.provider },
       });
@@ -436,6 +451,12 @@ export class CalendarSyncService {
     if (!CALENDAR_PROVIDERS.includes(provider as CalendarProvider)) {
       throw new BadRequestException('Unsupported calendar provider');
     }
+  }
+
+  private isAppleCalendarEnabled(): boolean {
+    return (
+      this.config.get<string>('CALENDAR_APPLE_BETA_ENABLED') === 'true'
+    );
   }
 
   private async syncExistingHostEventsOnConnect(userId: string): Promise<void> {

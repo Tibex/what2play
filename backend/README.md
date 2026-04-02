@@ -1,109 +1,109 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# What2Play Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS API for What2Play.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## What It Provides
 
-## Description
+- Auth (email/password + Google + Apple identity token login)
+- User profile management
+- Game search, collection, ratings
+- BoardGameGeek linking, sync, and catalog import tooling
+- Event lifecycle (create/edit/delete, invite links, RSVP)
+- Recommendation generation and telemetry
+- Ranked voting and result aggregation
+- Post-event feedback and analytics
+- Friends graph and event invitations
+- Notification delivery (webhook, push webhook, SMTP)
+- Calendar sync (Google supported, Apple currently disabled)
+- Admin endpoints for moderation/catalog operations
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project Notes
-
-- Database migrations: the app currently uses TypeORM `synchronize: true` in `app.module.ts` for local speed. For production, disable synchronize and run explicit migrations before deploys.
-- Notification delivery: cron jobs now dispatch reminder/feedback payloads through `NOTIFICATIONS_WEBHOOK_URL` with idempotency tracking in `notification_deliveries`.
-- BGG catalog seed: run `npm run bgg:import-top -- --limit=500` to import top-ranked BGG games into the local `games` table.
-  - Manual run respects a 7-day cooldown persisted in DB (`bgg_catalog_sync`) to avoid repeated imports.
-  - Check whether import is currently eligible: `npm run bgg:import-top -- --status`.
-  - To bypass cooldown intentionally, add `--force` (use sparingly): `npm run bgg:import-top -- --limit=500 --force`.
-  - Weekly production automation is always on at 500 games. Cron runs Mondays at 03:00 UTC and enforces the 7-day cooldown + DB advisory lock.
-  - Admin can force an immediate sync from UI/API via `POST /api/bgg/admin/import-top-catalog` (admin role required), which bypasses cooldown.
-
-## Project setup
+## Local Development
 
 ```bash
-$ npm install
+cd backend
+npm install
+npm run db:migration:run
+npm run start:dev
 ```
 
-## Compile and run the project
+Swagger: `http://localhost:3001/api/docs`
+
+## Commands
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run start:dev
+npm run build
+npm run start:prod
+npm run lint
+npm run test
+npm run test:e2e
 ```
 
-## Run tests
+## Database and Migrations
+
+Use migrations for schema changes.
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run db:migration:run
+npm run db:migration:generate
+npm run db:migration:revert
 ```
 
-## Deployment
+Runtime behavior:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- `DB_SYNCHRONIZE=true` enables TypeORM `synchronize` only in non-production environments.
+- `DB_MIGRATIONS_RUN` defaults to `true`.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Environment Variables
+
+Core:
+
+- `DATABASE_URL` (or `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`)
+- `JWT_SECRET`
+- `FRONTEND_URL`
+- `APP_PORT` (default `3001`)
+
+Auth and integrations:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_CALLBACK_URL` (auth callback)
+- `APPLE_CLIENT_ID`
+- `BGG_API_TOKEN`
+
+Calendar sync:
+
+- `GOOGLE_CALENDAR_CALLBACK_URL` (calendar OAuth callback)
+- `CALENDAR_TOKEN_ENCRYPTION_KEY` (required when storing calendar access/refresh tokens)
+- `CALENDAR_APPLE_BETA_ENABLED` (defaults to disabled; Apple sync is not yet production-ready)
+
+Notifications:
+
+- `NOTIFICATIONS_WEBHOOK_URL`
+- `NOTIFICATIONS_PUSH_WEBHOOK_URL`
+- `WEB_PUSH_PUBLIC_KEY`
+- `WEB_PUSH_PRIVATE_KEY`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+
+Support tickets:
+
+- `SUPPORT_TICKET_TO`
+
+## BGG Catalog Utilities
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run bgg:import-top -- --status
+npm run bgg:import-top -- --limit=500
+npm run bgg:import-top -- --limit=500 --force
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Production behavior:
 
-## Resources
+- Weekly top-catalog import is scheduled for Mondays at 03:00 UTC.
+- A 7-day cooldown and Postgres advisory lock prevent duplicate runs.
+- Admin can force import via `POST /api/bgg/admin/import-top-catalog`.
 
-Check out a few resources that may come in handy when working with NestJS:
+## E2E Tests
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Database e2e suites are guarded by `RUN_DB_E2E=true`.
+CI enables this flag and runs the full e2e set against Postgres.

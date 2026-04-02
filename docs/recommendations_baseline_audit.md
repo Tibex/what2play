@@ -8,13 +8,19 @@ From `backend/src/recommendations/recommendations.service.ts`:
 
 - `base`: 40
 - `groupRating`: 20
-- `bggRating`: 10
+- `bggRating`: 16
+- `bggConsensus`: 8
 - `timeFit`: 16
+- `preferredDurationFit`: 8
 - `history`: 14
 - `attendeeHistory`: 14
 - `freshness` penalty: -8
 - `complexityFit`: 10
 - `bggBestPlayersFit`: 8
+- `leastMiseryPenalty`: -14
+- `dislikePenalty`: -8
+- `affinityFit`: 10
+- `discoveryArchetypeFit`: 12
 
 ## Feature Coverage Baseline
 
@@ -22,26 +28,35 @@ From `backend/src/recommendations/recommendations.service.ts`:
   - hard player-count bounds (`minPlayers <= going <= maxPlayers`)
   - hard BGG poll exclusion when not-recommended >= 60%
 - Positive ranking signals:
-  - attendee average ratings for owned games
+  - attendee average ratings for owned games (with sample shrinkage)
   - global BGG rating
-  - duration fit against event duration
+  - BGG recommendation-consensus signal
+  - duration fit against event duration budget
+  - duration fit against attendee preferred duration profile
   - global historical feedback (enjoyment + completion)
   - attendee-only feedback (enjoyment + play rate)
   - preferred complexity fit (`preferredWeight`)
   - BGG player-count best/recommended poll fit
+  - affinity fit from liked/disliked mechanics/categories
+  - cold-start discovery archetype fit
 - Negative ranking signals:
   - freshness penalty if recently played in last 30 days
+  - least-misery guardrail (penalizes options with strong individual mismatch)
+  - explicit dislike-rate penalty from attendee feedback
+  - low best-player-vote dampener when BGG poll support is weak
 - Discovery fallback:
-  - external discovery candidates by compatibility + BGG score
-  - capped below strongest owned candidate in fallback mode
+  - external discovery candidates by compatibility + BGG quality
+  - capped below strongest owned candidate when not in discovery mode
+- Diversity rerank:
+  - MMR rerank over top-30 pool (`relevance * 0.78 - similarity * 12`)
+  - final exploration slots: `2`
 
 ## Known Gaps Baseline
 
-- Group average can hide strong individual dislikes.
-- No explicit diversity reranking objective in final top list.
-- Cold start relies strongly on BGG/popularity signals.
-- Confidence is based on signal presence, not sample reliability.
-- No dedicated recommendation telemetry stream for offline tuning.
+- Weight configuration is still hardcoded in service constants.
+- Confidence is based on signal presence/sample size heuristics, not calibrated reliability.
+- Similarity/diversity currently relies on hand-built heuristics rather than learned embeddings.
+- No dedicated recommendation telemetry dashboard for continuous offline tuning loops.
 
 ## Baseline Evaluation Queries
 
@@ -75,10 +90,13 @@ Initial V2 seed parameters introduced for validation:
   - least-misery penalty weight: `14`
   - explicit dislike penalty weight: `8`
 - Personalization:
-  - affinity fit weight (mechanics/categories from likes/dislikes): `10`
+  - affinity fit weight: `10`
   - preferred duration fit weight: `8`
 - Discovery cold start:
   - archetype fit weight: `12`
+- Best-player guardrail:
+  - dampener threshold: `0.10`
+  - dampener factor: `0.78`
 - Diversity rerank:
   - candidate pool considered: top `30`
   - exploration slots in final set: `2`

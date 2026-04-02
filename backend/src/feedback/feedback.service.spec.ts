@@ -52,6 +52,8 @@ describe('FeedbackService', () => {
   it('rejects feedback submission before event date', async () => {
     mockEventsRepo.findOne.mockResolvedValue({
       id: 'e1',
+      hostId: 'u1',
+      attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
       dateTime: new Date(Date.now() + 60_000),
     });
     mockFeedbackRepo.findOne.mockResolvedValue(null);
@@ -67,6 +69,8 @@ describe('FeedbackService', () => {
   it('rejects second feedback submission for same event/user', async () => {
     mockEventsRepo.findOne.mockResolvedValue({
       id: 'e1',
+      hostId: 'u1',
+      attendees: [{ userId: 'u1', rsvpStatus: 'going' }],
       dateTime: new Date(Date.now() - 60_000),
     });
     mockFeedbackRepo.findOne.mockResolvedValue({ id: 'f1' });
@@ -79,9 +83,68 @@ describe('FeedbackService', () => {
     ).rejects.toThrow('already submitted');
   });
 
+  it('rejects feedback from attendee who is not marked as going', async () => {
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e1',
+      hostId: 'host-1',
+      attendees: [{ userId: 'u2', rsvpStatus: 'not_going' }],
+      dateTime: new Date(Date.now() - 60_000),
+    });
+
+    await expect(
+      service.submitFeedback('e1', 'u2', {
+        enjoymentRating: 4,
+        finishedGame: true,
+      }),
+    ).rejects.toThrow('Only host or attendees marked as going');
+  });
+
+  it('marks non-going attendee as ineligible in feedback status', async () => {
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e1',
+      hostId: 'host-1',
+      attendees: [{ userId: 'u2', rsvpStatus: 'not_going' }],
+      dateTime: new Date(Date.now() - 60_000),
+    });
+    mockFeedbackRepo.findOne.mockResolvedValue(null);
+
+    const status = await service.getFeedbackStatus('e1', 'u2');
+    expect(status.eventEnded).toBe(true);
+    expect(status.alreadySubmitted).toBe(false);
+    expect(status.canSubmit).toBe(false);
+  });
+
+  it('blocks feedback listing for non-members', async () => {
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e1',
+      hostId: 'host-1',
+      attendees: [{ userId: 'member-1', rsvpStatus: 'going' }],
+      dateTime: new Date(Date.now() - 60_000),
+    });
+
+    await expect(service.getEventFeedback('e1', 'outsider-1')).rejects.toThrow(
+      'do not have access to this event',
+    );
+  });
+
+  it('blocks feedback analytics for non-host viewers', async () => {
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e1',
+      hostId: 'host-1',
+      attendees: [{ userId: 'u2', rsvpStatus: 'going' }],
+      selectedGameId: 'g1',
+    });
+
+    await expect(service.getEventFeedbackAnalytics('e1', 'u2')).rejects.toThrow(
+      'Only host can access feedback analytics',
+    );
+  });
+
   it('returns aggregated analytics metadata', async () => {
     mockEventsRepo.findOne.mockResolvedValue({
       id: 'e1',
+      hostId: 'host-1',
+      attendees: [{ userId: 'host-1', rsvpStatus: 'going' }],
       selectedGameId: 'g1',
     });
     mockCandidatesRepo.find.mockResolvedValue([

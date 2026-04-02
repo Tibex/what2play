@@ -37,15 +37,15 @@ export class FeedbackController {
 
   @Get()
   @ApiOperation({ summary: 'Get event feedback' })
-  getEventFeedback(@Param('eventId') eventId: string) {
-    return this.feedbackService.getEventFeedback(eventId);
+  getEventFeedback(@Param('eventId') eventId: string, @Request() req) {
+    return this.feedbackService.getEventFeedback(eventId, req.user.id);
   }
 
   @Get('analytics')
   @ApiOperation({
     summary: 'Get recommended vs voted vs played analytics for event',
   })
-  getEventFeedbackAnalytics(@Param('eventId') eventId: string) {
-    return this.feedbackService.getEventFeedbackAnalytics(eventId);
+  getEventFeedbackAnalytics(@Param('eventId') eventId: string, @Request() req) {
+    return this.feedbackService.getEventFeedbackAnalytics(eventId, req.user.id);
   }
 }

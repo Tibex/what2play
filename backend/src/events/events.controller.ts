@@ -305,7 +305,7 @@ export class EventsController {
     await this.eventsService.assertHostAccess(id, req.user.id);
     const [feedbackAnalytics, deliveryMetrics, event, cancellation] =
       await Promise.all([
-        this.feedbackService.getEventFeedbackAnalytics(id),
+        this.feedbackService.getEventFeedbackAnalytics(id, req.user.id),
         this.notificationsService.getDeliveryMetrics(id),
         this.eventsService.findById(id),
         this.eventsService.getCancellationAnalytics(id),

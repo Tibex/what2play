@@ -36,7 +36,7 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 ### 4. RSVP & Attendance
 
 1. Invitee receives link → views event details
-2. RSVP: Going / Maybe / Not Going
+2. RSVP: Going / Not Going
 3. Host sees live attendance dashboard
 
 ### 5. Game Recommendations
