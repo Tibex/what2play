@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Event } from '../entities/event.entity';
 import { EventVote } from '../entities/event-vote.entity';
 import { NotificationDelivery } from '../entities/notification-delivery.entity';
+import { NotificationRecipientDelivery } from '../entities/notification-recipient-delivery.entity';
 import { NotificationsService } from './notifications.service';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { VotingModule } from '../voting/voting.module';
@@ -18,6 +19,7 @@ import { PushSubscription } from '../entities/push-subscription.entity';
       Event,
       EventVote,
       NotificationDelivery,
+      NotificationRecipientDelivery,
       PushSubscription,
     ]),
     forwardRef(() => VotingModule),

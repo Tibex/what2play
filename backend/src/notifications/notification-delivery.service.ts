@@ -2,8 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import nodemailer from 'nodemailer';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { NotificationDelivery } from '../entities/notification-delivery.entity';
+import { NotificationRecipientDelivery } from '../entities/notification-recipient-delivery.entity';
 
 interface NotificationPayload {
   [key: string]: unknown;
@@ -26,6 +27,19 @@ interface NotificationPayload {
   metadata?: Record<string, unknown>;
 }
 
+type NotificationRecipient = {
+  email: string;
+  name?: string;
+  userId?: string;
+};
+
+type RecipientIdentity = {
+  key: string;
+  userId: string | null;
+  normalizedEmail: string | null;
+  recipient: NotificationRecipient;
+};
+
 export interface NotificationDeliveryMetrics {
   total: number;
   delivered: number;
@@ -38,102 +52,136 @@ export interface NotificationDeliveryMetrics {
 export class NotificationDeliveryService {
   private readonly logger = new Logger(NotificationDeliveryService.name);
   private readonly maxAttempts = 5;
+  private readonly advisoryLockNamespace = 52_143;
   private emailTransporter: any = null;
 
   constructor(
     private readonly config: ConfigService,
+    private readonly dataSource: DataSource,
     @InjectRepository(NotificationDelivery)
     private readonly deliveryRepo: Repository<NotificationDelivery>,
+    @InjectRepository(NotificationRecipientDelivery)
+    private readonly recipientDeliveryRepo: Repository<NotificationRecipientDelivery>,
   ) {}
 
   async send(payload: NotificationPayload): Promise<void> {
-    const existing = await this.deliveryRepo.findOne({
-      where: { idempotencyKey: payload.idempotencyKey },
-      select: ['id', 'delivered'],
-    });
-    if (existing?.delivered) return;
+    const normalizedPayload = this.normalizePayloadRecipients(payload);
 
-    const row = existing
-      ? await this.deliveryRepo.findOneByOrFail({ id: existing.id })
-      : this.deliveryRepo.create({
-          eventId: payload.eventId,
-          type: payload.type,
-          idempotencyKey: payload.idempotencyKey,
-          endpoint: null,
-          payload,
-        });
-    row.attempts = Number.isFinite(row.attempts) ? row.attempts + 1 : 1;
-    row.lastAttemptAt = new Date();
-    row.payload = payload;
-    const configuredChannels: string[] = [];
-    const successfulChannels: string[] = [];
-    const channelErrors: string[] = [];
+    const scopeLockKey = `${normalizedPayload.eventId}:${normalizedPayload.type}`;
+    const idempotencyLockKey = normalizedPayload.idempotencyKey;
 
-    const webhookEndpoint = this.config.get<string>(
-      'NOTIFICATIONS_WEBHOOK_URL',
-    );
-    if (webhookEndpoint) {
-      configuredChannels.push('webhook');
-      try {
-        await this.sendWebhook(webhookEndpoint, payload);
-        successfulChannels.push('webhook');
-      } catch (error) {
-        channelErrors.push(
-          `webhook: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
+    await this.withAdvisoryLocks([scopeLockKey, idempotencyLockKey], async () => {
+      const existing = await this.deliveryRepo.findOne({
+        where: { idempotencyKey: normalizedPayload.idempotencyKey },
+        select: ['id', 'delivered'],
+      });
+      if (existing?.delivered) return;
+
+      const recipients = await this.filterRecipientsNotYetDelivered(
+        normalizedPayload.eventId,
+        normalizedPayload.type,
+        normalizedPayload.recipients,
+      );
+      const dispatchPayload: NotificationPayload = {
+        ...normalizedPayload,
+        recipients,
+        recipientCount: recipients.length,
+      };
+
+      const row = existing
+        ? await this.deliveryRepo.findOneByOrFail({ id: existing.id })
+        : this.deliveryRepo.create({
+            eventId: normalizedPayload.eventId,
+            type: normalizedPayload.type,
+            idempotencyKey: normalizedPayload.idempotencyKey,
+            endpoint: null,
+            payload: dispatchPayload,
+          });
+      row.attempts = Number.isFinite(row.attempts) ? row.attempts + 1 : 1;
+      row.lastAttemptAt = new Date();
+      row.payload = dispatchPayload;
+
+      if (!dispatchPayload.recipients.length) {
+        row.endpoint = 'dedupe';
+        row.delivered = true;
+        row.deliveredAt = new Date();
+        row.lastError = null;
+        await this.deliveryRepo.save(row);
+        return;
       }
-    }
 
-    const pushEndpoint = this.config.get<string>(
-      'NOTIFICATIONS_PUSH_WEBHOOK_URL',
-    );
-    if (pushEndpoint) {
-      configuredChannels.push('push');
-      try {
-        await this.sendPushWebhook(pushEndpoint, payload);
-        successfulChannels.push('push');
-      } catch (error) {
-        channelErrors.push(
-          `push: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
+      const configuredChannels: string[] = [];
+      const successfulChannels: string[] = [];
+      const channelErrors: string[] = [];
+
+      const webhookEndpoint = this.config.get<string>(
+        'NOTIFICATIONS_WEBHOOK_URL',
+      );
+      if (webhookEndpoint) {
+        configuredChannels.push('webhook');
+        try {
+          await this.sendWebhook(webhookEndpoint, dispatchPayload);
+          successfulChannels.push('webhook');
+        } catch (error) {
+          channelErrors.push(
+            `webhook: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+        }
       }
-    }
 
-    if (this.hasEmailChannelConfigured()) {
-      configuredChannels.push('email');
-      try {
-        await this.sendEmail(payload);
-        successfulChannels.push('email');
-      } catch (error) {
-        channelErrors.push(
-          `email: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
+      const pushEndpoint = this.config.get<string>(
+        'NOTIFICATIONS_PUSH_WEBHOOK_URL',
+      );
+      if (pushEndpoint) {
+        configuredChannels.push('push');
+        try {
+          await this.sendPushWebhook(pushEndpoint, dispatchPayload);
+          successfulChannels.push('push');
+        } catch (error) {
+          channelErrors.push(
+            `push: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+        }
       }
-    }
 
-    if (!configuredChannels.length) {
-      row.delivered = false;
-      row.lastError =
-        'No notification channels configured (set NOTIFICATIONS_WEBHOOK_URL, NOTIFICATIONS_PUSH_WEBHOOK_URL, or SMTP_*)';
-      row.endpoint = null;
+      if (this.shouldSendEmailChannel(webhookEndpoint)) {
+        configuredChannels.push('email');
+        try {
+          await this.sendEmail(dispatchPayload);
+          successfulChannels.push('email');
+        } catch (error) {
+          channelErrors.push(
+            `email: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+        }
+      }
+
+      if (!configuredChannels.length) {
+        row.delivered = false;
+        row.lastError =
+          'No notification channels configured (set NOTIFICATIONS_WEBHOOK_URL, NOTIFICATIONS_PUSH_WEBHOOK_URL, or SMTP_*)';
+        row.endpoint = null;
+        await this.deliveryRepo.save(row);
+        this.logger.warn(
+          `Skipped notification delivery (${dispatchPayload.type}) - no channels configured`,
+        );
+        return;
+      }
+
+      row.endpoint = configuredChannels.join(',');
+      row.delivered = successfulChannels.length > 0;
+      row.deliveredAt = successfulChannels.length > 0 ? new Date() : null;
+      row.lastError = channelErrors.length ? channelErrors.join(' | ') : null;
       await this.deliveryRepo.save(row);
-      this.logger.warn(
-        `Skipped notification delivery (${payload.type}) - no channels configured`,
-      );
-      return;
-    }
 
-    row.endpoint = configuredChannels.join(',');
-    row.delivered = successfulChannels.length > 0;
-    row.deliveredAt = successfulChannels.length > 0 ? new Date() : null;
-    row.lastError = channelErrors.length ? channelErrors.join(' | ') : null;
-    await this.deliveryRepo.save(row);
-
-    if (!row.delivered) {
-      this.logger.error(
-        `Notification delivery failed (${payload.idempotencyKey}): ${row.lastError}`,
-      );
-    }
+      if (row.delivered) {
+        await this.recordRecipientDeliveries(dispatchPayload);
+      } else {
+        this.logger.error(
+          `Notification delivery failed (${dispatchPayload.idempotencyKey}): ${row.lastError}`,
+        );
+      }
+    });
   }
 
   async retryFailedDeliveries(): Promise<number> {
@@ -207,9 +255,13 @@ export class NotificationDeliveryService {
     endpoint: string,
     payload: NotificationPayload,
   ): Promise<void> {
-    const userIds = payload.recipients
-      .map((recipient) => recipient.userId)
-      .filter((id): id is string => Boolean(id));
+    const userIds = Array.from(
+      new Set(
+        payload.recipients
+          .map((recipient) => recipient.userId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
     const body = {
       eventId: payload.eventId,
       type: payload.type,
@@ -234,6 +286,157 @@ export class NotificationDeliveryService {
 
   private hasEmailChannelConfigured(): boolean {
     return Boolean(this.config.get<string>('SMTP_HOST'));
+  }
+
+  private shouldSendEmailChannel(webhookEndpoint?: string): boolean {
+    if (webhookEndpoint?.trim()) {
+      // Webhook integrations often handle their own email fan-out.
+      // Skip direct SMTP in this mode to avoid duplicate emails.
+      return false;
+    }
+    return this.hasEmailChannelConfigured();
+  }
+
+  private normalizePayloadRecipients(
+    payload: NotificationPayload,
+  ): NotificationPayload {
+    const recipients = this.dedupeRecipients(payload.recipients);
+    return {
+      ...payload,
+      recipients,
+      recipientCount: recipients.length,
+    };
+  }
+
+  private dedupeRecipients(
+    recipients: NotificationRecipient[],
+  ): NotificationRecipient[] {
+    const unique: RecipientIdentity[] = [];
+    const seen = new Set<string>();
+
+    for (const recipient of recipients) {
+      const identity = this.toRecipientIdentity(recipient);
+      if (!identity || seen.has(identity.key)) continue;
+      seen.add(identity.key);
+      unique.push(identity);
+    }
+
+    return unique.map((identity) => identity.recipient);
+  }
+
+  private toRecipientIdentity(
+    recipient: NotificationRecipient,
+  ): RecipientIdentity | null {
+    const normalizedUserId = recipient.userId?.trim() ?? '';
+    const normalizedEmail = recipient.email?.trim().toLowerCase() ?? '';
+    const key = normalizedUserId
+      ? `user:${normalizedUserId}`
+      : normalizedEmail
+        ? `email:${normalizedEmail}`
+        : '';
+    if (!key) return null;
+
+    return {
+      key,
+      userId: normalizedUserId || null,
+      normalizedEmail: normalizedEmail || null,
+      recipient: {
+        ...recipient,
+        email: recipient.email?.trim() ?? '',
+      },
+    };
+  }
+
+  private async filterRecipientsNotYetDelivered(
+    eventId: string,
+    type: string,
+    recipients: NotificationRecipient[],
+  ): Promise<NotificationRecipient[]> {
+    const identities = recipients
+      .map((recipient) => this.toRecipientIdentity(recipient))
+      .filter((identity): identity is RecipientIdentity => Boolean(identity));
+    if (!identities.length) {
+      return [];
+    }
+
+    const delivered = await this.recipientDeliveryRepo.find({
+      where: {
+        eventId,
+        type,
+        recipientKey: In(identities.map((identity) => identity.key)),
+      },
+      select: ['recipientKey'],
+    });
+    const deliveredKeys = new Set(delivered.map((row) => row.recipientKey));
+
+    return identities
+      .filter((identity) => !deliveredKeys.has(identity.key))
+      .map((identity) => identity.recipient);
+  }
+
+  private async recordRecipientDeliveries(
+    payload: NotificationPayload,
+  ): Promise<void> {
+    const rows = payload.recipients
+      .map((recipient) => this.toRecipientIdentity(recipient))
+      .filter((identity): identity is RecipientIdentity => Boolean(identity))
+      .map((identity) => ({
+        eventId: payload.eventId,
+        type: payload.type,
+        recipientKey: identity.key,
+        recipientUserId: identity.userId,
+        recipientEmail: identity.normalizedEmail,
+        idempotencyKey: payload.idempotencyKey,
+      }));
+
+    if (!rows.length) {
+      return;
+    }
+
+    await this.recipientDeliveryRepo
+      .createQueryBuilder()
+      .insert()
+      .values(rows)
+      .orIgnore()
+      .execute();
+  }
+
+  private async withAdvisoryLocks(
+    lockKeys: string[],
+    task: () => Promise<void>,
+  ): Promise<void> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    const acquired: string[] = [];
+    await queryRunner.connect();
+
+    try {
+      for (const key of lockKeys) {
+        await queryRunner.query('SELECT pg_advisory_lock($1, hashtext($2))', [
+          this.advisoryLockNamespace,
+          key,
+        ]);
+        acquired.push(key);
+      }
+
+      await task();
+    } finally {
+      for (const key of acquired.reverse()) {
+        try {
+          await queryRunner.query(
+            'SELECT pg_advisory_unlock($1, hashtext($2))',
+            [this.advisoryLockNamespace, key],
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to release advisory lock for notification key ${key}: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`,
+          );
+        }
+      }
+
+      await queryRunner.release();
+    }
   }
 
   private getEmailTransporter(): any {

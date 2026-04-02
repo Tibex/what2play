@@ -14,3 +14,4 @@ export { BggCatalogSync } from './bgg-catalog-sync.entity';
 export { Friendship } from './friendship.entity';
 export { PushSubscription } from './push-subscription.entity';
 export { RecommendationTelemetry } from './recommendation-telemetry.entity';
+export { NotificationRecipientDelivery } from './notification-recipient-delivery.entity';
