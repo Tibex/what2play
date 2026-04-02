@@ -21,10 +21,10 @@ export class NotificationRecipientDelivery {
   @Column()
   recipientKey: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   recipientUserId: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   recipientEmail: string | null;
 
   @Column()
