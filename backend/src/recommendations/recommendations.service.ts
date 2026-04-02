@@ -50,6 +50,27 @@ export interface DemoRecommendationDebugResult {
   }>;
 }
 
+export interface RecommendationTelemetryEventCount {
+  eventName: string;
+  count: number;
+}
+
+export interface RecommendationTelemetryAnalytics {
+  eventId: string;
+  totalEvents: number;
+  uniqueUsers: number;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+  eventCounts: RecommendationTelemetryEventCount[];
+  recentEvents: Array<{
+    id: string;
+    eventName: string;
+    userId?: string;
+    payload?: Record<string, unknown>;
+    createdAt: string;
+  }>;
+}
+
 const RECOMMENDATION_WEIGHTS = {
   base: 40,
   groupRating: 20,
@@ -1020,6 +1041,67 @@ export class RecommendationsService {
         payload: payload ?? {},
       }),
     );
+  }
+
+  async getTelemetryAnalytics(
+    eventId: string,
+    userId: string,
+  ): Promise<RecommendationTelemetryAnalytics> {
+    await this.eventsService.assertHostAccess(eventId, userId);
+
+    const [summary, eventCountsRaw, recentRows] = await Promise.all([
+      this.telemetryRepo
+        .createQueryBuilder('t')
+        .select('COUNT(*)', 'totalEvents')
+        .addSelect('COUNT(DISTINCT t.userId)', 'uniqueUsers')
+        .addSelect('MIN(t.createdAt)', 'firstSeenAt')
+        .addSelect('MAX(t.createdAt)', 'lastSeenAt')
+        .where('t.eventId = :eventId', { eventId })
+        .getRawOne<{
+          totalEvents: string | null;
+          uniqueUsers: string | null;
+          firstSeenAt: Date | string | null;
+          lastSeenAt: Date | string | null;
+        }>(),
+      this.telemetryRepo
+        .createQueryBuilder('t')
+        .select('t.eventName', 'eventName')
+        .addSelect('COUNT(*)', 'count')
+        .where('t.eventId = :eventId', { eventId })
+        .groupBy('t.eventName')
+        .orderBy('COUNT(*)', 'DESC')
+        .addOrderBy('t.eventName', 'ASC')
+        .getRawMany<{ eventName: string; count: string }>(),
+      this.telemetryRepo.find({
+        where: { eventId },
+        select: ['id', 'eventName', 'userId', 'payload', 'createdAt'],
+        order: { createdAt: 'DESC' },
+        take: 25,
+      }),
+    ]);
+
+    return {
+      eventId,
+      totalEvents: Number(summary?.totalEvents ?? 0),
+      uniqueUsers: Number(summary?.uniqueUsers ?? 0),
+      firstSeenAt: summary?.firstSeenAt
+        ? new Date(summary.firstSeenAt).toISOString()
+        : null,
+      lastSeenAt: summary?.lastSeenAt
+        ? new Date(summary.lastSeenAt).toISOString()
+        : null,
+      eventCounts: eventCountsRaw.map((row) => ({
+        eventName: row.eventName,
+        count: Number(row.count ?? 0),
+      })),
+      recentEvents: recentRows.map((row) => ({
+        id: row.id,
+        eventName: row.eventName,
+        userId: row.userId,
+        payload: row.payload,
+        createdAt: new Date(row.createdAt).toISOString(),
+      })),
+    };
   }
 
   private async getAverageFeedback(

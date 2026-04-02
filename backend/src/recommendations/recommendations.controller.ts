@@ -67,4 +67,16 @@ export class RecommendationsController {
     );
     return { ok: true };
   }
+
+  @Get('telemetry')
+  @ApiOperation({ summary: 'Get recommendation telemetry analytics for event' })
+  getTelemetryAnalytics(
+    @Param('eventId') eventId: string,
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    return this.recommendationsService.getTelemetryAnalytics(
+      eventId,
+      req.user.id,
+    );
+  }
 }

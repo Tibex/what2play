@@ -51,6 +51,8 @@ describe('RecommendationsService', () => {
   const mockTelemetryRepo = {
     save: jest.fn((data) => data),
     create: jest.fn((data) => data),
+    find: jest.fn(),
+    createQueryBuilder: jest.fn(),
   };
 
   const mockConfigService = {
@@ -60,6 +62,7 @@ describe('RecommendationsService', () => {
   const mockEventsService = {
     findById: jest.fn(),
     getAttendeeUserIds: jest.fn(),
+    assertHostAccess: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -767,6 +770,87 @@ describe('RecommendationsService', () => {
       expect(external).toBeDefined();
       expect(Number(owned!.score)).toBeGreaterThan(Number(external!.score));
       expect(external!.source).toBe('external_catalog');
+    });
+  });
+
+  describe('telemetry analytics', () => {
+    it('tracks recommendation telemetry events', async () => {
+      await service.trackTelemetry('e1', 'u1', 'recommendation_opened', {
+        source: 'list',
+      });
+
+      expect(mockTelemetryRepo.create).toHaveBeenCalledWith({
+        eventId: 'e1',
+        userId: 'u1',
+        eventName: 'recommendation_opened',
+        payload: { source: 'list' },
+      });
+      expect(mockTelemetryRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns aggregated telemetry analytics for host', async () => {
+      const summaryQb = {
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({
+          totalEvents: '4',
+          uniqueUsers: '2',
+          firstSeenAt: '2026-04-01T10:00:00.000Z',
+          lastSeenAt: '2026-04-02T12:30:00.000Z',
+        }),
+      };
+      const countsQb = {
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          { eventName: 'recommendation_generate_started', count: '3' },
+          { eventName: 'recommendation_generate_succeeded', count: '1' },
+        ]),
+      };
+      mockTelemetryRepo.createQueryBuilder
+        .mockReturnValueOnce(summaryQb)
+        .mockReturnValueOnce(countsQb);
+      mockTelemetryRepo.find.mockResolvedValue([
+        {
+          id: 't1',
+          eventName: 'recommendation_generate_succeeded',
+          userId: 'u1',
+          payload: { count: 10 },
+          createdAt: new Date('2026-04-02T12:30:00.000Z'),
+        },
+      ]);
+
+      const analytics = await service.getTelemetryAnalytics('e1', 'host-1');
+
+      expect(mockEventsService.assertHostAccess).toHaveBeenCalledWith(
+        'e1',
+        'host-1',
+      );
+      expect(analytics).toEqual({
+        eventId: 'e1',
+        totalEvents: 4,
+        uniqueUsers: 2,
+        firstSeenAt: '2026-04-01T10:00:00.000Z',
+        lastSeenAt: '2026-04-02T12:30:00.000Z',
+        eventCounts: [
+          { eventName: 'recommendation_generate_started', count: 3 },
+          { eventName: 'recommendation_generate_succeeded', count: 1 },
+        ],
+        recentEvents: [
+          {
+            id: 't1',
+            eventName: 'recommendation_generate_succeeded',
+            userId: 'u1',
+            payload: { count: 10 },
+            createdAt: '2026-04-02T12:30:00.000Z',
+          },
+        ],
+      });
     });
   });
 });
