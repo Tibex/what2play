@@ -299,7 +299,8 @@ export class FeedbackService {
   private canUserSubmitFeedback(event: Event, userId: string): boolean {
     if (event.hostId === userId) return true;
     return (event.attendees || []).some(
-      (attendee) => attendee.userId === userId && attendee.rsvpStatus === 'going',
+      (attendee) =>
+        attendee.userId === userId && attendee.rsvpStatus === 'going',
     );
   }
 

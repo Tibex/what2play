@@ -454,9 +454,7 @@ export class CalendarSyncService {
   }
 
   private isAppleCalendarEnabled(): boolean {
-    return (
-      this.config.get<string>('CALENDAR_APPLE_BETA_ENABLED') === 'true'
-    );
+    return this.config.get<string>('CALENDAR_APPLE_BETA_ENABLED') === 'true';
   }
 
   private async syncExistingHostEventsOnConnect(userId: string): Promise<void> {
