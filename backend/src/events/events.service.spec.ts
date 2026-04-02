@@ -110,7 +110,7 @@ describe('EventsService', () => {
         expect.objectContaining({
           eventId: 'e1',
           userId: 'u3',
-          rsvpStatus: 'going',
+          rsvpStatus: 'pending',
         }),
       );
       expect(mockAttendeesRepo.save).toHaveBeenCalledTimes(1);

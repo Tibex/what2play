@@ -244,6 +244,50 @@ describe('NotificationDeliveryService', () => {
     );
   });
 
+  it('skips invite SMTP email when webhook channel is configured', async () => {
+    const newRow = {
+      attempts: 0,
+      delivered: false,
+      endpoint: null,
+      lastError: null,
+      lastAttemptAt: null,
+      deliveredAt: null,
+      payload: null,
+    };
+    const invitePayload = {
+      ...payload,
+      type: 'event_friend_invited' as const,
+      idempotencyKey: 'event_friend_invited:event-1:user-1',
+      title: "You're invited",
+      body: 'Open the event to check details and RSVP.',
+    };
+    mockRepo.findOne.mockResolvedValue(null);
+    mockRepo.create.mockReturnValue(newRow);
+    mockRepo.save.mockResolvedValue(newRow);
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'NOTIFICATIONS_WEBHOOK_URL')
+        return 'https://example.com/hook';
+      if (key === 'SMTP_HOST') return 'smtp.example.com';
+      return undefined;
+    });
+    const sendWebhookSpy = jest
+      .spyOn(service as any, 'sendWebhook')
+      .mockResolvedValue(undefined);
+    const sendEmailSpy = jest
+      .spyOn(service as any, 'sendEmail')
+      .mockResolvedValue(undefined);
+
+    await service.send(invitePayload);
+
+    expect(sendWebhookSpy).toHaveBeenCalledTimes(1);
+    expect(sendEmailSpy).not.toHaveBeenCalled();
+    expect(mockRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: 'webhook',
+      }),
+    );
+  });
+
   it('deduplicates recipients before dispatching channels', async () => {
     const newRow = {
       attempts: 0,
@@ -332,5 +376,79 @@ describe('NotificationDeliveryService', () => {
         delivered: true,
       }),
     );
+  });
+
+  const nonFeedbackTypes = [
+    'event_reminder',
+    'voting_started',
+    'all_voted',
+    'attendance_change',
+    'spot_opened',
+    'event_friend_invited',
+  ] as const;
+
+  it('renders only Provide feedback CTA for feedback_prompt email html', () => {
+    const feedbackHtml = (service as any).renderEmailHtml(payload);
+    expect(feedbackHtml).toContain('Provide feedback');
+    expect(feedbackHtml).not.toContain('Open event');
+    expect(feedbackHtml).not.toContain('Open feedback');
+
+    for (const type of nonFeedbackTypes) {
+      const nonFeedbackHtml = (service as any).renderEmailHtml({
+        ...payload,
+        type,
+        idempotencyKey: `${type}:event-1:2026-04-01T11`,
+      });
+      expect(nonFeedbackHtml).toContain('Open event');
+      expect(nonFeedbackHtml).not.toContain('Provide feedback');
+      expect(nonFeedbackHtml).not.toContain('Open feedback');
+    }
+  });
+
+  it('renders only feedback URL line for feedback_prompt email text', async () => {
+    const sendMail = jest.fn().mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'getEmailTransporter')
+      .mockReturnValue({ sendMail });
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'SMTP_FROM') return 'What2Play <support@example.com>';
+      return undefined;
+    });
+
+    await (service as any).sendEmail(payload);
+    for (const type of nonFeedbackTypes) {
+      await (service as any).sendEmail({
+        ...payload,
+        type,
+        idempotencyKey: `${type}:event-1:2026-04-01T11`,
+      });
+    }
+
+    expect(sendMail).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: expect.stringContaining('Provide feedback: http://localhost:3000/events/event-1#feedback'),
+      }),
+    );
+    expect(sendMail).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: expect.not.stringContaining('Event: http://localhost:3000/events/event-1'),
+      }),
+    );
+    for (let i = 0; i < nonFeedbackTypes.length; i += 1) {
+      expect(sendMail).toHaveBeenNthCalledWith(
+        i + 2,
+        expect.objectContaining({
+          text: expect.not.stringContaining('Provide feedback:'),
+        }),
+      );
+      expect(sendMail).toHaveBeenNthCalledWith(
+        i + 2,
+        expect.objectContaining({
+          text: expect.stringContaining('Event: http://localhost:3000/events/event-1'),
+        }),
+      );
+    }
   });
 });

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { GameEvent } from '@/lib/types';
+import { useAuthStore } from '@/lib/store';
 
 type DashboardView = 'cards' | 'calendar';
 
@@ -71,6 +72,7 @@ function toMondayFirstIndex(day: number): number {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuthStore();
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [openEvents, setOpenEvents] = useState<GameEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,7 +189,7 @@ export default function DashboardPage() {
             <h2 className="wt-muted mb-4 text-lg font-semibold">Upcoming</h2>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
               {upcoming.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <EventCard key={event.id} event={event} currentUserId={user?.id} />
               ))}
             </div>
           </section>
@@ -202,7 +204,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
               {discoverableOpenEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <EventCard key={event.id} event={event} currentUserId={user?.id} />
               ))}
             </div>
           </section>
@@ -227,7 +229,7 @@ export default function DashboardPage() {
                 className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 items-stretch"
               >
                 {past.map((event) => (
-                  <EventCard key={event.id} event={event} />
+                  <EventCard key={event.id} event={event} currentUserId={user?.id} />
                 ))}
               </div>
             )}
@@ -349,7 +351,7 @@ export default function DashboardPage() {
                   </h4>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
                     {selectedUpcoming.map((event) => (
-                      <EventCard key={event.id} event={event} />
+                      <EventCard key={event.id} event={event} currentUserId={user?.id} />
                     ))}
                   </div>
                 </div>
@@ -361,7 +363,7 @@ export default function DashboardPage() {
                   </h4>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
                     {selectedPast.map((event) => (
-                      <EventCard key={event.id} event={event} />
+                      <EventCard key={event.id} event={event} currentUserId={user?.id} />
                     ))}
                   </div>
                 </div>
@@ -432,7 +434,10 @@ export default function DashboardPage() {
   );
 }
 
-function EventCard({ event }: Readonly<{ event: GameEvent }>) {
+function EventCard({
+  event,
+  currentUserId,
+}: Readonly<{ event: GameEvent; currentUserId?: string }>) {
   const date = new Date(event.dateTime);
   const timeZone = event.eventTimezone || 'UTC';
   const shortDate = new Intl.DateTimeFormat(undefined, {
@@ -447,6 +452,10 @@ function EventCard({ event }: Readonly<{ event: GameEvent }>) {
   }).format(date);
   const isPast = event.status === 'completed' || date < new Date();
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
+  const myStatus = currentUserId
+    ? event.attendees?.find((a) => a.userId === currentUserId)?.rsvpStatus
+    : undefined;
+  const hasPendingInvite = myStatus === 'pending';
   const isCompleted = event.status === 'completed';
   let typeLabel = 'Invite only';
   let typeLabelClass = 'text-[var(--muted)]';
@@ -497,6 +506,11 @@ function EventCard({ event }: Readonly<{ event: GameEvent }>) {
           </p>
         )}
         <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap mt-auto pt-3">
+          {hasPendingInvite && (
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+              Pending invite
+            </span>
+          )}
           <span className="inline-flex items-center gap-1">
             <span aria-hidden="true">👥</span>
             {attendeeCount} going

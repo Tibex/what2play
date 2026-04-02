@@ -469,7 +469,7 @@ export class EventsService {
       const attendee = this.attendeesRepo.create({
         eventId,
         userId,
-        rsvpStatus: 'going',
+        rsvpStatus: 'pending',
         waitlistPriority: null,
         lastStatusChangeAt: new Date(),
         cancellationReason: null,

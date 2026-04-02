@@ -41,6 +41,7 @@ export default function EventDetailPage() {
   const [inviteableFriends, setInviteableFriends] = useState<User[]>([]);
   const [loadingInviteableFriends, setLoadingInviteableFriends] = useState(false);
   const [invitingFriends, setInvitingFriends] = useState(false);
+  const [updatingRsvp, setUpdatingRsvp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [nowTs] = useState(() => Date.now());
   const [savingFallback, setSavingFallback] = useState(false);
@@ -70,7 +71,21 @@ export default function EventDetailPage() {
   );
 
   const loadEvent = useCallback(async () => {
-    const ev = await api.get<GameEvent>(`/events/${id}`);
+    setLoading(true);
+    let ev: GameEvent;
+    try {
+      ev = await api.get<GameEvent>(`/events/${id}`, { showErrorToast: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load event';
+      if (message === 'Event not found') {
+        toast('You no longer have access to this event');
+        router.push('/dashboard');
+      } else {
+        toast.error(message);
+      }
+      setLoading(false);
+      return null;
+    }
     setEvent(ev);
     try {
       const [friends, sentPending] = await Promise.all([
@@ -99,7 +114,8 @@ export default function EventDetailPage() {
       setFeedbackStatus(fs);
     } catch { /* no feedback status yet */ }
     setLoading(false);
-  }, [id]);
+    return ev;
+  }, [id, router]);
 
   useEffect(() => {
     // Defer to microtask queue to satisfy react-hooks/set-state-in-effect.
@@ -158,6 +174,9 @@ export default function EventDetailPage() {
     !isPastEvent && event.status !== 'cancelled';
   const canRsvp = !isPastEvent && event.status !== 'cancelled';
   const isGoingAttendee = myAttendee?.rsvpStatus === 'going';
+  const isPendingInvite = myAttendee?.rsvpStatus === 'pending';
+  const canViewEventBody = isHost || isGoingAttendee;
+  const canEditRecommendations = isHost || isGoingAttendee;
   const eventTimeZone = event.eventTimezone || 'UTC';
   const eventDate = new Date(event.dateTime);
   const shortEventDate = new Intl.DateTimeFormat(undefined, {
@@ -187,13 +206,24 @@ export default function EventDetailPage() {
       toast.error('RSVP is closed for this event');
       return;
     }
+    if (updatingRsvp) {
+      return;
+    }
+    setUpdatingRsvp(true);
     try {
       await api.post(`/events/${id}/rsvp`, { status });
       toast.success(
         status === 'not_going' ? 'You left this event' : `RSVP updated to ${status}`,
       );
-      loadEvent();
+      if (status === 'not_going' && event.type === 'invite' && !isHost) {
+        router.push('/dashboard');
+        return;
+      }
+      await loadEvent();
     } catch { /* toast auto-shown */ }
+    finally {
+      setUpdatingRsvp(false);
+    }
   };
 
   const handleSetFallbackGame = async (gameId: string) => {
@@ -477,6 +507,11 @@ export default function EventDetailPage() {
             <span>⏱ {formatDurationMinutes(event.durationMinutes)}</span>
           )}
           <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
+          {isPendingInvite && (
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+              Invitation pending
+            </span>
+          )}
           <span>
             {event.status === 'completed'
               ? '🗂 Past event'
@@ -515,25 +550,32 @@ export default function EventDetailPage() {
               {!myAttendee && (
                 <button
                   onClick={() => handleRsvp('going')}
+                  disabled={updatingRsvp}
                   className="wt-btn rounded-lg border border-[#3f6a3f] bg-[#3f6a3f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  Join
+                  {updatingRsvp ? 'Joining...' : 'Join'}
                 </button>
               )}
               {myAttendee && myAttendee.rsvpStatus !== 'going' && (
                 <button
                   onClick={() => handleRsvp('going')}
+                  disabled={updatingRsvp}
                   className="wt-btn rounded-lg border border-[#3f6a3f] bg-[#3f6a3f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  Going
+                  {updatingRsvp
+                    ? 'Joining...'
+                    : isPendingInvite
+                      ? 'Join event'
+                      : 'Going'}
                 </button>
               )}
               {myAttendee && myAttendee.rsvpStatus === 'going' && (
                 <button
                   onClick={() => handleRsvp('not_going')}
+                  disabled={updatingRsvp}
                   className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium disabled:opacity-50"
                 >
-                  Can&apos;t make it
+                  {updatingRsvp ? 'Updating...' : "Can't make it"}
                 </button>
               )}
             </>
@@ -580,7 +622,11 @@ export default function EventDetailPage() {
       </div>
 
       <div className="mt-6">
-        {hasPassed ? (
+        {!canViewEventBody ? (
+          <div className="wt-card p-4 text-sm text-[var(--muted)] sm:p-5">
+            Join this event to view recommendations, voting, and feedback.
+          </div>
+        ) : hasPassed ? (
           <div id="feedback">
             <FeedbackSection
               eventId={id}
@@ -652,6 +698,7 @@ export default function EventDetailPage() {
             eventId={id}
             candidates={candidates}
             isPlanning={event.status === 'planning'}
+            canEditRecommendations={canEditRecommendations}
             onChanged={loadEvent}
             onTelemetry={sendRecommendationTelemetry}
           />
@@ -764,6 +811,11 @@ function AttendeesSection({
   });
 
   const knownStatusGroups = [
+    {
+      key: 'pending',
+      label: 'pending',
+      list: attendees.filter((a) => a.rsvpStatus === 'pending'),
+    },
     {
       key: 'going',
       label: 'going',
@@ -930,12 +982,14 @@ function RecommendationsSection({
   eventId,
   candidates,
   isPlanning,
+  canEditRecommendations,
   onChanged,
   onTelemetry,
 }: {
   eventId: string;
   candidates: EventGameCandidate[];
   isPlanning: boolean;
+  canEditRecommendations: boolean;
   onChanged: () => void;
   onTelemetry: (eventName: string, payload?: Record<string, unknown>) => void;
 }) {
@@ -1065,7 +1119,7 @@ function RecommendationsSection({
 
   return (
     <div className="space-y-6">
-      {isPlanning && (
+      {isPlanning && canEditRecommendations && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Add a game manually</h3>
           <div className="flex gap-2">
@@ -1131,7 +1185,7 @@ function RecommendationsSection({
                 })
               }
               actions={
-                isPlanning ? (
+                isPlanning && canEditRecommendations ? (
                   <button
                     onClick={() => handleRemove(c.id)}
                     disabled={removing === c.id}

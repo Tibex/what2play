@@ -480,13 +480,19 @@ export class NotificationDeliveryService {
       this.config.get<string>('SMTP_FROM') ??
       'What2Play <no-reply@what2play.games>';
     const html = this.renderEmailHtml(payload);
+    const textLines = [payload.body, ''];
+    if (this.shouldIncludeFeedbackLink(payload.type)) {
+      textLines.push(`Provide feedback: ${payload.feedbackUrl}`);
+    } else {
+      textLines.push(`Event: ${payload.eventUrl}`);
+    }
 
     await transporter.sendMail({
       from,
       to: from,
       bcc: recipients.join(','),
       subject: payload.title,
-      text: `${payload.body}\n\nEvent: ${payload.eventUrl}\nFeedback: ${payload.feedbackUrl}`,
+      text: textLines.join('\n'),
       html,
     });
   }
@@ -496,18 +502,28 @@ export class NotificationDeliveryService {
     const body = this.escapeHtml(payload.body);
     const eventUrl = this.escapeHtml(payload.eventUrl);
     const feedbackUrl = this.escapeHtml(payload.feedbackUrl);
+    const primaryLink = this.shouldIncludeFeedbackLink(payload.type)
+      ? `
+        <p style="margin: 0;">
+          <a href="${feedbackUrl}">Provide feedback</a>
+        </p>
+      `
+      : `
+        <p style="margin: 0;">
+          <a href="${eventUrl}">Open event</a>
+        </p>
+      `;
     return `
       <div style="font-family: Arial, Helvetica, sans-serif; color: #111827;">
         <h2 style="margin-bottom: 8px;">${title}</h2>
         <p style="margin: 0 0 12px 0;">${body}</p>
-        <p style="margin: 0 0 8px 0;">
-          <a href="${eventUrl}">Open event</a>
-        </p>
-        <p style="margin: 0;">
-          <a href="${feedbackUrl}">Open feedback</a>
-        </p>
+        ${primaryLink}
       </div>
     `;
+  }
+
+  private shouldIncludeFeedbackLink(type: NotificationPayload['type']): boolean {
+    return type === 'feedback_prompt';
   }
 
   private escapeHtml(value: string): string {

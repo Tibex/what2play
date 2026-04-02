@@ -84,7 +84,7 @@ describe('EventDetailPage', () => {
                 subscriptionTier: 'free',
                 role: 'user',
               },
-              rsvpStatus: 'going',
+              rsvpStatus: 'pending',
             },
             {
               id: 'a-2',
@@ -138,11 +138,64 @@ describe('EventDetailPage', () => {
     });
   });
 
-  it('shows pending icon for attendees with sent friend requests after load', async () => {
+  it('shows invite and friend-request pending markers after load', async () => {
     render(<EventDetailPage />);
 
     await waitFor(() => {
       expect(screen.getByTitle('Request pending')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Join event' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Join this event to view recommendations, voting, and feedback.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Add a game manually')).not.toBeInTheDocument();
+  });
+
+  it('shows manual game add controls for joined attendees', async () => {
+    getMock.mockImplementation(async (path: string) => {
+      if (path === '/events/event-1') {
+        return {
+          id: 'event-1',
+          hostId: 'host-1',
+          host: { id: 'host-1', name: 'Host', email: 'host@example.com' },
+          title: 'Friday Game Night',
+          dateTime: '2030-01-01T19:00:00.000Z',
+          eventTimezone: 'UTC',
+          type: 'invite',
+          status: 'planning',
+          discoveryMode: false,
+          attendees: [
+            {
+              id: 'a-1',
+              eventId: 'event-1',
+              userId: 'me',
+              user: {
+                id: 'me',
+                email: 'me@example.com',
+                name: 'Me',
+                subscriptionTier: 'free',
+                role: 'user',
+              },
+              rsvpStatus: 'going',
+            },
+          ],
+          candidates: [],
+          createdAt: '2030-01-01T12:00:00.000Z',
+        };
+      }
+      if (path === '/friends') {
+        return [];
+      }
+      if (path === '/friends/pending/sent') {
+        return [];
+      }
+      throw new Error(`Unexpected GET path: ${path}`);
+    });
+
+    render(<EventDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add a game manually')).toBeInTheDocument();
     });
   });
 });
