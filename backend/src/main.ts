@@ -2,7 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, urlencoded } from 'express';
+import {
+  json,
+  urlencoded,
+  type Request,
+  type Response,
+  type NextFunction,
+} from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -45,6 +51,17 @@ async function bootstrap() {
   // Allow larger payloads for manual BGG XML imports.
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
+
+  app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate',
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    next();
+  });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 

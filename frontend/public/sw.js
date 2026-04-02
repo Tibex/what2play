@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bgn-pwa-v2';
+const CACHE_NAME = 'bgn-pwa-v3';
 const OFFLINE_URL = '/offline.html';
 const ASSETS_TO_CACHE = [
   OFFLINE_URL,
@@ -8,6 +8,19 @@ const ASSETS_TO_CACHE = [
   '/meeple-photo-full-192.png',
   '/meeple-photo-full-64.png',
 ];
+const STATIC_PATH_PREFIXES = ['/static/', '/_next/static/'];
+
+function isStaticCacheableRequest(request) {
+  if (request.method !== 'GET') return false;
+  const url = new URL(request.url);
+  if (url.origin !== globalThis.location.origin) return false;
+
+  // Never cache API responses. They are user/session scoped and quickly stale.
+  if (url.pathname.startsWith('/api/')) return false;
+
+  if (ASSETS_TO_CACHE.includes(url.pathname)) return true;
+  return STATIC_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
+}
 
 globalThis.addEventListener('install', (event) => {
   event.waitUntil(
@@ -40,6 +53,11 @@ globalThis.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request).catch(() => caches.match(OFFLINE_URL)),
     );
+    return;
+  }
+
+  if (!isStaticCacheableRequest(request)) {
+    event.respondWith(fetch(request));
     return;
   }
 

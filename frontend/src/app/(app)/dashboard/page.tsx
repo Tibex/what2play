@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { GameEvent } from '@/lib/types';
@@ -84,20 +84,41 @@ export default function DashboardPage() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [showPastEvents, setShowPastEvents] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [userEvents, discoverable] = await Promise.all([
-          api.get<GameEvent[]>('/events'),
-          api.get<GameEvent[]>('/events/open', { showErrorToast: false }),
-        ]);
-        setEvents(userEvents);
-        setOpenEvents(discoverable);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadDashboardData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const [userEvents, discoverable] = await Promise.all([
+        api.get<GameEvent[]>('/events'),
+        api.get<GameEvent[]>('/events/open', { showErrorToast: false }),
+      ]);
+      setEvents(userEvents);
+      setOpenEvents(discoverable);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void loadDashboardData(false);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [loadDashboardData]);
 
   const now = new Date();
   const isPastEvent = (event: GameEvent) =>

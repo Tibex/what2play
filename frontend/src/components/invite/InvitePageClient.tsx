@@ -38,7 +38,7 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
     api
       .get<GameEvent>(`/events/invite/${token}`, { auth: false })
       .then(setEvent)
-      .catch(() => setLoadError('Invalid or expired invite link'))
+      .catch(() => setLoadError('Invalid invite link'))
       .finally(() => setLoading(false));
   }, [token]);
 

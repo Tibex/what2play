@@ -23,6 +23,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers,
+    'Cache-Control': 'no-store',
+    Pragma: 'no-cache',
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -32,6 +34,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method: options.method || 'GET',
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
+      cache: 'no-store',
     });
   } catch {
     const msg = 'Network error — is the backend running?';
@@ -69,6 +72,7 @@ async function tryRefresh(): Promise<boolean> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
+      cache: 'no-store',
     });
     if (!res.ok) return false;
     const data = await res.json();

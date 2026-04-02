@@ -70,8 +70,8 @@ export default function EventDetailPage() {
     [id],
   );
 
-  const loadEvent = useCallback(async () => {
-    setLoading(true);
+  const loadEvent = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     let ev: GameEvent;
     try {
       ev = await api.get<GameEvent>(`/events/${id}`, { showErrorToast: false });
@@ -83,7 +83,7 @@ export default function EventDetailPage() {
       } else {
         toast.error(message);
       }
-      setLoading(false);
+      if (showLoading) setLoading(false);
       return null;
     }
     setEvent(ev);
@@ -113,7 +113,7 @@ export default function EventDetailPage() {
       const fs = await api.get<FeedbackStatus>(`/events/${id}/feedback/status`, { showErrorToast: false });
       setFeedbackStatus(fs);
     } catch { /* no feedback status yet */ }
-    setLoading(false);
+    if (showLoading) setLoading(false);
     return ev;
   }, [id, router]);
 
@@ -122,6 +122,24 @@ export default function EventDetailPage() {
     queueMicrotask(() => {
       void loadEvent();
     });
+  }, [loadEvent]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void loadEvent(false);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [loadEvent]);
 
   useEffect(() => {
