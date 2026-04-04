@@ -19,6 +19,7 @@ describe('EventsService', () => {
   const mockEventsRepo = {
     findOne: jest.fn(),
     find: jest.fn(),
+    create: jest.fn((value) => value),
     save: jest.fn(),
     remove: jest.fn(),
   };
@@ -142,6 +143,89 @@ describe('EventsService', () => {
 
       await expect(service.findByIdForUser('e-open', 'u2')).resolves.toEqual(
         event,
+      );
+    });
+  });
+
+  describe('capacity normalization', () => {
+    it('forces invite events to store null capacity on create', async () => {
+      const persistedEvent = {
+        id: 'e-create',
+        hostId: 'host-1',
+        type: 'invite',
+        capacity: null,
+      };
+      mockEventsRepo.save.mockResolvedValue({ id: 'e-create' });
+      mockEventsRepo.findOne.mockResolvedValue(persistedEvent);
+
+      await service.create('host-1', {
+        title: 'Invite Event',
+        dateTime: new Date('2026-05-01T18:00:00.000Z').toISOString(),
+        type: 'invite',
+        capacity: 12,
+      });
+
+      expect(mockEventsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hostId: 'host-1',
+          type: 'invite',
+          capacity: null,
+        }),
+      );
+    });
+
+    it('clears capacity when updating an event to invite type', async () => {
+      const existingEvent = {
+        id: 'e-update-invite',
+        hostId: 'host-1',
+        type: 'open',
+        capacity: 10,
+        status: 'planning',
+        dateTime: new Date('2026-05-02T18:00:00.000Z'),
+        eventTimezone: 'UTC',
+        votingDeadline: null,
+      };
+      mockEventsRepo.findOne.mockResolvedValue(existingEvent);
+
+      await service.update('e-update-invite', 'host-1', {
+        type: 'invite',
+        capacity: 6,
+      });
+
+      expect(mockEventsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'e-update-invite',
+          type: 'invite',
+          capacity: null,
+        }),
+      );
+    });
+
+    it('keeps existing open capacity when update payload omits capacity', async () => {
+      const existingEvent = {
+        id: 'e-update-open',
+        hostId: 'host-1',
+        type: 'open',
+        capacity: 6,
+        status: 'planning',
+        title: 'Original',
+        dateTime: new Date('2026-05-03T18:00:00.000Z'),
+        eventTimezone: 'UTC',
+        votingDeadline: null,
+      };
+      mockEventsRepo.findOne.mockResolvedValue(existingEvent);
+
+      await service.update('e-update-open', 'host-1', {
+        title: 'Renamed',
+      });
+
+      expect(mockEventsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'e-update-open',
+          type: 'open',
+          capacity: 6,
+          title: 'Renamed',
+        }),
       );
     });
   });

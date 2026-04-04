@@ -113,6 +113,70 @@ button:disabled,
   background: #fbfdff;
 }
 
+.wt-place-input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--paper);
+  color: var(--foreground);
+  box-sizing: border-box;
+  background-clip: padding-box;
+  color-scheme: light;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+  --gmpx-color-surface: var(--paper);
+  --gmpx-color-on-surface: var(--foreground);
+  --gmpx-color-on-surface-variant: var(--muted);
+  --gmpx-color-outline: transparent;
+  --gmpx-color-primary: transparent;
+  --gmpx-border-radius: 0.65rem;
+  --gmpx-font-family-base: var(--font-sans), "Inter", "Segoe UI", sans-serif;
+  --gmpx-font-size-base: 0.9rem;
+  --gmpx-font-size-small: 0.78rem;
+}
+
+.wt-place-input:hover {
+  background: #fbfdff;
+}
+
+.wt-place-input:focus,
+.wt-place-input:focus-within {
+  border-color: var(--border);
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.wt-place-input::part(input),
+.wt-place-input::part(input-field),
+.wt-place-input::part(text-input) {
+  min-height: 32px;
+  padding: 0.22rem 0.56rem;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.wt-place-input::part(input-container),
+.wt-place-input::part(text-field),
+.wt-place-input::part(field),
+.wt-place-input::part(container),
+.wt-place-input::part(root),
+.wt-place-input::part(text-field-container),
+.wt-place-input::part(input-wrapper) {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.wt-place-input::part(option),
+.wt-place-input::part(prediction-item) {
+  min-height: 32px;
+  height: 32px;
+  padding: 0.22rem 0.56rem;
+}
+
 .wt-btn {
   border-radius: 0.65rem;
   font-weight: 600;

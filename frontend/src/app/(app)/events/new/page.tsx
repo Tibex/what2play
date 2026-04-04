@@ -26,11 +26,15 @@ export default function NewEventPage() {
   };
 
   const handleSubmit = async (data: EventFormData) => {
-    const event = await api.post<{ id: string }>('/events', {
+    const payload = {
       ...data,
       eventTimezone: browserTimeZone,
       durationMinutes: Number(data.durationMinutes),
-      capacity: Number(data.capacity),
+      capacity: data.type === 'open' ? Number(data.capacity) : null,
+    };
+
+    const event = await api.post<{ id: string }>('/events', {
+      ...payload,
     });
     router.push(`/events/${event.id}`);
   };

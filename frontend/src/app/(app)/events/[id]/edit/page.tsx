@@ -54,10 +54,14 @@ export default function EditEventPage() {
   };
 
   const handleSubmit = async (data: EventFormData) => {
-    await api.patch(`/events/${id}`, {
+    const payload = {
       ...data,
       durationMinutes: Number(data.durationMinutes),
-      capacity: Number(data.capacity),
+      capacity: data.type === 'open' ? Number(data.capacity) : null,
+    };
+
+    await api.patch(`/events/${id}`, {
+      ...payload,
     });
     toast.success('Event updated');
     router.push(`/events/${id}`);

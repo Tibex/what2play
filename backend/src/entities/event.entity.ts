@@ -44,8 +44,8 @@ export class Event {
   @Column({ nullable: true })
   location: string;
 
-  @Column({ nullable: true })
-  capacity: number;
+  @Column({ type: 'int', nullable: true })
+  capacity: number | null;
 
   @Column({ default: 'invite' })
   type: string;

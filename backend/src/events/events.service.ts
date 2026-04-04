@@ -42,11 +42,15 @@ export class EventsService {
   async create(hostId: string, dto: CreateEventDto): Promise<Event> {
     const eventTimezone = resolveEventTimezone(dto.eventTimezone);
     const dateTime = resolveEventDateTime(dto.dateTime, eventTimezone);
+    const type = dto.type === 'open' ? 'open' : 'invite';
+    const capacity = type === 'open' ? dto.capacity ?? null : null;
     const event = this.eventsRepo.create({
       ...dto,
       hostId,
       dateTime,
       eventTimezone,
+      type,
+      capacity,
     });
     const saved = await this.eventsRepo.save(event);
 
@@ -144,8 +148,23 @@ export class EventsService {
     ) {
       event.votingStartedAttendeeCount = await this.getGoingAttendeeCount(id);
     }
+    const type = dto.type ?? event.type;
+    const capacity =
+      type === 'open' ? (dto.capacity ?? event.capacity ?? null) : null;
+
+    const {
+      dateTime: _ignoredDateTime,
+      eventTimezone: _ignoredEventTimezone,
+      votingDeadline: _ignoredVotingDeadline,
+      capacity: _ignoredCapacity,
+      type: _ignoredType,
+      ...rest
+    } = dto;
+
     Object.assign(event, {
-      ...dto,
+      ...rest,
+      type,
+      capacity,
       dateTime: event.dateTime,
       eventTimezone: event.eventTimezone,
       votingDeadline: event.votingDeadline,
