@@ -37,6 +37,7 @@ export interface BggSearchResult {
   minPlayers?: number;
   maxPlayers?: number;
   playingTime?: number;
+  bggRating?: number;
 }
 
 export interface SyncAccount {

@@ -8,13 +8,15 @@ import ConfirmModal from '@/components/ConfirmModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import GameCard from '@/components/GameCard';
+import GameSearchAdd, {
+  type GameSearchAddResult,
+} from '@/components/GameSearchAdd';
 import FeedbackSection from './feedback-section';
 import type {
   Game,
   GameEvent,
   User,
   EventGameCandidate,
-  BggSearchResult,
   VoteResult,
   EventVote,
   VotingStatus,
@@ -1015,96 +1017,15 @@ function RecommendationsSection({
   onChanged: () => void;
   onTelemetry: (eventName: string, payload?: Record<string, unknown>) => void;
 }) {
-  type SearchResultItem = {
-    key: string;
-    title: string;
-    thumbnailUrl?: string;
-    minPlayers?: number;
-    maxPlayers?: number;
-    playingTime?: number;
-    yearPublished?: number;
-    gameId?: string;
-    bggId?: number;
-  };
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [adding, setAdding] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
   const safeCandidates = candidates.filter((c) => c?.game);
-  const candidateGameIds = new Set(safeCandidates.map((c) => c.gameId));
-  const candidateBggIds = new Set(
-    safeCandidates.map((c) => c.game?.bggId).filter((id): id is number => id != null),
-  );
+  const candidateGameIds = safeCandidates.map((candidate) => candidate.gameId);
+  const candidateBggIds = safeCandidates
+    .map((candidate) => candidate.game?.bggId)
+    .filter((id): id is number => id != null);
 
-  const dedupeKeyFor = (item: {
-    title: string;
-    bggId?: number;
-    yearPublished?: number;
-  }) => {
-    if (item.bggId != null) return `bgg:${item.bggId}`;
-    const normalizedTitle = item.title.trim().toLowerCase().replace(/\s+/g, ' ');
-    return `title:${normalizedTitle}:${item.yearPublished ?? 'na'}`;
-  };
-
-  const handleSearch = async () => {
-    const q = searchQuery.trim();
-    if (!q) return;
-    setSearching(true);
-    try {
-      const [local, bgg] = await Promise.all([
-        api.get<Game[]>(`/games/search?q=${encodeURIComponent(q)}`, {
-          showErrorToast: false,
-        }),
-        api.get<BggSearchResult[]>(`/bgg/search?q=${encodeURIComponent(q)}`, {
-          showErrorToast: false,
-        }),
-      ]);
-
-      const merged = new Map<string, SearchResultItem>();
-      for (const game of local) {
-        if (candidateGameIds.has(game.id)) continue;
-        const item: SearchResultItem = {
-          key: `game:${game.id}`,
-          title: game.title,
-          thumbnailUrl: game.thumbnailUrl,
-          minPlayers: game.minPlayers,
-          maxPlayers: game.maxPlayers,
-          playingTime: game.playingTime,
-          yearPublished: game.yearPublished,
-          gameId: game.id,
-          bggId: game.bggId,
-        };
-        merged.set(dedupeKeyFor(item), item);
-      }
-
-      for (const item of bgg) {
-        if (candidateBggIds.has(item.bggId)) continue;
-        const dedupeKey = dedupeKeyFor(item);
-        if (merged.has(dedupeKey)) continue;
-        merged.set(dedupeKey, {
-          key: `bgg:${item.bggId}`,
-          title: item.title,
-          thumbnailUrl: item.thumbnailUrl,
-          minPlayers: item.minPlayers,
-          maxPlayers: item.maxPlayers,
-          playingTime: item.playingTime,
-          yearPublished: item.yearPublished,
-          bggId: item.bggId,
-        });
-      }
-
-      setSearchResults(
-        [...merged.values()].sort((a, b) => a.title.localeCompare(b.title)),
-      );
-    } catch { /* toast auto-shown */ }
-    finally { setSearching(false); }
-  };
-
-  const handleAdd = async (result: SearchResultItem) => {
-    setAdding(result.key);
+  const handleAdd = async (result: GameSearchAddResult) => {
     try {
       let gameId = result.gameId;
       if (!gameId && result.bggId != null) {
@@ -1118,14 +1039,8 @@ function RecommendationsSection({
       await api.post(`/events/${eventId}/recommendations/add`, { gameId });
       onTelemetry('recommendation_manual_add', { gameId });
       toast.success('Game added to recommendations');
-      setSearchResults((prev) =>
-        prev.filter(
-          (r) => r.key !== result.key && (r.gameId ? r.gameId !== gameId : true),
-        ),
-      );
       onChanged();
     } catch { /* toast auto-shown */ }
-    finally { setAdding(null); }
   };
 
   const handleRemove = async (candidateId: string) => {
@@ -1142,51 +1057,21 @@ function RecommendationsSection({
   return (
     <div className="space-y-6">
       {isPlanning && canEditRecommendations && (
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Add a game manually</h3>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search games..."
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-            <button
-              onClick={handleSearch}
-              disabled={searching}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
-            >
-              {searching ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-          {searchResults.length > 0 && (
-            <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
-              {searchResults.map((result) => (
-                <div key={result.key} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
-                  {result.thumbnailUrl && (
-                    <img src={result.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{result.title}</p>
-                    <p className="text-xs text-gray-500">
-                      {result.minPlayers}-{result.maxPlayers} players
-                      {result.playingTime ? ` · ${result.playingTime} min` : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleAdd(result)}
-                    disabled={adding === result.key}
-                    className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50 transition"
-                  >
-                    {adding === result.key ? 'Adding...' : '+ Add'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <GameSearchAdd
+          heading="Add a game manually"
+          placeholder="Search games..."
+          searchButtonLabel="Search"
+          excludedGameIds={candidateGameIds}
+          excludedBggIds={candidateBggIds}
+          onAdd={handleAdd}
+          containerClassName="bg-white rounded-xl border border-gray-100 p-4"
+          headingClassName="text-sm font-semibold text-gray-700 mb-2"
+          inputClassName="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          searchButtonClassName="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
+          resultsContainerClassName="mt-3 space-y-2 max-h-60 overflow-y-auto"
+          addButtonClassName="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 disabled:opacity-50 transition"
+          noResultsMessage={(query) => `No results found for “${query}”`}
+        />
       )}
 
       {!safeCandidates.length ? (

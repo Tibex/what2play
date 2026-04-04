@@ -19,6 +19,27 @@ const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const BGG_TOP_CSV_SNAPSHOT_URL =
   'https://gist.githubusercontent.com/stungeye/358bf7e10e11e42224a483990f64eed5/raw/board_games.csv';
 
+type BggSearchHit = {
+  bggId: number;
+  title: string;
+  yearPublished?: number;
+  alternateTitles: string[];
+  exactQueryMatch: boolean;
+  sourceOrder: number;
+};
+
+type BggSearchDetail = {
+  bggId: number;
+  title: string;
+  thumbnailUrl?: string;
+  imageUrl?: string;
+  bggRating?: number;
+  minPlayers?: number;
+  maxPlayers?: number;
+  playingTime?: number;
+  yearPublished?: number;
+};
+
 @Injectable()
 export class BggService {
   private readonly logger = new Logger(BggService.name);
@@ -178,9 +199,11 @@ export class BggService {
       minPlayers?: number;
       maxPlayers?: number;
       playingTime?: number;
+      bggRating?: number;
     }>
   > {
-    if (!query.trim()) return [];
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return [];
 
     const headers = this.getBggHeaders();
     if (!Object.keys(headers).length) {
@@ -189,25 +212,47 @@ export class BggService {
       );
     }
 
-    const url = `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame`;
-    const response = await fetch(url, { headers });
-    if (!response.ok) {
-      throw new BadRequestException(
-        `BGG search failed (${response.status}). Check your BGG_API_TOKEN.`,
-      );
+    const [exactSearch, broadSearch] = await Promise.allSettled([
+      this.fetchSearchHits(normalizedQuery, headers, true),
+      this.fetchSearchHits(normalizedQuery, headers, false),
+    ]);
+
+    if (broadSearch.status === 'rejected') {
+      throw broadSearch.reason;
     }
 
-    const xml = await response.text();
-    const hits = this.parseBggSearchXml(xml);
-    if (!hits.length) return [];
+    const exactHits =
+      exactSearch.status === 'fulfilled' ? exactSearch.value : [];
+    const mergedHits = this.mergeSearchHits(exactHits, broadSearch.value);
+    if (!mergedHits.length) return [];
 
-    const enriched = await this.fetchThingDetails(hits.map((h) => h.bggId));
-    const detailMap = new Map(enriched.map((d) => [d.bggId, d]));
+    const shortlistedHits = this.rankSearchHits(
+      normalizedQuery,
+      mergedHits,
+    ).slice(0, 60);
+    const enriched = await this.fetchThingDetails(
+      shortlistedHits.map((hit) => hit.bggId),
+    );
+    const detailMap = new Map(enriched.map((detail) => [detail.bggId, detail]));
+    const rankedHits = this.rankSearchHits(
+      normalizedQuery,
+      shortlistedHits,
+      detailMap,
+    ).slice(0, 25);
 
-    return hits.map((hit) => {
+    return rankedHits.map((hit) => {
       const detail = detailMap.get(hit.bggId);
-      if (detail) return { ...hit, ...detail };
-      return hit;
+      return {
+        bggId: hit.bggId,
+        title: detail?.title ?? hit.title,
+        yearPublished: detail?.yearPublished ?? hit.yearPublished,
+        thumbnailUrl: detail?.thumbnailUrl,
+        imageUrl: detail?.imageUrl,
+        minPlayers: detail?.minPlayers,
+        maxPlayers: detail?.maxPlayers,
+        playingTime: detail?.playingTime,
+        bggRating: detail?.bggRating,
+      };
     });
   }
 
@@ -425,17 +470,228 @@ export class BggService {
     };
   }
 
+  private async fetchSearchHits(
+    query: string,
+    headers: Record<string, string>,
+    exact: boolean,
+  ): Promise<BggSearchHit[]> {
+    const exactParam = exact ? '&exact=1' : '';
+    const url = `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame${exactParam}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new BadRequestException(
+        `BGG search failed (${response.status}). Check your BGG_API_TOKEN.`,
+      );
+    }
+    const xml = await response.text();
+    return this.parseBggSearchXml(xml, { exactQueryMatch: exact, limit: 150 });
+  }
+
+  private mergeSearchHits(
+    exactHits: BggSearchHit[],
+    broadHits: BggSearchHit[],
+  ): BggSearchHit[] {
+    const merged = new Map<number, BggSearchHit>();
+
+    for (const hit of [...exactHits, ...broadHits]) {
+      const existing = merged.get(hit.bggId);
+      if (!existing) {
+        merged.set(hit.bggId, {
+          ...hit,
+          alternateTitles: [...hit.alternateTitles],
+        });
+        continue;
+      }
+      existing.exactQueryMatch =
+        existing.exactQueryMatch || hit.exactQueryMatch;
+      existing.sourceOrder = Math.min(existing.sourceOrder, hit.sourceOrder);
+      if (!existing.yearPublished && hit.yearPublished) {
+        existing.yearPublished = hit.yearPublished;
+      }
+      if (
+        existing.title.startsWith('Game ') &&
+        !hit.title.startsWith('Game ')
+      ) {
+        existing.title = hit.title;
+      }
+      const seenAltTitles = new Set(
+        existing.alternateTitles.map((title) =>
+          this.normalizeSearchText(title),
+        ),
+      );
+      for (const altTitle of hit.alternateTitles) {
+        const normalizedAltTitle = this.normalizeSearchText(altTitle);
+        if (seenAltTitles.has(normalizedAltTitle)) continue;
+        seenAltTitles.add(normalizedAltTitle);
+        existing.alternateTitles.push(altTitle);
+      }
+    }
+
+    return [...merged.values()];
+  }
+
+  private rankSearchHits(
+    query: string,
+    hits: BggSearchHit[],
+    detailsById: Map<number, BggSearchDetail> = new Map(),
+  ): BggSearchHit[] {
+    const normalizedQuery = this.normalizeSearchText(query);
+    const queryTokens = this.tokenizeSearchText(normalizedQuery);
+    const queryYearMatch = query.match(/\b(18|19|20)\d{2}\b/);
+    const queryYear = queryYearMatch
+      ? Number.parseInt(queryYearMatch[0], 10)
+      : undefined;
+
+    return [...hits].sort((a, b) => {
+      const scoreA = this.computeSearchHitScore(
+        a,
+        normalizedQuery,
+        queryTokens,
+        queryYear,
+        detailsById,
+      );
+      const scoreB = this.computeSearchHitScore(
+        b,
+        normalizedQuery,
+        queryTokens,
+        queryYear,
+        detailsById,
+      );
+      if (scoreB !== scoreA) return scoreB - scoreA;
+
+      const detailA = detailsById.get(a.bggId);
+      const detailB = detailsById.get(b.bggId);
+      const ratingDiff = (detailB?.bggRating ?? 0) - (detailA?.bggRating ?? 0);
+      if (ratingDiff !== 0) return ratingDiff;
+
+      const yearDiff =
+        (detailB?.yearPublished ?? b.yearPublished ?? 0) -
+        (detailA?.yearPublished ?? a.yearPublished ?? 0);
+      if (yearDiff !== 0) return yearDiff;
+
+      if (a.sourceOrder !== b.sourceOrder) return a.sourceOrder - b.sourceOrder;
+      return a.bggId - b.bggId;
+    });
+  }
+
+  private computeSearchHitScore(
+    hit: BggSearchHit,
+    normalizedQuery: string,
+    queryTokens: string[],
+    queryYear: number | undefined,
+    detailsById: Map<number, BggSearchDetail>,
+  ): number {
+    const detail = detailsById.get(hit.bggId);
+    const candidateTitles = [
+      hit.title,
+      ...(hit.alternateTitles || []),
+      detail?.title,
+    ].filter((value): value is string => Boolean(value));
+    const bestTitleScore = candidateTitles.reduce((best, title) => {
+      return Math.max(
+        best,
+        this.computeTitleMatchScore(normalizedQuery, queryTokens, title),
+      );
+    }, 0);
+
+    let score = bestTitleScore;
+    if (hit.exactQueryMatch) score += 250;
+
+    const yearPublished = detail?.yearPublished ?? hit.yearPublished;
+    if (queryYear && yearPublished) {
+      score += queryYear === yearPublished ? 120 : -60;
+    }
+    if (detail?.bggRating) {
+      score += detail.bggRating * 10;
+    }
+
+    return score;
+  }
+
+  private computeTitleMatchScore(
+    normalizedQuery: string,
+    queryTokens: string[],
+    title: string,
+  ): number {
+    const normalizedTitle = this.normalizeSearchText(title);
+    if (!normalizedQuery || !normalizedTitle) return 0;
+
+    let score = 0;
+
+    if (normalizedTitle === normalizedQuery) score += 1000;
+    if (normalizedTitle.startsWith(normalizedQuery)) score += 700;
+
+    const queryIndex = normalizedTitle.indexOf(normalizedQuery);
+    if (queryIndex >= 0) {
+      score += 450;
+      score -= Math.min(queryIndex * 8, 220);
+    }
+
+    const titleTokens = this.tokenizeSearchText(normalizedTitle);
+    let exactTokenMatches = 0;
+    let prefixTokenMatches = 0;
+    for (const queryToken of queryTokens) {
+      if (titleTokens.includes(queryToken)) {
+        exactTokenMatches++;
+        continue;
+      }
+      if (
+        titleTokens.some(
+          (titleToken) =>
+            titleToken.startsWith(queryToken) ||
+            queryToken.startsWith(titleToken),
+        )
+      ) {
+        prefixTokenMatches++;
+      }
+    }
+
+    score += exactTokenMatches * 90;
+    score += prefixTokenMatches * 45;
+    if (
+      queryTokens.length > 0 &&
+      exactTokenMatches + prefixTokenMatches === queryTokens.length
+    ) {
+      score += 200;
+    }
+    if (queryTokens.length > 1 && titleTokens[0] === queryTokens[0]) {
+      score += 80;
+    }
+
+    const lengthPenalty = Math.abs(
+      normalizedTitle.length - normalizedQuery.length,
+    );
+    score -= Math.min(lengthPenalty, 40) * 2;
+
+    return score;
+  }
+
+  private normalizeSearchText(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+
+  private tokenizeSearchText(value: string): string[] {
+    if (!value) return [];
+    return value.split(' ').filter((token) => token.length > 0);
+  }
+
   private parseBggSearchXml(
     xml: string,
-  ): Array<{ bggId: number; title: string; yearPublished?: number }> {
-    const results: Array<{
-      bggId: number;
-      title: string;
-      yearPublished?: number;
-    }> = [];
+    options: { exactQueryMatch?: boolean; limit?: number } = {},
+  ): BggSearchHit[] {
+    const limit = options.limit ?? 150;
+    const exactQueryMatch = options.exactQueryMatch ?? false;
+    const results: BggSearchHit[] = [];
 
     const itemRegex = /<item[^>]*id="(\d+)"[^>]*>([\s\S]*?)<\/item>/g;
     let match: RegExpExecArray | null;
+    let sourceOrder = 0;
 
     while ((match = itemRegex.exec(xml)) !== null) {
       const bggId = parseInt(match[1], 10);
@@ -451,8 +707,32 @@ export class BggService {
       const yearMatch = block.match(/<yearpublished[^>]*value="(\d+)"/);
       const yearPublished = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
 
-      results.push({ bggId, title, yearPublished });
-      if (results.length >= 25) break;
+      const alternateTitleSet = new Set<string>();
+      const alternateNameRegex =
+        /<name[^>]*type="alternate"[^>]*value="([^"]+)"/g;
+      let alternateNameMatch: RegExpExecArray | null;
+      while ((alternateNameMatch = alternateNameRegex.exec(block)) !== null) {
+        const alternateTitle = this.decodeHtmlEntities(alternateNameMatch[1]);
+        const normalizedAlternateTitle =
+          this.normalizeSearchText(alternateTitle);
+        const normalizedPrimaryTitle = this.normalizeSearchText(title);
+        if (
+          normalizedAlternateTitle &&
+          normalizedAlternateTitle !== normalizedPrimaryTitle
+        ) {
+          alternateTitleSet.add(alternateTitle);
+        }
+      }
+
+      results.push({
+        bggId,
+        title,
+        yearPublished,
+        alternateTitles: [...alternateTitleSet],
+        exactQueryMatch,
+        sourceOrder: sourceOrder++,
+      });
+      if (results.length >= limit) break;
     }
 
     return results;

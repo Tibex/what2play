@@ -5,6 +5,7 @@ import { Game } from '@/lib/types';
 interface GameCardProps {
   game: Game;
   actions?: React.ReactNode;
+  actionsPlacement?: 'below' | 'right';
   explanation?: Record<string, string>;
   showScore?: number;
   bggUrl?: string;
@@ -20,6 +21,7 @@ interface GameCardProps {
 export default function GameCard({
   game,
   actions,
+  actionsPlacement = 'below',
   explanation,
   showScore,
   bggUrl,
@@ -47,10 +49,21 @@ export default function GameCard({
     explanationTreatment === 'full' &&
     explanation &&
     Object.keys(explanation).length > 0;
+  const centerRightActionsVertically =
+    actionsPlacement === 'right' &&
+    showScore === undefined &&
+    !showFullExplanation;
+  const bodyClass = `${bodyPad} min-w-0 flex-1 ${
+    centerRightActionsVertically ? 'flex items-center' : ''
+  }`;
   const actionsMt = compact ? 'mt-2' : 'mt-3';
   const explanationChipClass = compact
     ? 'wt-chip px-1.5 py-0.5 text-[0.62rem] leading-none'
     : 'wt-chip px-1.5 py-0.5 text-[0.68rem] leading-none';
+  const headerRowClass =
+    actionsPlacement === 'right' && showScore === undefined
+      ? 'flex w-full items-center justify-between gap-1.5'
+      : 'flex items-start justify-between gap-1.5';
 
   if (heroStrip) {
     const pills = (previewPills ?? [])
@@ -128,8 +141,8 @@ export default function GameCard({
           ) : (
             <img src={game.thumbnailUrl} alt={game.title} className={imgClass} />
           ))}
-        <div className={`${bodyPad} min-w-0 flex-1`}>
-          <div className="flex items-start justify-between gap-1.5">
+        <div className={bodyClass}>
+          <div className={headerRowClass}>
             <div className="min-w-0">
               {bggUrl ? (
                 <a
@@ -150,8 +163,14 @@ export default function GameCard({
                 {game.yearPublished && (compact ? '' : ` · ${game.yearPublished}`)}
               </p>
             </div>
-            {showScore !== undefined && (
-              <span className={scoreClass}>{showScore.toFixed(0)} pts</span>
+            {(showScore !== undefined ||
+              (actions && actionsPlacement === 'right')) && (
+              <div className="flex shrink-0 items-center gap-2">
+                {showScore !== undefined && (
+                  <span className={scoreClass}>{showScore.toFixed(0)} pts</span>
+                )}
+                {actions && actionsPlacement === 'right' && actions}
+              </div>
             )}
           </div>
           {showFullExplanation && (
@@ -165,7 +184,9 @@ export default function GameCard({
                 ))}
             </div>
           )}
-          {actions && <div className={actionsMt}>{actions}</div>}
+          {actions && actionsPlacement === 'below' && (
+            <div className={actionsMt}>{actions}</div>
+          )}
         </div>
       </div>
     </div>
