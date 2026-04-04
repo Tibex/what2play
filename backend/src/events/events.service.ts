@@ -43,7 +43,7 @@ export class EventsService {
     const eventTimezone = resolveEventTimezone(dto.eventTimezone);
     const dateTime = resolveEventDateTime(dto.dateTime, eventTimezone);
     const type = dto.type === 'open' ? 'open' : 'invite';
-    const capacity = type === 'open' ? dto.capacity ?? null : null;
+    const capacity = type === 'open' ? (dto.capacity ?? null) : null;
     const event = this.eventsRepo.create({
       ...dto,
       hostId,
