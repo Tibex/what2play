@@ -224,6 +224,10 @@ export default function EventDetailPage() {
       toast.error('RSVP is closed for this event');
       return;
     }
+    if (isHost && status === 'not_going') {
+      toast.error('Event creator cannot leave this event');
+      return;
+    }
     if (updatingRsvp) {
       return;
     }
@@ -587,7 +591,7 @@ export default function EventDetailPage() {
                       : 'Going'}
                 </button>
               )}
-              {myAttendee && myAttendee.rsvpStatus === 'going' && (
+              {myAttendee && myAttendee.rsvpStatus === 'going' && !isHost && (
                 <button
                   onClick={() => handleRsvp('not_going')}
                   disabled={updatingRsvp}

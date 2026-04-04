@@ -187,6 +187,9 @@ export class EventsService {
         'RSVP cannot be changed for completed or cancelled events',
       );
     }
+    if (status === 'not_going' && event.hostId === userId) {
+      throw new BadRequestException('Host cannot leave their own event');
+    }
 
     let attendee = await this.attendeesRepo.findOne({
       where: { eventId, userId },

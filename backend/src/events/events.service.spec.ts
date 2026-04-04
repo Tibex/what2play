@@ -302,6 +302,23 @@ describe('EventsService', () => {
       expect(mockAttendeesRepo.save).toHaveBeenCalledTimes(1);
     });
 
+    it('rejects host RSVP change to not_going', async () => {
+      mockEventsRepo.findOne.mockResolvedValue({
+        id: 'e-open',
+        hostId: 'host-1',
+        type: 'open',
+        status: 'planning',
+        capacity: 6,
+      });
+
+      await expect(
+        service.rsvp('e-open', 'host-1', 'not_going'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(mockAttendeesRepo.findOne).not.toHaveBeenCalled();
+      expect(mockAttendeesRepo.remove).not.toHaveBeenCalled();
+      expect(mockAttendeesRepo.save).not.toHaveBeenCalled();
+    });
+
     it('removes non-host attendee when RSVP changes to not_going', async () => {
       const event = {
         id: 'e-open',

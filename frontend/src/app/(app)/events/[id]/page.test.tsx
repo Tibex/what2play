@@ -198,4 +198,69 @@ describe('EventDetailPage', () => {
       expect(screen.getByText('Add a game manually')).toBeInTheDocument();
     });
   });
+
+  it('does not render "Can\'t make it" for the event creator', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'host-1',
+        email: 'host@example.com',
+        name: 'Host',
+        subscriptionTier: 'free',
+        role: 'user',
+      },
+      isAuthenticated: true,
+    });
+
+    getMock.mockImplementation(async (path: string) => {
+      if (path === '/events/event-1') {
+        return {
+          id: 'event-1',
+          hostId: 'host-1',
+          host: { id: 'host-1', name: 'Host', email: 'host@example.com' },
+          title: 'Friday Game Night',
+          dateTime: '2030-01-01T19:00:00.000Z',
+          eventTimezone: 'UTC',
+          type: 'invite',
+          status: 'planning',
+          discoveryMode: false,
+          attendees: [
+            {
+              id: 'a-host',
+              eventId: 'event-1',
+              userId: 'host-1',
+              user: {
+                id: 'host-1',
+                email: 'host@example.com',
+                name: 'Host',
+                subscriptionTier: 'free',
+                role: 'user',
+              },
+              rsvpStatus: 'going',
+            },
+          ],
+          candidates: [],
+          createdAt: '2030-01-01T12:00:00.000Z',
+        };
+      }
+
+      if (path === '/friends') {
+        return [];
+      }
+
+      if (path === '/friends/pending/sent') {
+        return [];
+      }
+
+      throw new Error(`Unexpected GET path: ${path}`);
+    });
+
+    render(<EventDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Friday Game Night')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole('button', { name: "Can't make it" }),
+    ).not.toBeInTheDocument();
+  });
 });
