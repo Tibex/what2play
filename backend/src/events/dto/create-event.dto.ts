@@ -34,7 +34,8 @@ export class CreateEventDto {
   dateTime?: string;
 
   @ApiPropertyOptional({
-    description: 'When true, create the event in scheduling mode with availabilitySlots.',
+    description:
+      'When true, create the event in scheduling mode with availabilitySlots.',
   })
   @IsOptional()
   @IsBoolean()

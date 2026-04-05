@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddDurationMinutesToSchedulePolls1764570000000
-  implements MigrationInterface
-{
+export class AddDurationMinutesToSchedulePolls1764570000000 implements MigrationInterface {
   name = 'AddDurationMinutesToSchedulePolls1764570000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

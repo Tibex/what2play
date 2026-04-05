@@ -124,7 +124,9 @@ export class EventsController {
   @Get(':id/schedule')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Availability poll for an event in scheduling status' })
+  @ApiOperation({
+    summary: 'Availability poll for an event in scheduling status',
+  })
   getEventSchedule(@Param('id') id: string, @Request() req) {
     return this.eventsService.getScheduleDetail(id, req.user.id);
   }
@@ -132,7 +134,9 @@ export class EventsController {
   @Patch(':id/schedule/responses')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Set availability answers for scheduling event slots' })
+  @ApiOperation({
+    summary: 'Set availability answers for scheduling event slots',
+  })
   async setEventScheduleResponses(
     @Param('id') id: string,
     @Request() req,

@@ -1,14 +1,14 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class EventSchedulingReplaceSchedulePolls1764582000000
-  implements MigrationInterface
-{
+export class EventSchedulingReplaceSchedulePolls1764582000000 implements MigrationInterface {
   name = 'EventSchedulingReplaceSchedulePolls1764582000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_invites"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_responses"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_participants"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "schedule_poll_participants"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_slots"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_polls"`);
 
@@ -56,9 +56,7 @@ export class EventSchedulingReplaceSchedulePolls1764582000000
     await queryRunner.query(`DROP TABLE IF EXISTS "event_schedule_responses"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "event_schedule_slots"`);
 
-    await queryRunner.query(
-      `DELETE FROM "events" WHERE "dateTime" IS NULL`,
-    );
+    await queryRunner.query(`DELETE FROM "events" WHERE "dateTime" IS NULL`);
     await queryRunner.query(
       `ALTER TABLE "events" ALTER COLUMN "dateTime" SET NOT NULL`,
     );

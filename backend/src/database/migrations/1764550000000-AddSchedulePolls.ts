@@ -83,7 +83,9 @@ export class AddSchedulePolls1764550000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_responses"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_participants"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "schedule_poll_participants"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_poll_slots"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "schedule_polls"`);
   }

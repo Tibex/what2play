@@ -733,7 +733,10 @@ export class EventsService {
       }
     }
 
-    const responsesByUserSlot = new Map<string, Map<string, EventScheduleAnswer>>();
+    const responsesByUserSlot = new Map<
+      string,
+      Map<string, EventScheduleAnswer>
+    >();
     for (const uid of voterIds) {
       responsesByUserSlot.set(uid, new Map());
     }
