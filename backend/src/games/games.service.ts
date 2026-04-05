@@ -4,6 +4,24 @@ import { Repository, In } from 'typeorm';
 import { Game } from '../entities/game.entity';
 import { UserGameOwnership } from '../entities/user-game-ownership.entity';
 import { UserGameRating } from '../entities/user-game-rating.entity';
+import { Event } from '../entities/event.entity';
+import { EventAttendee } from '../entities/event-attendee.entity';
+import { EventFeedback } from '../entities/event-feedback.entity';
+import { EventVote } from '../entities/event-vote.entity';
+import { EventGameCandidate } from '../entities/event-game-candidate.entity';
+
+type GameCollectionPerformance = {
+  pickedCount: number;
+  avgVotingRank: number | null;
+  votingPoolCount: number;
+  autoRecommendedCount: number;
+  avgEnjoyment: number | null;
+};
+
+export type UserCollectionItem = UserGameOwnership & {
+  game: Game;
+  performance: GameCollectionPerformance;
+};
 
 @Injectable()
 export class GamesService {
@@ -14,6 +32,14 @@ export class GamesService {
     private ownershipRepo: Repository<UserGameOwnership>,
     @InjectRepository(UserGameRating)
     private ratingsRepo: Repository<UserGameRating>,
+    @InjectRepository(Event)
+    private eventsRepo: Repository<Event>,
+    @InjectRepository(EventFeedback)
+    private feedbackRepo: Repository<EventFeedback>,
+    @InjectRepository(EventVote)
+    private votesRepo: Repository<EventVote>,
+    @InjectRepository(EventGameCandidate)
+    private candidatesRepo: Repository<EventGameCandidate>,
   ) {}
 
   async searchGames(query: string): Promise<Game[]> {
@@ -81,13 +107,170 @@ export class GamesService {
     return output;
   }
 
-  async getUserCollection(
-    userId: string,
-  ): Promise<(UserGameOwnership & { game: Game })[]> {
-    return this.ownershipRepo.find({
+  async getUserCollection(userId: string): Promise<UserCollectionItem[]> {
+    const ownerships = await this.ownershipRepo.find({
       where: { userId },
       relations: ['game'],
       order: { createdAt: 'DESC' },
+    });
+    if (ownerships.length === 0) return [];
+
+    const gameIds = ownerships.map((ownership) => ownership.gameId);
+    const votingPoolStatuses = [
+      'voting',
+      'confirmed',
+      'active',
+      'completed',
+      'past',
+    ];
+
+    const [pickedRows, votingRows, votingPoolRows, autoRows, enjoymentRows] =
+      await Promise.all([
+      this.eventsRepo
+        .createQueryBuilder('event')
+        .select('event.selectedGameId', 'gameId')
+        .addSelect('COUNT(DISTINCT event.id)', 'pickedCount')
+        .leftJoin(
+          EventAttendee,
+          'membership',
+          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+          { userId, going: 'going' },
+        )
+        .where('event.selectedGameId IN (:...gameIds)', { gameIds })
+        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+          userId,
+        })
+        .groupBy('event.selectedGameId')
+        .getRawMany<{ gameId: string; pickedCount: string }>(),
+      this.votesRepo
+        .createQueryBuilder('vote')
+        .innerJoin(Event, 'event', 'event.id = vote.eventId')
+        .leftJoin(
+          EventAttendee,
+          'membership',
+          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+          { userId, going: 'going' },
+        )
+        .select('vote.gameId', 'gameId')
+        .addSelect('AVG(vote.rank)', 'avgVotingRank')
+        .where('vote.gameId IN (:...gameIds)', { gameIds })
+        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+          userId,
+        })
+        .groupBy('vote.gameId')
+        .getRawMany<{ gameId: string; avgVotingRank: string | null }>(),
+      this.candidatesRepo
+        .createQueryBuilder('candidate')
+        .innerJoin(Event, 'event', 'event.id = candidate.eventId')
+        .leftJoin(
+          EventAttendee,
+          'membership',
+          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+          { userId, going: 'going' },
+        )
+        .select('candidate.gameId', 'gameId')
+        .addSelect('COUNT(DISTINCT candidate.eventId)', 'votingPoolCount')
+        .where('candidate.gameId IN (:...gameIds)', { gameIds })
+        .andWhere('event.status IN (:...votingPoolStatuses)', {
+          votingPoolStatuses,
+        })
+        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+          userId,
+        })
+        .groupBy('candidate.gameId')
+        .getRawMany<{ gameId: string; votingPoolCount: string }>(),
+      this.candidatesRepo
+        .createQueryBuilder('candidate')
+        .innerJoin(Event, 'event', 'event.id = candidate.eventId')
+        .leftJoin(
+          EventAttendee,
+          'membership',
+          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+          { userId, going: 'going' },
+        )
+        .select('candidate.gameId', 'gameId')
+        .addSelect('COUNT(DISTINCT candidate.eventId)', 'autoRecommendedCount')
+        .where('candidate.gameId IN (:...gameIds)', { gameIds })
+        .andWhere('candidate.source != :manualSource', {
+          manualSource: 'manual',
+        })
+        .andWhere('event.status != :cancelledStatus', {
+          cancelledStatus: 'cancelled',
+        })
+        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+          userId,
+        })
+        .groupBy('candidate.gameId')
+        .getRawMany<{ gameId: string; autoRecommendedCount: string }>(),
+      this.feedbackRepo
+        .createQueryBuilder('feedback')
+        .innerJoin(Event, 'event', 'event.id = feedback.eventId')
+        .leftJoin(
+          EventAttendee,
+          'membership',
+          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+          { userId, going: 'going' },
+        )
+        .select('feedback.gameId', 'gameId')
+        .addSelect('AVG(feedback.enjoymentRating)', 'avgEnjoyment')
+        .where('feedback.gameId IN (:...gameIds)', { gameIds })
+        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+          userId,
+        })
+        .groupBy('feedback.gameId')
+        .getRawMany<{ gameId: string; avgEnjoyment: string | null }>(),
+      ]);
+
+    const pickedCountByGame = new Map<string, number>();
+    for (const row of pickedRows) {
+      pickedCountByGame.set(row.gameId, Number(row.pickedCount) || 0);
+    }
+
+    const avgVotingRankByGame = new Map<string, number | null>();
+    for (const row of votingRows) {
+      avgVotingRankByGame.set(
+        row.gameId,
+        row.avgVotingRank == null
+          ? null
+          : Number(Number(row.avgVotingRank).toFixed(2)),
+      );
+    }
+
+    const votingPoolByGame = new Map<string, number>();
+    for (const row of votingPoolRows) {
+      votingPoolByGame.set(row.gameId, Number(row.votingPoolCount) || 0);
+    }
+
+    const autoRecommendedByGame = new Map<string, number>();
+    for (const row of autoRows) {
+      autoRecommendedByGame.set(
+        row.gameId,
+        Number(row.autoRecommendedCount) || 0,
+      );
+    }
+
+    const avgEnjoymentByGame = new Map<string, number | null>();
+    for (const row of enjoymentRows) {
+      avgEnjoymentByGame.set(
+        row.gameId,
+        row.avgEnjoyment == null
+          ? null
+          : Number(Number(row.avgEnjoyment).toFixed(2)),
+      );
+    }
+
+    return ownerships.map((ownership) => {
+      return {
+        ...ownership,
+        performance: {
+          pickedCount: pickedCountByGame.get(ownership.gameId) ?? 0,
+          avgVotingRank: avgVotingRankByGame.get(ownership.gameId) ?? null,
+          votingPoolCount: votingPoolByGame.get(ownership.gameId) ?? 0,
+          autoRecommendedCount:
+            autoRecommendedByGame.get(ownership.gameId) ?? 0,
+          avgEnjoyment: avgEnjoymentByGame.get(ownership.gameId) ?? null,
+        },
+      };
     });
   }
 
@@ -137,6 +320,20 @@ export class GamesService {
     const gameMap = new Map<string, Game>();
     ownerships.forEach((o) => gameMap.set(o.gameId, o.game));
     return Array.from(gameMap.values());
+  }
+
+  async getOwnershipsByUsers(
+    userIds: string[],
+  ): Promise<Array<Pick<UserGameOwnership, 'userId' | 'gameId'>>> {
+    if (!userIds.length) return [];
+    const ownerships = await this.ownershipRepo.find({
+      where: { userId: In(userIds) },
+      select: ['userId', 'gameId'],
+    });
+    return ownerships.map((ownership) => ({
+      userId: ownership.userId,
+      gameId: ownership.gameId,
+    }));
   }
 
   async getRatingsForGames(

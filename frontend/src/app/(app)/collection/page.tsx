@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
@@ -10,6 +10,34 @@ import type { GameOwnership } from '@/lib/types';
 export default function CollectionPage() {
   const [collection, setCollection] = useState<GameOwnership[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const sortedCollection = useMemo(
+    () =>
+      [...collection].sort((a, b) => {
+        const aPicked = a.performance?.pickedCount ?? 0;
+        const bPicked = b.performance?.pickedCount ?? 0;
+        if (bPicked !== aPicked) return bPicked - aPicked;
+
+        const aPool = a.performance?.votingPoolCount ?? 0;
+        const bPool = b.performance?.votingPoolCount ?? 0;
+        if (bPool !== aPool) return bPool - aPool;
+
+        const aAuto = a.performance?.autoRecommendedCount ?? 0;
+        const bAuto = b.performance?.autoRecommendedCount ?? 0;
+        if (bAuto !== aAuto) return bAuto - aAuto;
+
+        const aPos = a.performance?.avgVotingRank ?? Number.POSITIVE_INFINITY;
+        const bPos = b.performance?.avgVotingRank ?? Number.POSITIVE_INFINITY;
+        if (aPos !== bPos) return aPos - bPos;
+
+        const aEnjoy = a.performance?.avgEnjoyment ?? Number.NEGATIVE_INFINITY;
+        const bEnjoy = b.performance?.avgEnjoyment ?? Number.NEGATIVE_INFINITY;
+        if (bEnjoy !== aEnjoy) return bEnjoy - aEnjoy;
+
+        return a.game.title.localeCompare(b.game.title);
+      }),
+    [collection],
+  );
 
   const loadCollection = async () => {
     const data = await api.get<GameOwnership[]>('/games/collection');
@@ -68,10 +96,50 @@ export default function CollectionPage() {
           </h2>
 
           <div className="space-y-3">
-            {collection.map((ownership) => (
+            {sortedCollection.map((ownership) => (
               <GameCard
                 key={ownership.id}
                 game={ownership.game}
+                metaBadges={
+                  <div className="flex flex-wrap gap-1.5">
+                    <span
+                      className="wt-chip px-2 py-0.5 text-[0.65rem]"
+                      title="Times this game was the final picked game."
+                    >
+                      Picked {ownership.performance?.pickedCount ?? 0}
+                    </span>
+                    <span
+                      className="wt-chip px-2 py-0.5 text-[0.65rem]"
+                      title="Average vote rank when this game was voted. Lower is better."
+                    >
+                      Pos{' '}
+                      {ownership.performance?.avgVotingRank != null
+                        ? ownership.performance.avgVotingRank.toFixed(2)
+                        : '—'}
+                    </span>
+                    <span
+                      className="wt-chip px-2 py-0.5 text-[0.65rem]"
+                      title="Number of events where this game appeared in the voting pool."
+                    >
+                      Pool {ownership.performance?.votingPoolCount ?? 0}
+                    </span>
+                    <span
+                      className="wt-chip px-2 py-0.5 text-[0.65rem]"
+                      title="Number of events where this game was auto-recommended (not manually added)."
+                    >
+                      Auto {ownership.performance?.autoRecommendedCount ?? 0}
+                    </span>
+                    <span
+                      className="wt-chip px-2 py-0.5 text-[0.65rem]"
+                      title="Average post-event enjoyment score for this game (1-5)."
+                    >
+                      Enjoy{' '}
+                      {ownership.performance?.avgEnjoyment != null
+                        ? `${ownership.performance.avgEnjoyment.toFixed(1)}/5`
+                        : '—'}
+                    </span>
+                  </div>
+                }
                 actions={
                   <button
                     onClick={() => void removeFromCollection(ownership.gameId)}
@@ -88,4 +156,3 @@ export default function CollectionPage() {
     </div>
   );
 }
-

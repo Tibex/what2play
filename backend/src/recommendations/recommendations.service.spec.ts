@@ -46,6 +46,7 @@ describe('RecommendationsService', () => {
     getGamesOwnedByUsers: jest.fn(),
     getRatingsForGames: jest.fn(),
     getDiscoveryGames: jest.fn(),
+    getOwnershipsByUsers: jest.fn(),
   };
 
   const mockTelemetryRepo = {
@@ -61,6 +62,7 @@ describe('RecommendationsService', () => {
 
   const mockEventsService = {
     findById: jest.fn(),
+    findByIdForUser: jest.fn(),
     getAttendeeUserIds: jest.fn(),
     assertHostAccess: jest.fn(),
   };
@@ -98,6 +100,7 @@ describe('RecommendationsService', () => {
     jest.clearAllMocks();
     mockCandidatesRepo.find.mockResolvedValue([]);
     mockGamesService.getDiscoveryGames.mockResolvedValue([]);
+    mockGamesService.getOwnershipsByUsers.mockResolvedValue([]);
   });
 
   describe('generateCandidates', () => {
@@ -851,6 +854,80 @@ describe('RecommendationsService', () => {
           },
         ],
       });
+    });
+  });
+
+  describe('pool stats', () => {
+    it('returns unique pool count with weighted attendee shares', async () => {
+      mockEventsService.findByIdForUser.mockResolvedValue({
+        id: 'e1',
+        hostId: 'host-1',
+        attendees: [
+          {
+            userId: 'host-1',
+            rsvpStatus: 'going',
+            user: { name: 'Host' },
+          },
+          {
+            userId: 'u2',
+            rsvpStatus: 'going',
+            user: { name: 'Alice' },
+          },
+          {
+            userId: 'u3',
+            rsvpStatus: 'going',
+            user: { name: 'Bob' },
+          },
+        ],
+      });
+      mockGamesService.getOwnershipsByUsers.mockResolvedValue([
+        { userId: 'host-1', gameId: 'g1' },
+        { userId: 'u2', gameId: 'g1' },
+        { userId: 'u2', gameId: 'g2' },
+        { userId: 'u3', gameId: 'g3' },
+      ]);
+
+      const stats = await service.getPoolStats('e1', 'host-1');
+
+      expect(stats.uniquePoolGames).toBe(3);
+      expect(stats.attendeeShares).toEqual([
+        expect.objectContaining({
+          userId: 'u2',
+          weightedContribution: 1.5,
+          weightedSharePercent: 50,
+          ownedPoolGames: 2,
+        }),
+        expect.objectContaining({
+          userId: 'u3',
+          weightedContribution: 1,
+          weightedSharePercent: 33.33,
+          ownedPoolGames: 1,
+        }),
+        expect.objectContaining({
+          userId: 'host-1',
+          weightedContribution: 0.5,
+          weightedSharePercent: 16.67,
+          ownedPoolGames: 1,
+        }),
+      ]);
+    });
+
+    it('rejects viewer who is neither host nor going attendee', async () => {
+      mockEventsService.findByIdForUser.mockResolvedValue({
+        id: 'e1',
+        hostId: 'host-1',
+        attendees: [
+          {
+            userId: 'u2',
+            rsvpStatus: 'pending',
+            user: { name: 'Alice' },
+          },
+        ],
+      });
+
+      await expect(service.getPoolStats('e1', 'u2')).rejects.toThrow(
+        'Join this event as going',
+      );
     });
   });
 });

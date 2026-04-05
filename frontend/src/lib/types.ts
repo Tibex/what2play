@@ -55,6 +55,13 @@ export interface GameOwnership {
   userId: string;
   gameId: string;
   game: Game;
+  performance?: {
+    pickedCount: number;
+    avgVotingRank: number | null;
+    votingPoolCount: number;
+    autoRecommendedCount: number;
+    avgEnjoyment: number | null;
+  };
 }
 
 export interface GameRating {
@@ -154,6 +161,20 @@ export interface VotingStatus {
   expectedVoters: number;
   submittedVoters: number;
   allVoted: boolean;
+}
+
+export interface RecommendationPoolAttendeeShare {
+  userId: string;
+  name: string;
+  ownedPoolGames: number;
+  weightedContribution: number;
+  weightedSharePercent: number;
+}
+
+export interface RecommendationPoolStats {
+  eventId: string;
+  uniquePoolGames: number;
+  attendeeShares: RecommendationPoolAttendeeShare[];
 }
 
 export interface EventFeedback {

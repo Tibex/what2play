@@ -79,4 +79,15 @@ export class RecommendationsController {
       req.user.id,
     );
   }
+
+  @Get('pool-stats')
+  @ApiOperation({
+    summary: 'Get shared recommendation pool size and attendee contribution',
+  })
+  getPoolStats(
+    @Param('eventId') eventId: string,
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    return this.recommendationsService.getPoolStats(eventId, req.user.id);
+  }
 }

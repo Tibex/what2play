@@ -4,6 +4,10 @@ import { GamesService } from './games.service';
 import { Game } from '../entities/game.entity';
 import { UserGameOwnership } from '../entities/user-game-ownership.entity';
 import { UserGameRating } from '../entities/user-game-rating.entity';
+import { Event } from '../entities/event.entity';
+import { EventFeedback } from '../entities/event-feedback.entity';
+import { EventVote } from '../entities/event-vote.entity';
+import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 
 describe('GamesService', () => {
   let service: GamesService;
@@ -30,6 +34,22 @@ describe('GamesService', () => {
     find: jest.fn(),
   };
 
+  const mockEventsRepo = {
+    createQueryBuilder: jest.fn(),
+  };
+
+  const mockFeedbackRepo = {
+    createQueryBuilder: jest.fn(),
+  };
+
+  const mockVotesRepo = {
+    createQueryBuilder: jest.fn(),
+  };
+
+  const mockCandidatesRepo = {
+    createQueryBuilder: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,6 +62,16 @@ describe('GamesService', () => {
         {
           provide: getRepositoryToken(UserGameRating),
           useValue: mockRatingsRepo,
+        },
+        { provide: getRepositoryToken(Event), useValue: mockEventsRepo },
+        {
+          provide: getRepositoryToken(EventFeedback),
+          useValue: mockFeedbackRepo,
+        },
+        { provide: getRepositoryToken(EventVote), useValue: mockVotesRepo },
+        {
+          provide: getRepositoryToken(EventGameCandidate),
+          useValue: mockCandidatesRepo,
         },
       ],
     }).compile();

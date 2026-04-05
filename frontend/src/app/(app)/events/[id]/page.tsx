@@ -13,6 +13,7 @@ import GameSearchAdd, {
 } from '@/components/GameSearchAdd';
 import FeedbackSection from './feedback-section';
 import EventScheduleBlock from '@/components/events/EventScheduleBlock';
+import RecommendationPoolInsights from '@/components/events/RecommendationPoolInsights';
 import type {
   Game,
   GameEvent,
@@ -26,6 +27,7 @@ import type {
   FriendRequestByUserIdResponse,
   Friendship,
   EventScheduleDetail,
+  RecommendationPoolStats,
 } from '@/lib/types';
 
 export default function EventDetailPage() {
@@ -62,6 +64,10 @@ export default function EventDetailPage() {
   const [scheduleDetail, setScheduleDetail] = useState<EventScheduleDetail | null>(
     null,
   );
+  const [poolStats, setPoolStats] = useState<RecommendationPoolStats | null>(
+    null,
+  );
+  const [loadingPoolStats, setLoadingPoolStats] = useState(false);
 
   const sendRecommendationTelemetry = useCallback(
     async (eventName: string, payload?: Record<string, unknown>) => {
@@ -120,6 +126,23 @@ export default function EventDetailPage() {
       const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`, { showErrorToast: false });
       setCandidates(c);
     } catch { /* no candidates yet */ }
+    if (ev.status === 'planning') {
+      try {
+        setLoadingPoolStats(true);
+        const stats = await api.get<RecommendationPoolStats>(
+          `/events/${id}/recommendations/pool-stats`,
+          { showErrorToast: false },
+        );
+        setPoolStats(stats);
+      } catch {
+        setPoolStats(null);
+      } finally {
+        setLoadingPoolStats(false);
+      }
+    } else {
+      setPoolStats(null);
+      setLoadingPoolStats(false);
+    }
     try {
       const r = await api.get<VoteResult[]>(`/events/${id}/voting/results`, { showErrorToast: false });
       setResults(r);
@@ -676,6 +699,14 @@ export default function EventDetailPage() {
               </button>
             </div>
           </div>
+        )}
+
+        {event.status === 'planning' && canViewEventBody && !hasPassed && (
+          <RecommendationPoolInsights
+            stats={poolStats}
+            loading={loadingPoolStats}
+            embedded
+          />
         )}
 
       </div>

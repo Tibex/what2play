@@ -6,6 +6,7 @@ interface GameCardProps {
   game: Game;
   actions?: React.ReactNode;
   actionsPlacement?: 'below' | 'right';
+  metaBadges?: React.ReactNode;
   explanation?: Record<string, string>;
   showScore?: number;
   bggUrl?: string;
@@ -22,6 +23,7 @@ export default function GameCard({
   game,
   actions,
   actionsPlacement = 'below',
+  metaBadges,
   explanation,
   showScore,
   bggUrl,
@@ -162,6 +164,9 @@ export default function GameCard({
                 {game.playingTime && ` · ${game.playingTime} min`}
                 {game.yearPublished && (compact ? '' : ` · ${game.yearPublished}`)}
               </p>
+              {metaBadges ? (
+                <div className={compact ? 'mt-1.5' : 'mt-2'}>{metaBadges}</div>
+              ) : null}
             </div>
             {(showScore !== undefined ||
               (actions && actionsPlacement === 'right')) && (

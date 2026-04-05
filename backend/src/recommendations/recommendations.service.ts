@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -69,6 +70,20 @@ export interface RecommendationTelemetryAnalytics {
     payload?: Record<string, unknown>;
     createdAt: string;
   }>;
+}
+
+export interface RecommendationPoolAttendeeShare {
+  userId: string;
+  name: string;
+  ownedPoolGames: number;
+  weightedContribution: number;
+  weightedSharePercent: number;
+}
+
+export interface RecommendationPoolStats {
+  eventId: string;
+  uniquePoolGames: number;
+  attendeeShares: RecommendationPoolAttendeeShare[];
 }
 
 const RECOMMENDATION_WEIGHTS = {
@@ -1101,6 +1116,98 @@ export class RecommendationsService {
         payload: row.payload,
         createdAt: new Date(row.createdAt).toISOString(),
       })),
+    };
+  }
+
+  async getPoolStats(
+    eventId: string,
+    userId: string,
+  ): Promise<RecommendationPoolStats> {
+    const event = await this.eventsService.findByIdForUser(eventId, userId);
+    const canViewPool =
+      event.hostId === userId ||
+      (event.attendees ?? []).some(
+        (attendee) =>
+          attendee.userId === userId && attendee.rsvpStatus === 'going',
+      );
+    if (!canViewPool) {
+      throw new ForbiddenException(
+        'Join this event as going to view recommendation pool insights',
+      );
+    }
+
+    const goingAttendees = (event.attendees ?? [])
+      .filter(
+        (attendee) =>
+          attendee.rsvpStatus === 'going' && attendee.userId != null,
+      )
+      .map((attendee) => ({
+        userId: attendee.userId,
+        name: attendee.user?.name ?? 'Unknown attendee',
+      }));
+
+    if (!goingAttendees.length) {
+      return { eventId, uniquePoolGames: 0, attendeeShares: [] };
+    }
+
+    const attendeeIds = [...new Set(goingAttendees.map((a) => a.userId))];
+    const ownerships =
+      await this.gamesService.getOwnershipsByUsers(attendeeIds);
+    const ownersByGame = new Map<string, Set<string>>();
+    for (const ownership of ownerships) {
+      if (!ownersByGame.has(ownership.gameId)) {
+        ownersByGame.set(ownership.gameId, new Set<string>());
+      }
+      ownersByGame.get(ownership.gameId)?.add(ownership.userId);
+    }
+
+    const weightedByUser = new Map<string, number>(
+      attendeeIds.map((id) => [id, 0]),
+    );
+    const ownedPoolCountByUser = new Map<string, number>(
+      attendeeIds.map((id) => [id, 0]),
+    );
+
+    for (const owners of ownersByGame.values()) {
+      const ownerCount = owners.size;
+      if (!ownerCount) continue;
+      const weight = 1 / ownerCount;
+      for (const ownerId of owners) {
+        weightedByUser.set(
+          ownerId,
+          (weightedByUser.get(ownerId) ?? 0) + weight,
+        );
+        ownedPoolCountByUser.set(
+          ownerId,
+          (ownedPoolCountByUser.get(ownerId) ?? 0) + 1,
+        );
+      }
+    }
+
+    const totalWeighted = [...weightedByUser.values()].reduce(
+      (sum, value) => sum + value,
+      0,
+    );
+
+    const attendeeShares = goingAttendees
+      .map((attendee) => {
+        const weightedContribution = weightedByUser.get(attendee.userId) ?? 0;
+        const weightedSharePercent =
+          totalWeighted > 0 ? (weightedContribution / totalWeighted) * 100 : 0;
+        return {
+          userId: attendee.userId,
+          name: attendee.name,
+          ownedPoolGames: ownedPoolCountByUser.get(attendee.userId) ?? 0,
+          weightedContribution: Number(weightedContribution.toFixed(2)),
+          weightedSharePercent: Number(weightedSharePercent.toFixed(2)),
+        };
+      })
+      .sort((a, b) => b.weightedContribution - a.weightedContribution);
+
+    return {
+      eventId,
+      uniquePoolGames: ownersByGame.size,
+      attendeeShares,
     };
   }
 
