@@ -16,7 +16,8 @@ interface NotificationPayload {
     | 'all_voted'
     | 'attendance_change'
     | 'spot_opened'
-    | 'event_friend_invited';
+    | 'event_friend_invited'
+    | 'schedule_finalized';
   idempotencyKey: string;
   title: string;
   body: string;

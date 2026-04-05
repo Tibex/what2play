@@ -28,7 +28,7 @@ export class EventVote {
   })
   user: User;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   userId: string | null;
 
   @Column()

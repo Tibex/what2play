@@ -36,3 +36,11 @@ export function toDateTimeLocalInTimeZone(
   const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return `${pick('year')}-${pick('month')}-${pick('day')}T${pick('hour')}:${pick('minute')}`;
 }
+
+/** Format a Date or ISO string for `<input type="datetime-local" />` in the user's local timezone. */
+export function isoToDatetimeLocalValue(iso: string | Date): string {
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

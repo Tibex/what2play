@@ -10,6 +10,7 @@ describe('NotificationsService', () => {
 
   const mockEventsRepo = {
     find: jest.fn(),
+    findOne: jest.fn(),
   };
   const mockVotingService = {
     autoCloseVoting: jest.fn(),
@@ -119,9 +120,11 @@ describe('NotificationsService', () => {
   });
 
   it('sends event invite notification to newly added friend attendee', async () => {
-    mockEventsRepo.findOne = jest.fn().mockResolvedValue({
+    mockEventsRepo.findOne.mockResolvedValue({
       id: 'e4',
       title: 'Monday session',
+      status: 'planning',
+      hostId: 'host-1',
       host: { id: 'host-1', name: 'Host Name' },
       attendees: [
         {
@@ -139,6 +142,98 @@ describe('NotificationsService', () => {
         type: 'event_friend_invited',
         recipientCount: 1,
         recipients: [expect.objectContaining({ email: 'friend@example.com' })],
+        body: expect.stringContaining(
+          'Open the event to check details and RSVP',
+        ),
+      }),
+    );
+  });
+
+  it('uses poll-aware invite copy when event is in scheduling status', async () => {
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e5',
+      title: 'Friday Poll',
+      status: 'scheduling',
+      hostId: 'host-1',
+      host: { id: 'host-1', name: 'Host Name' },
+      attendees: [
+        {
+          userId: 'u11',
+          rsvpStatus: 'pending',
+          user: { email: 'pollfriend@example.com', name: 'Poll Friend' },
+        },
+      ],
+    });
+
+    await service.sendFriendAddedToEventNotification('e5', 'host-1', ['u11']);
+
+    expect(mockDeliveryService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'e5',
+        type: 'event_friend_invited',
+        title: expect.stringContaining('availability poll'),
+        body: expect.stringContaining('Respond Yes/No'),
+      }),
+    );
+  });
+
+  it('sends schedule-finalized notifications to active non-host attendees', async () => {
+    const finalizedAt = new Date('2026-05-02T19:00:00.000Z');
+    mockEventsRepo.findOne.mockResolvedValue({
+      id: 'e6',
+      title: 'Weekend Session',
+      status: 'planning',
+      hostId: 'host-1',
+      eventTimezone: 'Europe/Zagreb',
+      dateTime: finalizedAt,
+      host: { id: 'host-1', name: 'Host Name' },
+      attendees: [
+        {
+          userId: 'host-1',
+          rsvpStatus: 'going',
+          user: { email: 'host@example.com', name: 'Host Name' },
+        },
+        {
+          userId: 'u12',
+          rsvpStatus: 'pending',
+          user: { email: 'pending@example.com', name: 'Pending User' },
+        },
+        {
+          userId: 'u13',
+          rsvpStatus: 'going',
+          user: { email: 'going@example.com', name: 'Going User' },
+        },
+        {
+          userId: 'u14',
+          rsvpStatus: 'not_going',
+          user: { email: 'notgoing@example.com', name: 'Not Going User' },
+        },
+      ],
+    });
+
+    await service.sendScheduleFinalizedNotification('e6', 'slot-123');
+
+    expect(mockDeliveryService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'e6',
+        type: 'schedule_finalized',
+        idempotencyKey: `schedule_finalized:e6:${finalizedAt.toISOString()}`,
+        recipientCount: 2,
+        recipients: expect.arrayContaining([
+          expect.objectContaining({
+            email: 'pending@example.com',
+            userId: 'u12',
+          }),
+          expect.objectContaining({
+            email: 'going@example.com',
+            userId: 'u13',
+          }),
+        ]),
+        metadata: expect.objectContaining({
+          winningSlotId: 'slot-123',
+          finalizedDateTime: finalizedAt.toISOString(),
+          eventTimezone: 'Europe/Zagreb',
+        }),
       }),
     );
   });

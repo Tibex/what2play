@@ -305,6 +305,7 @@ export class FeedbackService {
   }
 
   private hasEventEnded(event: Event): boolean {
+    if (!event.dateTime) return false;
     return new Date(event.dateTime).getTime() <= Date.now();
   }
 }

@@ -4,6 +4,8 @@ import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
 import { EventInvite } from '../entities/event-invite.entity';
 import { EventReport } from '../entities/event-report.entity';
+import { EventScheduleSlot } from '../entities/event-schedule-slot.entity';
+import { EventScheduleResponse } from '../entities/event-schedule-response.entity';
 import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
 import { RecommendationsModule } from '../recommendations/recommendations.module';
@@ -17,7 +19,14 @@ import { CalendarModule } from '../calendar/calendar.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Event, EventAttendee, EventInvite, EventReport]),
+    TypeOrmModule.forFeature([
+      Event,
+      EventAttendee,
+      EventInvite,
+      EventReport,
+      EventScheduleSlot,
+      EventScheduleResponse,
+    ]),
     forwardRef(() => RecommendationsModule),
     VotingModule,
     NotificationsModule,

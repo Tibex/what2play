@@ -50,6 +50,12 @@ const statusStyles: Record<
     dot: 'bg-[#a35247]',
     border: 'border-[#ddb5ae]',
   },
+  scheduling: {
+    badge: 'bg-[#e2e8f4] text-[#3d4f6f]',
+    accent: 'bg-slate-50',
+    dot: 'bg-[#647896]',
+    border: 'border-[#c5cedd]',
+  },
 };
 
 const FALLBACK_STATUS = {
@@ -122,26 +128,30 @@ export default function DashboardPage() {
 
   const now = new Date();
   const isPastEvent = (event: GameEvent) =>
-    event.status === 'completed' || new Date(event.dateTime) < now;
+    event.status === 'completed' ||
+    (event.dateTime != null && new Date(event.dateTime) < now);
   const userEventIds = useMemo(() => new Set(events.map((event) => event.id)), [events]);
   const discoverableOpenEvents = openEvents.filter(
     (event) => !userEventIds.has(event.id) && !isPastEvent(event),
   );
   const upcoming = events.filter((event) => !isPastEvent(event));
   const past = events.filter((event) => isPastEvent(event));
+  const upcomingWithoutDate = upcoming.filter((event) => event.dateTime == null);
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, GameEvent[]>();
     for (const event of events) {
-      const key = getDateKey(event.dateTime);
+      const key =
+        event.dateTime != null ? getDateKey(event.dateTime) : '__scheduling';
       const list = grouped.get(key) || [];
       list.push(event);
       grouped.set(key, list);
     }
     for (const [, list] of grouped.entries()) {
-      list.sort(
-        (a, b) =>
-          new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime(),
-      );
+      list.sort((a, b) => {
+        const ta = a.dateTime ? new Date(a.dateTime).getTime() : 0;
+        const tb = b.dateTime ? new Date(b.dateTime).getTime() : 0;
+        return ta - tb;
+      });
     }
     return grouped;
   }, [events]);
@@ -149,7 +159,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!selectedDateKey && events.length > 0) {
       queueMicrotask(() => {
-        setSelectedDateKey(getDateKey(events[0].dateTime));
+        const first = events[0];
+        setSelectedDateKey(
+          first.dateTime != null ? getDateKey(first.dateTime) : '__scheduling',
+        );
       });
     }
   }, [events, selectedDateKey]);
@@ -261,6 +274,18 @@ export default function DashboardPage() {
   } else {
     content = (
       <section className="space-y-4">
+        {upcomingWithoutDate.length > 0 && (
+          <div className="wt-card border border-dashed border-[var(--border)] p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">
+              Waiting on a date
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
+              {upcomingWithoutDate.map((event) => (
+                <EventCard key={event.id} event={event} currentUserId={user?.id} />
+              ))}
+            </div>
+          </div>
+        )}
         <div className="wt-card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
@@ -358,7 +383,9 @@ export default function DashboardPage() {
         <div className="wt-card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">
             {selectedDateKey
-              ? `Events on ${new Date(selectedDateKey).toLocaleDateString()}`
+              ? selectedDateKey === '__scheduling'
+                ? 'Events without a set date'
+                : `Events on ${new Date(`${selectedDateKey}T12:00:00`).toLocaleDateString()}`
               : 'Pick a day'}
           </h3>
           {selectedDayEvents.length === 0 ? (
@@ -459,19 +486,25 @@ function EventCard({
   event,
   currentUserId,
 }: Readonly<{ event: GameEvent; currentUserId?: string }>) {
-  const date = new Date(event.dateTime);
   const timeZone = event.eventTimezone || 'UTC';
-  const shortDate = new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    timeZone,
-  }).format(date);
-  const shortTime = new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-  }).format(date);
-  const isPast = event.status === 'completed' || date < new Date();
+  const hasDate = event.dateTime != null;
+  const date = hasDate ? new Date(event.dateTime as string) : null;
+  const shortDate = hasDate
+    ? new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        timeZone,
+      }).format(date as Date)
+    : 'TBD';
+  const shortTime = hasDate
+    ? new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone,
+      }).format(date as Date)
+    : '';
+  const isPast =
+    event.status === 'completed' || (date != null && date < new Date());
   const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
   const myStatus = currentUserId
     ? event.attendees?.find((a) => a.userId === currentUserId)?.rsvpStatus
@@ -518,7 +551,9 @@ function EventCard({
         </div>
         <p className="text-sm text-gray-600 flex items-start gap-2">
           <span aria-hidden="true">🕒</span>
-          <span className="line-clamp-1">{shortDate} · {shortTime}</span>
+          <span className="line-clamp-1">
+            {hasDate ? `${shortDate} · ${shortTime}` : `${shortDate} · picking time`}
+          </span>
         </p>
         {event.location && (
           <p className="text-sm text-gray-600 mt-0.5 flex items-start gap-2">

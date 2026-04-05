@@ -27,3 +27,7 @@ out/
 coverage/
 *.tsbuildinfo
 
+# Local AI/IDE tooling state
+.agents/
+.cursor/
+skills-lock.json

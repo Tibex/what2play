@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
@@ -39,6 +40,23 @@ export default function EditEventPage() {
     );
   }
 
+  if (event.status === 'scheduling' || event.dateTime == null) {
+    return (
+      <div className="max-w-lg mx-auto py-16 px-4 text-center text-[var(--muted)]">
+        <p>This night doesn&apos;t have a fixed time yet.</p>
+        <p className="mt-2 text-sm">
+          Choose the winning time on the event page, then you can edit details here.
+        </p>
+        <Link
+          href={`/events/${id}`}
+          className="wt-btn wt-btn-primary mt-6 inline-block px-4 py-2 text-sm font-medium"
+        >
+          Back to event
+        </Link>
+      </div>
+    );
+  }
+
   const eventTimeZone = event.eventTimezone || 'UTC';
   const localDateTime = toDateTimeLocalInTimeZone(event.dateTime, eventTimeZone);
 
@@ -51,6 +69,8 @@ export default function EditEventPage() {
     capacity: event.capacity || 8,
     type: event.type || 'invite',
     discoveryMode: event.discoveryMode || false,
+    scheduleMode: 'fixed',
+    availabilitySlots: [],
   };
 
   const handleSubmit = async (data: EventFormData) => {

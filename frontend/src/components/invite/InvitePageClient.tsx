@@ -114,7 +114,10 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
   if (!event) return null;
 
   const timeZone = event.eventTimezone || 'UTC';
-  const formatted = formatEventDateTime(event.dateTime, timeZone);
+  const formatted =
+    event.dateTime != null
+      ? formatEventDateTime(event.dateTime, timeZone)
+      : null;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -125,11 +128,17 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
           {event.title}
         </h2>
         <p className="wt-muted mb-1">
-          {formatted.date}
-          {' at '}
-          {formatted.time}
-          {' · '}
-          {timeZone}
+          {formatted ? (
+            <>
+              {formatted.date}
+              {' at '}
+              {formatted.time}
+              {' · '}
+              {timeZone}
+            </>
+          ) : (
+            <>Date to be decided — help pick a time after you join · {timeZone}</>
+          )}
         </p>
         {event.location && (
           <p className="wt-muted mb-1 text-sm">{event.location}</p>

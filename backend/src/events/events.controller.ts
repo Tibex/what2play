@@ -28,6 +28,8 @@ import { RsvpDto } from './dto/rsvp.dto';
 import { InviteFriendsDto } from './dto/invite-friends.dto';
 import { AdminListEventsQueryDto } from './dto/admin-list-events-query.dto';
 import { ReportEventDto } from './dto/report-event.dto';
+import { SetEventScheduleResponsesDto } from './dto/set-event-schedule-responses.dto';
+import { FinalizeEventScheduleDto } from './dto/finalize-event-schedule.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -48,11 +50,13 @@ export class EventsController {
   @ApiOperation({ summary: 'Create a new event' })
   async create(@Request() req, @Body() dto: CreateEventDto) {
     const created = await this.eventsService.create(req.user.id, dto);
-    this.calendarSyncService
-      .queueEventSync(created.id, 'event_created')
-      .catch(() => {
-        /* non-critical */
-      });
+    if (created.dateTime) {
+      this.calendarSyncService
+        .queueEventSync(created.id, 'event_created')
+        .catch(() => {
+          /* non-critical */
+        });
+    }
     return created;
   }
 
@@ -92,17 +96,16 @@ export class EventsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Join event via invite link' })
   async joinViaInvite(@Param('token') token: string, @Request() req) {
-    const result = await this.eventsService.joinViaInvite(token, req.user.id);
-    this.recommendationsService.generateCandidates(result.eventId).catch(() => {
-      /* non-critical */
-    });
-    return result;
+    return this.eventsService.joinViaInvite(token, req.user.id);
   }
 
   @Get('invite/:token/recommendations')
   @ApiOperation({ summary: 'Get event recommendations by invite token' })
   async getInviteRecommendations(@Param('token') token: string) {
     const inviteEvent = await this.eventsService.getInviteEvent(token);
+    if (inviteEvent.status === 'scheduling' || !inviteEvent.dateTime) {
+      return [];
+    }
     return this.recommendationsService.getCandidates(inviteEvent.id);
   }
 
@@ -116,6 +119,57 @@ export class EventsController {
     @Body() dto: ReportEventDto,
   ) {
     return this.eventsService.reportOpenEvent(id, req.user.id, dto);
+  }
+
+  @Get(':id/schedule')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Availability poll for an event in scheduling status' })
+  getEventSchedule(@Param('id') id: string, @Request() req) {
+    return this.eventsService.getScheduleDetail(id, req.user.id);
+  }
+
+  @Patch(':id/schedule/responses')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set availability answers for scheduling event slots' })
+  async setEventScheduleResponses(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: SetEventScheduleResponsesDto,
+  ) {
+    await this.eventsService.setScheduleResponses(id, req.user.id, dto);
+    return { ok: true };
+  }
+
+  @Post(':id/schedule/finalize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Choose the winning time and move the event to planning',
+  })
+  async finalizeEventSchedule(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: FinalizeEventScheduleDto,
+  ) {
+    const updated = await this.eventsService.finalizeSchedule(
+      id,
+      req.user.id,
+      dto.winningSlotId,
+    );
+    this.calendarSyncService.queueEventSync(id, 'event_updated').catch(() => {
+      /* non-critical */
+    });
+    this.recommendationsService.generateCandidates(id).catch(() => {
+      /* non-critical */
+    });
+    this.notificationsService
+      .sendScheduleFinalizedNotification(id, dto.winningSlotId)
+      .catch(() => {
+        /* non-critical */
+      });
+    return updated;
   }
 
   @Get(':id')
@@ -143,9 +197,11 @@ export class EventsController {
         /* non-critical */
       });
     }
-    this.calendarSyncService.queueEventSync(id, 'event_updated').catch(() => {
-      /* non-critical */
-    });
+    if (updated.dateTime) {
+      this.calendarSyncService.queueEventSync(id, 'event_updated').catch(() => {
+        /* non-critical */
+      });
+    }
 
     return updated;
   }

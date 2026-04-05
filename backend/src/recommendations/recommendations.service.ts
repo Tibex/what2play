@@ -148,6 +148,11 @@ export class RecommendationsService {
         'Recommendations cannot be regenerated for completed or cancelled events',
       );
     }
+    if (event.status === 'scheduling' || !event.dateTime) {
+      throw new BadRequestException(
+        'Set a date and time for this event before generating recommendations',
+      );
+    }
     const attendeeIds = await this.eventsService.getAttendeeUserIds(eventId);
     const playerCount =
       (await this.eventsService.getGoingAttendeeCount?.(eventId)) ??
@@ -475,7 +480,7 @@ export class RecommendationsService {
         }
         const archetypeFit = this.getArchetypeFitScore(
           game,
-          event.durationMinutes,
+          event.durationMinutes ?? undefined,
           averagePreferredWeight,
           averagePreferredDuration,
           preferenceProfile,

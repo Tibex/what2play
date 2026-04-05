@@ -76,7 +76,7 @@ export default function OpenEventsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {events.map((event) => {
-            const date = new Date(event.dateTime);
+            const date = new Date(event.dateTime as string);
             const timeZone = event.eventTimezone || 'UTC';
             const shortDate = new Intl.DateTimeFormat(undefined, {
               month: 'short',

@@ -72,7 +72,7 @@ export interface GameEvent {
   host: User;
   title: string;
   description?: string;
-  dateTime: string;
+  dateTime: string | null;
   eventTimezone: string;
   durationMinutes?: number;
   location?: string;
@@ -240,4 +240,31 @@ export interface EventCalendarSyncState {
   eventId: string;
   canManage: boolean;
   items: EventCalendarSyncItem[];
+}
+
+export type EventScheduleAnswer = 'yes' | 'no';
+
+export interface EventScheduleSlotSummary {
+  id: string;
+  start: string;
+  label: string | null;
+  sortOrder: number;
+  counts: { yes: number; no: number };
+}
+
+export interface EventScheduleDetail {
+  eventId: string;
+  title: string;
+  eventTimezone: string;
+  durationMinutes: number | null;
+  status: string;
+  isHost: boolean;
+  host: { id: string; name: string };
+  slots: EventScheduleSlotSummary[];
+  myResponses: Record<string, EventScheduleAnswer>;
+  voters: {
+    userId: string;
+    name: string;
+    responsesBySlotId: Record<string, EventScheduleAnswer | null>;
+  }[];
 }

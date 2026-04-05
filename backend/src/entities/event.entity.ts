@@ -14,6 +14,7 @@ import { EventGameCandidate } from './event-game-candidate.entity';
 import { EventVote } from './event-vote.entity';
 import { EventFeedback } from './event-feedback.entity';
 import { EventReport } from './event-report.entity';
+import { EventScheduleSlot } from './event-schedule-slot.entity';
 
 @Entity('events')
 export class Event {
@@ -30,19 +31,19 @@ export class Event {
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
-  @Column({ type: 'timestamptz' })
-  dateTime: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  dateTime: Date | null;
 
   @Column({ default: 'UTC' })
   eventTimezone: string;
 
-  @Column({ nullable: true })
-  durationMinutes: number;
+  @Column({ type: 'int', nullable: true })
+  durationMinutes: number | null;
 
-  @Column({ nullable: true })
-  location: string;
+  @Column({ type: 'varchar', nullable: true })
+  location: string | null;
 
   @Column({ type: 'int', nullable: true })
   capacity: number | null;
@@ -106,4 +107,7 @@ export class Event {
 
   @OneToMany(() => EventReport, (r) => r.event)
   reports: EventReport[];
+
+  @OneToMany(() => EventScheduleSlot, (s) => s.event)
+  scheduleSlots: EventScheduleSlot[];
 }

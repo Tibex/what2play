@@ -44,6 +44,24 @@ export class NotificationsService {
       }));
   }
 
+  private getActiveNonHostRecipients(
+    attendees: Event['attendees'],
+    hostId: string,
+  ): Array<{ email: string; name?: string; userId?: string }> {
+    return (attendees || [])
+      .filter(
+        (a) =>
+          a.userId !== hostId &&
+          a.rsvpStatus !== 'not_going' &&
+          !!a.user?.email,
+      )
+      .map((a) => ({
+        email: a.user?.email || '',
+        name: a.user?.name || undefined,
+        userId: a.userId || undefined,
+      }));
+  }
+
   async sendVotingStartedNotification(eventId: string): Promise<void> {
     const event = await this.eventsRepo.findOne({
       where: { id: eventId },
@@ -203,16 +221,24 @@ export class NotificationsService {
     if (!event) return;
 
     const hostName = event.host?.name || 'Your host';
+    const isSchedulingPoll = event.status === 'scheduling';
     const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
     for (const userId of invitedUserIds) {
-      const attendee = event.attendees.find((a) => a.userId === userId);
+      if (userId === event.hostId) continue;
+      const attendee = event.attendees.find(
+        (a) => a.userId === userId && a.rsvpStatus !== 'not_going',
+      );
       if (!attendee?.user?.email) continue;
       await this.deliveryService.send({
         eventId: event.id,
         type: 'event_friend_invited',
         idempotencyKey: `event_friend_invited:${event.id}:${userId}`,
-        title: `You're invited: ${event.title}`,
-        body: `${hostName} added you to this event. Open the event to check details and RSVP.`,
+        title: isSchedulingPoll
+          ? `You're invited to the availability poll: ${event.title}`
+          : `You're invited: ${event.title}`,
+        body: isSchedulingPoll
+          ? `${hostName} invited you to pick a time. Respond Yes/No in the availability poll.`
+          : `${hostName} added you to this event. Open the event to check details and RSVP.`,
         recipientCount: 1,
         recipients: [
           {
@@ -230,6 +256,56 @@ export class NotificationsService {
         },
       });
     }
+  }
+
+  async sendScheduleFinalizedNotification(
+    eventId: string,
+    winningSlotId: string,
+  ): Promise<void> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      relations: ['attendees', 'attendees.user', 'host'],
+    });
+    if (!event || !event.dateTime) return;
+
+    const recipients = this.getActiveNonHostRecipients(
+      event.attendees,
+      event.hostId,
+    );
+    if (!recipients.length) return;
+
+    const eventDate = new Date(event.dateTime);
+    const eventTimezone = event.eventTimezone || 'UTC';
+    const finalizedIso = eventDate.toISOString();
+    const localFinalized = eventDate.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: eventTimezone,
+    });
+
+    const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
+    await this.deliveryService.send({
+      eventId: event.id,
+      type: 'schedule_finalized',
+      idempotencyKey: `schedule_finalized:${event.id}:${finalizedIso}`,
+      title: `Time finalized: ${event.title}`,
+      body: `Availability poll closed. Final time is ${localFinalized} (${eventTimezone}). The event is now in planning.`,
+      recipientCount: recipients.length,
+      recipients,
+      eventUrl,
+      feedbackUrl,
+      metadata: {
+        winningSlotId,
+        finalizedDateTime: finalizedIso,
+        eventTimezone,
+        attendeeIds: recipients
+          .map((a) => a.userId)
+          .filter((id): id is string => Boolean(id)),
+      },
+    });
+    this.logger.log(
+      `Schedule-finalized notification dispatched for "${event.title}" (${recipients.length} recipients)`,
+    );
   }
 
   private getRecipientsByStatuses(
@@ -286,7 +362,7 @@ export class NotificationsService {
     });
 
     for (const event of upcomingEvents) {
-      if (event.dateTime <= now) continue;
+      if (!event.dateTime || event.dateTime <= now) continue;
       const recipients = this.getEmailRecipients(event.attendees);
       if (!recipients.length) continue;
       const { eventUrl, feedbackUrl } = this.getEventUrls(event.id);
@@ -327,6 +403,7 @@ export class NotificationsService {
     });
 
     for (const event of recentlyCompleted) {
+      if (!event.dateTime) continue;
       const endTime = new Date(
         new Date(event.dateTime).getTime() +
           (event.durationMinutes ?? 0) * 60_000,

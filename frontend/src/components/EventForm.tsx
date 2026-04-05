@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  GAME_DURATION_OPTIONS_MINUTES,
+  formatDurationMinutes,
+} from '@/lib/duration';
+import DragSelectCalendar from '@/components/events/DragSelectCalendar';
+import { localDateKeyAndTimeToIso } from '@/lib/schedulePollDates';
 
 export interface EventFormData {
   title: string;
@@ -11,9 +17,13 @@ export interface EventFormData {
   capacity: number;
   type: 'invite' | 'open';
   discoveryMode: boolean;
+  scheduleMode: 'fixed' | 'poll';
+  /** Filled when scheduleMode is poll at submit */
+  availabilitySlots: { start: string; label?: string }[];
 }
 
-const DURATION_OPTIONS = [60, 120, 180, 240, 300, 360];
+const POLL_DEFAULT_START = '19:00';
+
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-places-script';
 const PLACES_READY_TIMEOUT_MS = 4000;
 const PLACE_SHADOW_STYLE_ID = 'wt-place-shadow-overrides';
@@ -255,12 +265,10 @@ function loadGoogleMapsPlaces(apiKey: string): Promise<void> {
   return googleMapsPlacesLoader;
 }
 
-function durationLabel(mins: number): string {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h${m}m`;
+function toTimeInputValue(value: Date): string {
+  const hh = String(value.getHours()).padStart(2, '0');
+  const mm = String(value.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 export default function EventForm({
@@ -281,7 +289,31 @@ export default function EventForm({
   const latestLocationRef = useRef(initial.location);
   const locationInputRef = useRef<HTMLInputElement | null>(null);
   const placesContainerRef = useRef<HTMLDivElement | null>(null);
-  const [datePart, timePart = '19:00'] = form.dateTime.split('T');
+  const [selectedDayKeys, setSelectedDayKeys] = useState<string[]>([]);
+  const [startTimeByDay, setStartTimeByDay] = useState<Record<string, string>>(
+    {},
+  );
+
+  const setSelectedKeys = useCallback((keys: string[]) => {
+    setSelectedDayKeys(keys);
+    setStartTimeByDay((prev) => {
+      const next = { ...prev };
+      for (const k of keys) {
+        if (next[k] === undefined) next[k] = POLL_DEFAULT_START;
+      }
+      for (const k of Object.keys(next)) {
+        if (!keys.includes(k)) delete next[k];
+      }
+      return next;
+    });
+  }, []);
+
+  const sortedPollDays = useMemo(
+    () => [...selectedDayKeys].sort(),
+    [selectedDayKeys],
+  );
+
+  const [datePart, timePart = POLL_DEFAULT_START] = form.dateTime.split('T');
 
   const setDateTime = (nextDate: string, nextTime: string) => {
     setForm({ ...form, dateTime: `${nextDate}T${nextTime}` });
@@ -479,7 +511,27 @@ export default function EventForm({
     setLoading(true);
     setError('');
     try {
-      await onSubmit(form);
+      if (form.scheduleMode === 'poll') {
+        if (sortedPollDays.length < 1) {
+          setError('Select at least one day on the calendar');
+          setLoading(false);
+          return;
+        }
+        if (sortedPollDays.length > 32) {
+          setError('Maximum 32 time options — remove some days');
+          setLoading(false);
+          return;
+        }
+        const availabilitySlots = sortedPollDays.map((dateKey) => ({
+          start: localDateKeyAndTimeToIso(
+            dateKey,
+            startTimeByDay[dateKey] || POLL_DEFAULT_START,
+          ),
+        }));
+        await onSubmit({ ...form, availabilitySlots });
+        return;
+      }
+      await onSubmit({ ...form, availabilitySlots: [] });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -504,26 +556,151 @@ export default function EventForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">Date & Time</label>
-        <div className="wt-subtle space-y-3 p-3 sm:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              type="date"
-              value={datePart}
-              onChange={(e) => setDateTime(e.target.value, timePart)}
-              required
-              className="wt-input"
-            />
-            <input
-              type="time"
-              value={timePart}
-              onChange={(e) => setDateTime(datePart, e.target.value)}
-              step={900}
-              required
-              className="wt-input"
-            />
-          </div>
+        <label className="mb-1.5 block text-sm font-medium">When</label>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setForm((f) => ({ ...f, scheduleMode: 'fixed' }))}
+            className={`wt-btn px-3 py-1.5 text-sm font-medium ${
+              form.scheduleMode === 'fixed' ? 'wt-btn-primary' : 'wt-btn-secondary'
+            }`}
+          >
+            Set date &amp; time
+          </button>
+          <button
+            type="button"
+            disabled={form.type === 'open'}
+            title={
+              form.type === 'open'
+                ? 'Open nights need a fixed time'
+                : undefined
+            }
+            onClick={() => setForm((f) => ({ ...f, scheduleMode: 'poll' }))}
+            className={`wt-btn px-3 py-1.5 text-sm font-medium disabled:opacity-45 ${
+              form.scheduleMode === 'poll' ? 'wt-btn-primary' : 'wt-btn-secondary'
+            }`}
+          >
+            Poll availability
+          </button>
         </div>
+
+        {form.scheduleMode === 'fixed' ? (
+          <div className="wt-subtle space-y-3 p-3 sm:p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="date"
+                value={datePart}
+                onChange={(e) => setDateTime(e.target.value, timePart)}
+                required
+                className="wt-input"
+              />
+              <input
+                type="time"
+                value={timePart}
+                onChange={(e) => setDateTime(datePart, e.target.value)}
+                step={900}
+                required
+                className="wt-input"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="wt-subtle space-y-4 p-3 sm:p-4">
+            <DragSelectCalendar
+              selectedKeys={selectedDayKeys}
+              onChange={setSelectedKeys}
+            />
+            {sortedPollDays.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-[var(--muted)]">
+                  Start time per day (in your timezone)
+                </p>
+                <div className="hidden sm:grid sm:grid-cols-[minmax(0,1fr)_8.75rem_8.75rem] items-center gap-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  <span>Date</span>
+                  <span>Start</span>
+                  <span>End</span>
+                </div>
+                <ul className="space-y-2">
+                  {sortedPollDays.map((dateKey) => {
+                    const startTime =
+                      startTimeByDay[dateKey] || POLL_DEFAULT_START;
+                    const start = new Date(
+                      localDateKeyAndTimeToIso(dateKey, startTime),
+                    );
+                    const end = new Date(start);
+                    end.setMinutes(end.getMinutes() + form.durationMinutes);
+                    return (
+                      <li
+                        key={dateKey}
+                        className="rounded-lg border border-[var(--border)]/70 bg-[var(--surface)]/45 p-2 text-sm sm:grid sm:grid-cols-[minmax(0,1fr)_8.75rem_8.75rem] sm:items-center sm:gap-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
+                      >
+                        <input
+                          type="date"
+                          value={dateKey}
+                          disabled
+                          aria-label={`Date for ${dateKey}`}
+                          className="wt-input w-full py-1 text-sm tabular-nums disabled:cursor-not-allowed disabled:bg-[var(--surface)] disabled:text-[var(--muted)]"
+                        />
+                        <div className="mt-2 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:hidden">
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                              Start
+                            </span>
+                            <input
+                              type="time"
+                              step={900}
+                              value={startTime}
+                              onChange={(e) =>
+                                setStartTimeByDay((prev) => ({
+                                  ...prev,
+                                  [dateKey]: e.target.value,
+                                }))
+                              }
+                              aria-label={`Start time for ${dateKey}`}
+                              className="wt-input w-full py-1 text-sm"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                              End
+                            </span>
+                            <input
+                              type="time"
+                              value={toTimeInputValue(end)}
+                              disabled
+                              aria-label={`End time for ${dateKey}`}
+                              className="wt-input w-full py-1 text-sm disabled:cursor-not-allowed disabled:bg-[var(--surface)] disabled:text-[var(--muted)]"
+                            />
+                          </label>
+                        </div>
+                        <input
+                          type="time"
+                          step={900}
+                          value={startTime}
+                          onChange={(e) =>
+                            setStartTimeByDay((prev) => ({
+                              ...prev,
+                              [dateKey]: e.target.value,
+                            }))
+                          }
+                          aria-label={`Start time for ${dateKey}`}
+                          className="hidden wt-input w-full py-1 text-sm sm:block"
+                        />
+                        <input
+                          type="time"
+                          value={toTimeInputValue(end)}
+                          disabled
+                          aria-label={`End time for ${dateKey}`}
+                          className="hidden wt-input w-full py-1 text-sm disabled:cursor-not-allowed disabled:bg-[var(--surface)] disabled:text-[var(--muted)] sm:block"
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
@@ -547,7 +724,7 @@ export default function EventForm({
       <div>
         <label className="mb-1.5 block text-sm font-medium">Duration</label>
         <div className="flex flex-wrap gap-2">
-          {DURATION_OPTIONS.map((mins) => (
+          {GAME_DURATION_OPTIONS_MINUTES.map((mins) => (
             <button
               key={mins}
               type="button"
@@ -558,7 +735,7 @@ export default function EventForm({
                   : 'wt-btn-secondary'
               }`}
             >
-              {durationLabel(mins)}
+              {formatDurationMinutes(mins)}
             </button>
           ))}
         </div>
@@ -569,12 +746,14 @@ export default function EventForm({
           <label className="mb-1 block text-sm font-medium">Event Type</label>
           <select
             value={form.type}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                type: e.target.value as EventFormData['type'],
-              })
-            }
+            onChange={(e) => {
+              const type = e.target.value as EventFormData['type'];
+              setForm((prev) => ({
+                ...prev,
+                type,
+                scheduleMode: type === 'open' ? 'fixed' : prev.scheduleMode,
+              }));
+            }}
             className="wt-input"
           >
             <option value="invite">Invite Only</option>

@@ -379,7 +379,9 @@ export default function AdminPage() {
                     <td className="px-4 py-2">{item.host?.name || item.hostId}</td>
                     <td className="px-4 py-2">{item.status}</td>
                     <td className="px-4 py-2">
-                      {new Date(item.dateTime).toLocaleString()}
+                      {item.dateTime
+                        ? new Date(item.dateTime).toLocaleString()
+                        : '—'}
                     </td>
                     <td className="px-4 py-2">{item.openReportCount ?? 0}</td>
                     <td className="px-4 py-2">
@@ -435,7 +437,11 @@ export default function AdminPage() {
         title="Delete event?"
         message={
           pendingEventDelete
-            ? `Delete event "${pendingEventDelete.title}" scheduled for ${new Date(pendingEventDelete.dateTime).toLocaleString()}?`
+            ? `Delete event "${pendingEventDelete.title}"${
+                pendingEventDelete.dateTime
+                  ? ` scheduled for ${new Date(pendingEventDelete.dateTime).toLocaleString()}`
+                  : ''
+              }?`
             : ''
         }
         confirmLabel="Delete event"

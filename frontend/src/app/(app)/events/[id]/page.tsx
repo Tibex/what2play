@@ -12,6 +12,7 @@ import GameSearchAdd, {
   type GameSearchAddResult,
 } from '@/components/GameSearchAdd';
 import FeedbackSection from './feedback-section';
+import EventScheduleBlock from '@/components/events/EventScheduleBlock';
 import type {
   Game,
   GameEvent,
@@ -24,6 +25,7 @@ import type {
   InviteFriendsResponse,
   FriendRequestByUserIdResponse,
   Friendship,
+  EventScheduleDetail,
 } from '@/lib/types';
 
 export default function EventDetailPage() {
@@ -57,6 +59,9 @@ export default function EventDetailPage() {
   const [removingAttendeeId, setRemovingAttendeeId] = useState<string | null>(null);
   const [confirmDeleteEventOpen, setConfirmDeleteEventOpen] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState(false);
+  const [scheduleDetail, setScheduleDetail] = useState<EventScheduleDetail | null>(
+    null,
+  );
 
   const sendRecommendationTelemetry = useCallback(
     async (eventName: string, payload?: Record<string, unknown>) => {
@@ -89,6 +94,18 @@ export default function EventDetailPage() {
       return null;
     }
     setEvent(ev);
+    if (ev.status === 'scheduling') {
+      try {
+        const s = await api.get<EventScheduleDetail>(`/events/${id}/schedule`, {
+          showErrorToast: false,
+        });
+        setScheduleDetail(s);
+      } catch {
+        setScheduleDetail(null);
+      }
+    } else {
+      setScheduleDetail(null);
+    }
     try {
       const [friends, sentPending] = await Promise.all([
         api.get<User[]>('/friends', { showErrorToast: false }),
@@ -187,6 +204,7 @@ export default function EventDetailPage() {
     attendeeCount < votingStartAttendeeCount;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
   const isPlanning = event.status === 'planning';
+  const isScheduling = event.status === 'scheduling';
   const isPastEvent = event.status === 'past' || event.status === 'completed';
   const canRemoveAttendees =
     isHost && !isPastEvent && event.status !== 'cancelled';
@@ -195,24 +213,31 @@ export default function EventDetailPage() {
   const canRsvp = !isPastEvent && event.status !== 'cancelled';
   const isGoingAttendee = myAttendee?.rsvpStatus === 'going';
   const isPendingInvite = myAttendee?.rsvpStatus === 'pending';
+  const canViewSchedulePoll =
+    isHost || isGoingAttendee || isPendingInvite;
   const canViewEventBody = isHost || isGoingAttendee;
   const canEditRecommendations = isHost || isGoingAttendee;
   const eventTimeZone = event.eventTimezone || 'UTC';
-  const eventDate = new Date(event.dateTime);
-  const shortEventDate = new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    timeZone: eventTimeZone,
-  }).format(eventDate);
-  const shortEventTime = new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: eventTimeZone,
-  }).format(eventDate);
-  const eventEndsAt =
-    new Date(event.dateTime).getTime() +
-    (event.durationMinutes ?? 0) * 60_000;
-  const hasPassed = nowTs >= eventEndsAt;
+  const hasEventDate = event.dateTime != null;
+  const eventDate = hasEventDate ? new Date(event.dateTime as string) : null;
+  const shortEventDate = eventDate
+    ? new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        timeZone: eventTimeZone,
+      }).format(eventDate)
+    : 'TBD';
+  const shortEventTime = eventDate
+    ? new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: eventTimeZone,
+      }).format(eventDate)
+    : '';
+  const eventEndsAt = eventDate
+    ? eventDate.getTime() + (event.durationMinutes ?? 0) * 60_000
+    : Number.POSITIVE_INFINITY;
+  const hasPassed = hasEventDate && nowTs >= eventEndsAt;
   const formatDurationMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
@@ -288,13 +313,14 @@ export default function EventDetailPage() {
     setGenerationProgress(0);
     setGenerationStage(0);
     const startedAt = Date.now();
+    let generatedCandidates: EventGameCandidate[] | null = null;
     try {
       sendRecommendationTelemetry('recommendation_generate_started').catch(
         () => undefined,
       );
       await api.post<EventGameCandidate[]>(`/events/${id}/recommendations/generate`);
       const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
-      setCandidates(c);
+      generatedCandidates = c;
       sendRecommendationTelemetry('recommendation_generate_succeeded', {
         count: c.length,
       }).catch(() => undefined);
@@ -320,6 +346,9 @@ export default function EventDetailPage() {
       setGenerationProgress(100);
       await new Promise((resolve) => setTimeout(resolve, 180));
       setGeneratingRecommendations(false);
+      if (generatedCandidates !== null) {
+        setCandidates(generatedCandidates);
+      }
       setGenerationProgress(0);
       setGenerationStage(0);
     }
@@ -514,10 +543,16 @@ export default function EventDetailPage() {
             </div>
             <p className="wt-muted mt-1">
               Hosted by {event.host?.name || 'Unknown'}
-              {' · '}
-              {shortEventDate}
-              {' at '}
-              {shortEventTime}
+              {hasEventDate ? (
+                <>
+                  {' · '}
+                  {shortEventDate}
+                  {' at '}
+                  {shortEventTime}
+                </>
+              ) : (
+                <> · Date to be decided — vote on options below</>
+              )}
             </p>
           </div>
           <StatusBadge status={event.status} />
@@ -606,12 +641,12 @@ export default function EventDetailPage() {
           )}
           {isHost && canManageEvent && (
             <>
-              {isPlanning && (
+              {(isPlanning || isScheduling) && (
                 <button onClick={handleCreateInvite} className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium">
                   Create Invite Link
                 </button>
               )}
-              {event.status === 'planning' && (
+              {event.status === 'planning' && !isScheduling && (
                 <button
                   onClick={handleGenerateRecommendations}
                   disabled={generatingRecommendations}
@@ -622,7 +657,7 @@ export default function EventDetailPage() {
                     : 'Generate Recommendations'}
                 </button>
               )}
-              {candidates.length > 0 && event.status === 'planning' && (
+              {candidates.length > 0 && event.status === 'planning' && !isScheduling && (
                 <button onClick={handleStartVoting} className="wt-btn rounded-lg border border-[#4a7b90] bg-[#4a7b90] px-4 py-2 text-sm font-medium text-white">
                   Start Voting
                 </button>
@@ -646,7 +681,17 @@ export default function EventDetailPage() {
       </div>
 
       <div className="mt-6">
-        {!canViewEventBody ? (
+        {isScheduling && canViewSchedulePoll ? (
+          <EventScheduleBlock
+            eventId={id}
+            detail={scheduleDetail}
+            loading={loading}
+            currentUserId={user?.id}
+            onReload={() => {
+              void loadEvent(false);
+            }}
+          />
+        ) : !canViewEventBody ? (
           <div className="wt-card p-4 text-sm text-[var(--muted)] sm:p-5">
             Join this event to view recommendations, voting, and feedback.
           </div>
@@ -661,7 +706,7 @@ export default function EventDetailPage() {
                 .filter((g): g is Game => Boolean(g))}
               isHost={isHost}
               isGoingAttendee={isGoingAttendee}
-              eventDateTime={event.dateTime}
+              eventDateTime={event.dateTime as string}
               eventTimezone={eventTimeZone}
               eventDurationMinutes={event.durationMinutes}
             />
@@ -759,6 +804,7 @@ export default function EventDetailPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
+    scheduling: 'bg-[#e2e8f4] text-[#3d4f6f]',
     planning: 'bg-[#f1e0b8] text-[#6b521f]',
     voting: 'bg-[#d8e4ea] text-[#2f586b]',
     confirmed: 'bg-[#dbe8d3] text-[#355f39]',

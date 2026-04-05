@@ -11,6 +11,8 @@ import { Event } from '../entities/event.entity';
 import { EventAttendee } from '../entities/event-attendee.entity';
 import { EventInvite } from '../entities/event-invite.entity';
 import { EventReport } from '../entities/event-report.entity';
+import { EventScheduleSlot } from '../entities/event-schedule-slot.entity';
+import { EventScheduleResponse } from '../entities/event-schedule-response.entity';
 import { FriendsService } from '../friends/friends.service';
 
 describe('EventsService', () => {
@@ -48,6 +50,21 @@ describe('EventsService', () => {
     create: jest.fn((value) => value),
   };
 
+  const mockScheduleSlotsRepo = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn().mockResolvedValue([]),
+    delete: jest.fn().mockResolvedValue({}),
+    create: jest.fn((value) => value),
+  };
+
+  const mockScheduleResponsesRepo = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn((value) => Promise.resolve(value)),
+    create: jest.fn((value) => value),
+  };
+
   const mockFriendsService = {
     getFriendIds: jest.fn(),
   };
@@ -65,6 +82,14 @@ describe('EventsService', () => {
         {
           provide: getRepositoryToken(EventReport),
           useValue: mockEventReportsRepo,
+        },
+        {
+          provide: getRepositoryToken(EventScheduleSlot),
+          useValue: mockScheduleSlotsRepo,
+        },
+        {
+          provide: getRepositoryToken(EventScheduleResponse),
+          useValue: mockScheduleResponsesRepo,
         },
         { provide: FriendsService, useValue: mockFriendsService },
       ],

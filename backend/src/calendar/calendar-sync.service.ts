@@ -7,7 +7,7 @@ import {
 import { randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { SyncAccount } from '../entities/sync-account.entity';
 import { EventCalendarSync } from '../entities/event-calendar-sync.entity';
 import { Event } from '../entities/event.entity';
@@ -253,6 +253,7 @@ export class CalendarSyncService {
       ],
     });
     if (!event) return;
+    if (!event.dateTime && trigger !== 'event_cancelled') return;
     const accounts = await this.getAccounts(event.hostId);
     if (!accounts.length) return;
 
@@ -393,6 +394,7 @@ export class CalendarSyncService {
     >,
   ): Promise<void> {
     if (row.syncState === 'disabled') return;
+    if (!event.dateTime && trigger !== 'event_cancelled') return;
     if (!account.encryptedAccessToken) {
       row.syncState = 'error';
       row.lastError = 'No access token available for calendar provider';
@@ -416,6 +418,7 @@ export class CalendarSyncService {
         await this.eventCalendarSyncRepo.save(row);
         return;
       }
+      if (!event.dateTime) return;
       const payload = await adapter.upsertEvent({
         accessToken,
         calendarId: row.calendarId,
@@ -463,6 +466,7 @@ export class CalendarSyncService {
       where: {
         hostId: userId,
         status: In(activeStatuses),
+        dateTime: Not(IsNull()),
       },
       select: ['id'],
       take: 200,

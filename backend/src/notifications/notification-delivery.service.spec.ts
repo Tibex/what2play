@@ -244,6 +244,43 @@ describe('NotificationDeliveryService', () => {
     );
   });
 
+  it('dispatches schedule_finalized notifications through existing channels', async () => {
+    const newRow = {
+      attempts: 0,
+      delivered: false,
+      endpoint: null,
+      lastError: null,
+      lastAttemptAt: null,
+      deliveredAt: null,
+      payload: null,
+    };
+    mockRepo.findOne.mockResolvedValue(null);
+    mockRepo.create.mockReturnValue(newRow);
+    mockRepo.save.mockResolvedValue(newRow);
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'SMTP_HOST') return 'smtp.example.com';
+      return undefined;
+    });
+    const sendEmailSpy = jest
+      .spyOn(service as any, 'sendEmail')
+      .mockResolvedValue(undefined);
+
+    await service.send({
+      ...payload,
+      type: 'schedule_finalized',
+      idempotencyKey: 'schedule_finalized:event-1:2026-04-01T11:00:00.000Z',
+      title: 'Time finalized: Friday night',
+      body: 'Availability poll closed. Final time is set.',
+    });
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(1);
+    expect(mockRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: 'email',
+      }),
+    );
+  });
+
   it('skips invite SMTP email when webhook channel is configured', async () => {
     const newRow = {
       attempts: 0,
@@ -385,6 +422,7 @@ describe('NotificationDeliveryService', () => {
     'attendance_change',
     'spot_opened',
     'event_friend_invited',
+    'schedule_finalized',
   ] as const;
 
   it('renders only Provide feedback CTA for feedback_prompt email html', () => {
