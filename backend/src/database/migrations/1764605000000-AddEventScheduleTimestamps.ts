@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddEventScheduleTimestamps1764605000000
-  implements MigrationInterface
-{
+export class AddEventScheduleTimestamps1764605000000 implements MigrationInterface {
   name = 'AddEventScheduleTimestamps1764605000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
