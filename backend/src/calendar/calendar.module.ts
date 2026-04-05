@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SyncAccount } from '../entities/sync-account.entity';
 import { EventCalendarSync } from '../entities/event-calendar-sync.entity';
 import { Event } from '../entities/event.entity';
+import { EventAttendee } from '../entities/event-attendee.entity';
 import { CalendarChangeLog } from '../entities/calendar-change-log.entity';
 import { CalendarSyncService } from './calendar-sync.service';
 import { CalendarController } from './calendar.controller';
@@ -17,6 +18,7 @@ import { AppleCalendarAdapter } from './adapters/apple-calendar.adapter';
       SyncAccount,
       EventCalendarSync,
       Event,
+      EventAttendee,
       CalendarChangeLog,
     ]),
   ],

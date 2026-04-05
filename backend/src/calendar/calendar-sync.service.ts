@@ -11,6 +11,7 @@ import { In, IsNull, Not, Repository } from 'typeorm';
 import { SyncAccount } from '../entities/sync-account.entity';
 import { EventCalendarSync } from '../entities/event-calendar-sync.entity';
 import { Event } from '../entities/event.entity';
+import { EventAttendee } from '../entities/event-attendee.entity';
 import { TokenCryptoService } from './token-crypto.service';
 import type { CalendarAdapter, CalendarProvider } from './calendar.types';
 import { CALENDAR_PROVIDERS } from './calendar.types';
@@ -32,6 +33,8 @@ export class CalendarSyncService {
     private readonly eventCalendarSyncRepo: Repository<EventCalendarSync>,
     @InjectRepository(Event)
     private readonly eventRepo: Repository<Event>,
+    @InjectRepository(EventAttendee)
+    private readonly attendeeRepo: Repository<EventAttendee>,
     private readonly tokenCryptoService: TokenCryptoService,
     private readonly config: ConfigService,
     private readonly googleAdapter: GoogleCalendarAdapter,
@@ -102,7 +105,7 @@ export class CalendarSyncService {
     }
 
     const saved = await this.syncAccountRepo.save(account);
-    await this.syncExistingHostEventsOnConnect(userId);
+    await this.syncExistingUserEventsOnConnect(userId);
     return saved;
   }
 
@@ -254,29 +257,72 @@ export class CalendarSyncService {
     });
     if (!event) return;
     if (!event.dateTime && trigger !== 'event_cancelled') return;
-    const accounts = await this.getAccounts(event.hostId);
-    if (!accounts.length) return;
 
-    for (const account of accounts) {
-      if (account.provider === 'apple' && !this.isAppleCalendarEnabled()) {
-        continue;
-      }
-      const row = await this.eventCalendarSyncRepo.findOne({
-        where: { eventId, userId: event.hostId, provider: account.provider },
-      });
-      const next = row
-        ? row
-        : this.eventCalendarSyncRepo.create({
+    const existingRows = await this.eventCalendarSyncRepo.find({
+      where: { eventId },
+    });
+    const existingRowByKey = new Map(
+      existingRows.map((row) => [`${row.userId}:${row.provider}`, row]),
+    );
+
+    const recipientUserIds = await this.getSyncRecipientUserIds(
+      event.id,
+      event.hostId,
+    );
+    const accountsByUser = await this.getAccountsByUserIds(recipientUserIds);
+    const activeRecipientKeys = new Set<string>();
+
+    for (const userId of recipientUserIds) {
+      const accounts = accountsByUser.get(userId) ?? [];
+      for (const account of accounts) {
+        const key = `${userId}:${account.provider}`;
+        activeRecipientKeys.add(key);
+        const existing = existingRowByKey.get(key);
+        if (trigger === 'event_cancelled' && !existing) {
+          continue;
+        }
+        const next =
+          existing ??
+          this.eventCalendarSyncRepo.create({
             eventId,
-            userId: event.hostId,
+            userId,
             provider: account.provider,
             calendarId: null,
           });
-      next.syncState =
-        trigger === 'event_cancelled' ? 'cancel_pending' : 'pending';
-      next.lastError = null;
-      const saved = await this.eventCalendarSyncRepo.save(next);
-      await this.executeSync(saved, account, trigger, event);
+        if (next.syncState === 'disabled' && trigger !== 'event_cancelled') {
+          continue;
+        }
+        next.syncState =
+          trigger === 'event_cancelled' ? 'cancel_pending' : 'pending';
+        next.lastError = null;
+        const saved = await this.eventCalendarSyncRepo.save(next);
+        await this.executeSync(saved, account, trigger, event);
+      }
+    }
+
+    if (trigger !== 'attendance_changed' && trigger !== 'event_cancelled') {
+      return;
+    }
+
+    const staleRows = existingRows.filter(
+      (row) => !activeRecipientKeys.has(`${row.userId}:${row.provider}`),
+    );
+    if (!staleRows.length) {
+      return;
+    }
+    const staleUserIds = [...new Set(staleRows.map((row) => row.userId))];
+    const staleAccountsByUser = await this.getAccountsByUserIds(staleUserIds);
+    for (const row of staleRows) {
+      if (row.syncState === 'disabled') {
+        continue;
+      }
+      const account = staleAccountsByUser
+        .get(row.userId)
+        ?.find((candidate) => candidate.provider === row.provider);
+      if (!account) {
+        continue;
+      }
+      await this.executeSync(row, account, 'event_cancelled', event);
     }
   }
 
@@ -289,7 +335,7 @@ export class CalendarSyncService {
     const rows = await this.eventCalendarSyncRepo.find({
       where: {
         eventId,
-        userId: event.hostId,
+        userId,
         provider: In([...CALENDAR_PROVIDERS]),
       },
       order: { updatedAt: 'DESC' },
@@ -460,20 +506,105 @@ export class CalendarSyncService {
     return this.config.get<string>('CALENDAR_APPLE_BETA_ENABLED') === 'true';
   }
 
-  private async syncExistingHostEventsOnConnect(userId: string): Promise<void> {
+  private async syncExistingUserEventsOnConnect(userId: string): Promise<void> {
     const activeStatuses = ['planning', 'voting', 'confirmed', 'active'];
-    const events = await this.eventRepo.find({
-      where: {
-        hostId: userId,
-        status: In(activeStatuses),
-        dateTime: Not(IsNull()),
-      },
-      select: ['id'],
-      take: 200,
-      order: { dateTime: 'DESC' },
-    });
-    for (const event of events) {
-      await this.queueEventSync(event.id, 'event_updated');
+    const [hostedEvents, attendeeRows] = await Promise.all([
+      this.eventRepo.find({
+        where: {
+          hostId: userId,
+          status: In(activeStatuses),
+          dateTime: Not(IsNull()),
+        },
+        select: ['id'],
+        take: 200,
+        order: { dateTime: 'DESC' },
+      }),
+      this.attendeeRepo.find({
+        where: {
+          userId,
+          rsvpStatus: 'going',
+        },
+        select: ['eventId'],
+      }),
+    ]);
+    const attendeeEventIds = [
+      ...new Set(
+        attendeeRows
+          .map((row) => row.eventId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const attendeeEvents =
+      attendeeEventIds.length > 0
+        ? await this.eventRepo.find({
+            where: {
+              id: In(attendeeEventIds),
+              status: In(activeStatuses),
+              dateTime: Not(IsNull()),
+            },
+            select: ['id'],
+            take: 200,
+            order: { dateTime: 'DESC' },
+          })
+        : [];
+
+    const eventIds = new Set<string>([
+      ...hostedEvents.map((event) => event.id),
+      ...attendeeEvents.map((event) => event.id),
+    ]);
+    for (const eventId of eventIds) {
+      await this.queueEventSync(eventId, 'event_updated');
     }
+  }
+
+  private async getSyncRecipientUserIds(
+    eventId: string,
+    hostId: string,
+  ): Promise<string[]> {
+    const attendees = await this.attendeeRepo.find({
+      where: {
+        eventId,
+        rsvpStatus: 'going',
+      },
+      select: ['userId'],
+    });
+    const userIds = new Set<string>([hostId]);
+    for (const attendee of attendees) {
+      if (attendee.userId) {
+        userIds.add(attendee.userId);
+      }
+    }
+    return [...userIds];
+  }
+
+  private async getAccountsByUserIds(
+    userIds: string[],
+  ): Promise<Map<string, SyncAccount[]>> {
+    const uniqueUserIds = [
+      ...new Set(userIds.filter((id): id is string => Boolean(id))),
+    ];
+    const byUser = new Map<string, SyncAccount[]>();
+    for (const userId of uniqueUserIds) {
+      byUser.set(userId, []);
+    }
+    if (!uniqueUserIds.length) {
+      return byUser;
+    }
+    let accounts = await this.syncAccountRepo.find({
+      where: {
+        userId: In(uniqueUserIds),
+        provider: In([...CALENDAR_PROVIDERS]),
+      },
+      order: { updatedAt: 'DESC' },
+    });
+    if (!this.isAppleCalendarEnabled()) {
+      accounts = accounts.filter((account) => account.provider !== 'apple');
+    }
+    for (const account of accounts) {
+      const current = byUser.get(account.userId) ?? [];
+      current.push(account);
+      byUser.set(account.userId, current);
+    }
+    return byUser;
   }
 }

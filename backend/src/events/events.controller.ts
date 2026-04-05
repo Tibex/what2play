@@ -96,7 +96,22 @@ export class EventsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Join event via invite link' })
   async joinViaInvite(@Param('token') token: string, @Request() req) {
-    return this.eventsService.joinViaInvite(token, req.user.id);
+    const inviteEvent = await this.eventsService.getInviteEvent(token);
+    const goingBefore = await this.eventsService.getGoingAttendeeCount(
+      inviteEvent.id,
+    );
+    const result = await this.eventsService.joinViaInvite(token, req.user.id);
+    const goingAfter = await this.eventsService.getGoingAttendeeCount(
+      result.eventId,
+    );
+    if (goingBefore !== goingAfter) {
+      this.calendarSyncService
+        .queueEventSync(result.eventId, 'attendance_changed')
+        .catch(() => {
+          /* non-critical */
+        });
+    }
+    return result;
   }
 
   @Get('invite/:token/recommendations')
