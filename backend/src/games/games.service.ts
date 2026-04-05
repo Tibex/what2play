@@ -126,99 +126,102 @@ export class GamesService {
 
     const [pickedRows, votingRows, votingPoolRows, autoRows, enjoymentRows] =
       await Promise.all([
-      this.eventsRepo
-        .createQueryBuilder('event')
-        .select('event.selectedGameId', 'gameId')
-        .addSelect('COUNT(DISTINCT event.id)', 'pickedCount')
-        .leftJoin(
-          EventAttendee,
-          'membership',
-          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
-          { userId, going: 'going' },
-        )
-        .where('event.selectedGameId IN (:...gameIds)', { gameIds })
-        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
-          userId,
-        })
-        .groupBy('event.selectedGameId')
-        .getRawMany<{ gameId: string; pickedCount: string }>(),
-      this.votesRepo
-        .createQueryBuilder('vote')
-        .innerJoin(Event, 'event', 'event.id = vote.eventId')
-        .leftJoin(
-          EventAttendee,
-          'membership',
-          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
-          { userId, going: 'going' },
-        )
-        .select('vote.gameId', 'gameId')
-        .addSelect('AVG(vote.rank)', 'avgVotingRank')
-        .where('vote.gameId IN (:...gameIds)', { gameIds })
-        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
-          userId,
-        })
-        .groupBy('vote.gameId')
-        .getRawMany<{ gameId: string; avgVotingRank: string | null }>(),
-      this.candidatesRepo
-        .createQueryBuilder('candidate')
-        .innerJoin(Event, 'event', 'event.id = candidate.eventId')
-        .leftJoin(
-          EventAttendee,
-          'membership',
-          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
-          { userId, going: 'going' },
-        )
-        .select('candidate.gameId', 'gameId')
-        .addSelect('COUNT(DISTINCT candidate.eventId)', 'votingPoolCount')
-        .where('candidate.gameId IN (:...gameIds)', { gameIds })
-        .andWhere('event.status IN (:...votingPoolStatuses)', {
-          votingPoolStatuses,
-        })
-        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
-          userId,
-        })
-        .groupBy('candidate.gameId')
-        .getRawMany<{ gameId: string; votingPoolCount: string }>(),
-      this.candidatesRepo
-        .createQueryBuilder('candidate')
-        .innerJoin(Event, 'event', 'event.id = candidate.eventId')
-        .leftJoin(
-          EventAttendee,
-          'membership',
-          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
-          { userId, going: 'going' },
-        )
-        .select('candidate.gameId', 'gameId')
-        .addSelect('COUNT(DISTINCT candidate.eventId)', 'autoRecommendedCount')
-        .where('candidate.gameId IN (:...gameIds)', { gameIds })
-        .andWhere('candidate.source != :manualSource', {
-          manualSource: 'manual',
-        })
-        .andWhere('event.status != :cancelledStatus', {
-          cancelledStatus: 'cancelled',
-        })
-        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
-          userId,
-        })
-        .groupBy('candidate.gameId')
-        .getRawMany<{ gameId: string; autoRecommendedCount: string }>(),
-      this.feedbackRepo
-        .createQueryBuilder('feedback')
-        .innerJoin(Event, 'event', 'event.id = feedback.eventId')
-        .leftJoin(
-          EventAttendee,
-          'membership',
-          'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
-          { userId, going: 'going' },
-        )
-        .select('feedback.gameId', 'gameId')
-        .addSelect('AVG(feedback.enjoymentRating)', 'avgEnjoyment')
-        .where('feedback.gameId IN (:...gameIds)', { gameIds })
-        .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
-          userId,
-        })
-        .groupBy('feedback.gameId')
-        .getRawMany<{ gameId: string; avgEnjoyment: string | null }>(),
+        this.eventsRepo
+          .createQueryBuilder('event')
+          .select('event.selectedGameId', 'gameId')
+          .addSelect('COUNT(DISTINCT event.id)', 'pickedCount')
+          .leftJoin(
+            EventAttendee,
+            'membership',
+            'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+            { userId, going: 'going' },
+          )
+          .where('event.selectedGameId IN (:...gameIds)', { gameIds })
+          .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+            userId,
+          })
+          .groupBy('event.selectedGameId')
+          .getRawMany<{ gameId: string; pickedCount: string }>(),
+        this.votesRepo
+          .createQueryBuilder('vote')
+          .innerJoin(Event, 'event', 'event.id = vote.eventId')
+          .leftJoin(
+            EventAttendee,
+            'membership',
+            'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+            { userId, going: 'going' },
+          )
+          .select('vote.gameId', 'gameId')
+          .addSelect('AVG(vote.rank)', 'avgVotingRank')
+          .where('vote.gameId IN (:...gameIds)', { gameIds })
+          .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+            userId,
+          })
+          .groupBy('vote.gameId')
+          .getRawMany<{ gameId: string; avgVotingRank: string | null }>(),
+        this.candidatesRepo
+          .createQueryBuilder('candidate')
+          .innerJoin(Event, 'event', 'event.id = candidate.eventId')
+          .leftJoin(
+            EventAttendee,
+            'membership',
+            'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+            { userId, going: 'going' },
+          )
+          .select('candidate.gameId', 'gameId')
+          .addSelect('COUNT(DISTINCT candidate.eventId)', 'votingPoolCount')
+          .where('candidate.gameId IN (:...gameIds)', { gameIds })
+          .andWhere('event.status IN (:...votingPoolStatuses)', {
+            votingPoolStatuses,
+          })
+          .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+            userId,
+          })
+          .groupBy('candidate.gameId')
+          .getRawMany<{ gameId: string; votingPoolCount: string }>(),
+        this.candidatesRepo
+          .createQueryBuilder('candidate')
+          .innerJoin(Event, 'event', 'event.id = candidate.eventId')
+          .leftJoin(
+            EventAttendee,
+            'membership',
+            'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+            { userId, going: 'going' },
+          )
+          .select('candidate.gameId', 'gameId')
+          .addSelect(
+            'COUNT(DISTINCT candidate.eventId)',
+            'autoRecommendedCount',
+          )
+          .where('candidate.gameId IN (:...gameIds)', { gameIds })
+          .andWhere('candidate.source != :manualSource', {
+            manualSource: 'manual',
+          })
+          .andWhere('event.status != :cancelledStatus', {
+            cancelledStatus: 'cancelled',
+          })
+          .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+            userId,
+          })
+          .groupBy('candidate.gameId')
+          .getRawMany<{ gameId: string; autoRecommendedCount: string }>(),
+        this.feedbackRepo
+          .createQueryBuilder('feedback')
+          .innerJoin(Event, 'event', 'event.id = feedback.eventId')
+          .leftJoin(
+            EventAttendee,
+            'membership',
+            'membership.eventId = event.id AND membership.userId = :userId AND membership.rsvpStatus = :going',
+            { userId, going: 'going' },
+          )
+          .select('feedback.gameId', 'gameId')
+          .addSelect('AVG(feedback.enjoymentRating)', 'avgEnjoyment')
+          .where('feedback.gameId IN (:...gameIds)', { gameIds })
+          .andWhere('(event.hostId = :userId OR membership.id IS NOT NULL)', {
+            userId,
+          })
+          .groupBy('feedback.gameId')
+          .getRawMany<{ gameId: string; avgEnjoyment: string | null }>(),
       ]);
 
     const pickedCountByGame = new Map<string, number>();
