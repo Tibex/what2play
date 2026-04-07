@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { Inter } from 'next/font/google';
 import ToastProvider from '@/components/ToastProvider';
 import PwaRegistration from '@/components/PwaRegistration';
@@ -80,7 +81,9 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased`}>
         <ToastProvider />
         <PwaRegistration />
-        <LoginModalQuerySync />
+        <Suspense fallback={null}>
+          <LoginModalQuerySync />
+        </Suspense>
         <LoginModalHost />
         <RegisterModalHost />
         <PublicHeader />
