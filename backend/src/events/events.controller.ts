@@ -28,6 +28,7 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { RsvpDto } from './dto/rsvp.dto';
 import { InviteFriendsDto } from './dto/invite-friends.dto';
 import { AdminListEventsQueryDto } from './dto/admin-list-events-query.dto';
+import { AdminActivityQueryDto } from './dto/admin-activity-query.dto';
 import { ReportEventDto } from './dto/report-event.dto';
 import { SetEventScheduleResponsesDto } from './dto/set-event-schedule-responses.dto';
 import { FinalizeEventScheduleDto } from './dto/finalize-event-schedule.dto';
@@ -86,6 +87,26 @@ export class EventsController {
   @ApiOperation({ summary: 'Admin list all events' })
   listAllEvents(@Query() query: AdminListEventsQueryDto) {
     return this.eventsService.listAllForAdmin(query);
+  }
+
+  @Get('admin/summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin events summary metrics' })
+  getAdminSummary() {
+    return this.eventsService.getAdminSummary();
+  }
+
+  @Get('admin/activity')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Admin activity feed for moderation and operations',
+  })
+  getAdminActivity(@Query() query: AdminActivityQueryDto) {
+    return this.eventsService.getAdminActivity(query);
   }
 
   @Get('invite/:token')

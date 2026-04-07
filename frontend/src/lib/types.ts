@@ -308,3 +308,44 @@ export interface EventScheduleDetail {
     responsesBySlotId: Record<string, EventScheduleAnswer | null>;
   }[];
 }
+
+export interface AdminCatalogStats {
+  syncState: {
+    running: boolean;
+    lastSuccessAt: string | null;
+    lastAttemptAt: string | null;
+    lastAttemptStatus: 'success' | 'failed' | null;
+    lastAttemptMessage: string | null;
+    nextEligibleAt: string | null;
+  };
+  quality: {
+    total: number;
+    missingRating: number;
+    missingWeight: number;
+    missingYear: number;
+    missingPoll: number;
+    missingPlayingTime: number;
+  };
+}
+
+export interface AdminEventsSummary {
+  totalEvents: number;
+  openEvents: number;
+  reportedOpenEvents: number;
+  reportsLast7d: number;
+}
+
+export interface AdminUsersSummary {
+  totalUsers: number;
+  totalAdmins: number;
+  usersLast7d: number;
+}
+
+export interface AdminActivityItem {
+  id: string;
+  type: 'user_created';
+  title: string;
+  subtitle: string;
+  userId: string;
+  createdAt: string;
+}

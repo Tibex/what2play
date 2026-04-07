@@ -57,6 +57,13 @@ export type EventScheduleDetail = {
 };
 
 type RsvpSource = 'direct' | 'invite_link';
+type AdminActivityItem = {
+  id: string;
+  type: 'event_created' | 'event_reported';
+  title: string;
+  subtitle: string;
+  createdAt: string;
+};
 
 function normalizeEventScheduleAnswer(answer: string): EventScheduleAnswer {
   return answer === 'yes' ? 'yes' : 'no';
@@ -1070,6 +1077,88 @@ export class EventsService {
         ? new Date(raw[index].lastReportedAt).toISOString()
         : null,
     }));
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasNext: page * pageSize < total,
+      },
+    };
+  }
+
+  async getAdminSummary() {
+    const [totalEvents, openEvents, reportsLast7d, reportedOpenEvents] =
+      await Promise.all([
+        this.eventsRepo.count(),
+        this.eventsRepo.count({ where: { type: 'open' } }),
+        this.eventReportsRepo
+          .createQueryBuilder('report')
+          .where(`report."createdAt" >= NOW() - INTERVAL '7 days'`)
+          .getCount(),
+        this.eventsRepo
+          .createQueryBuilder('event')
+          .where('event.type = :type', { type: 'open' })
+          .andWhere(
+            `EXISTS (
+              SELECT 1
+              FROM "event_reports" "report_filter"
+              WHERE "report_filter"."eventId" = event.id
+            )`,
+          )
+          .getCount(),
+      ]);
+
+    return {
+      totalEvents,
+      openEvents,
+      reportedOpenEvents,
+      reportsLast7d,
+    };
+  }
+
+  async getAdminActivity(query: { page?: number; pageSize?: number }) {
+    const page = query.page || 1;
+    const pageSize = query.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+    const seedSize = pageSize * 3;
+
+    const [latestEvents, latestReports] = await Promise.all([
+      this.eventsRepo.find({
+        relations: ['host'],
+        order: { createdAt: 'DESC' },
+        take: seedSize,
+      }),
+      this.eventReportsRepo.find({
+        relations: ['event', 'reporter'],
+        order: { createdAt: 'DESC' },
+        take: seedSize,
+      }),
+    ]);
+
+    const eventItems: AdminActivityItem[] = latestEvents.map((event) => ({
+      id: `event_created:${event.id}`,
+      type: 'event_created',
+      title: event.title,
+      subtitle: `Created by ${event.host?.name || event.hostId}`,
+      createdAt: event.createdAt.toISOString(),
+    }));
+
+    const reportItems: AdminActivityItem[] = latestReports.map((report) => ({
+      id: `event_reported:${report.id}`,
+      type: 'event_reported',
+      title: report.event?.title || `Event ${report.eventId}`,
+      subtitle: `Reported by ${report.reporter?.name || report.reporterUserId}: ${report.reason}`,
+      createdAt: report.createdAt.toISOString(),
+    }));
+
+    const merged = [...eventItems, ...reportItems].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
+    const total = merged.length;
+    const items = merged.slice(skip, skip + pageSize);
 
     return {
       items,

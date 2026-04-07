@@ -86,4 +86,51 @@ export class UsersService {
     await this.eventsRepo.delete({ hostId: userId });
     await this.usersRepo.delete(userId);
   }
+
+  async getAdminSummary() {
+    const [totalUsers, totalAdmins, usersLast7d] = await Promise.all([
+      this.usersRepo.count(),
+      this.usersRepo.count({ where: { role: 'admin' } }),
+      this.usersRepo
+        .createQueryBuilder('usr')
+        .where(`usr."createdAt" >= NOW() - INTERVAL '7 days'`)
+        .getCount(),
+    ]);
+
+    return {
+      totalUsers,
+      totalAdmins,
+      usersLast7d,
+    };
+  }
+
+  async getAdminActivity(query: { page?: number; pageSize?: number }) {
+    const page = query.page || 1;
+    const pageSize = query.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    const [items, total] = await this.usersRepo.findAndCount({
+      select: ['id', 'name', 'email', 'createdAt'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: pageSize,
+    });
+
+    return {
+      items: items.map((item) => ({
+        id: `user_created:${item.id}`,
+        type: 'user_created' as const,
+        title: item.name || item.email,
+        subtitle: item.email,
+        userId: item.id,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasNext: page * pageSize < total,
+      },
+    };
+  }
 }

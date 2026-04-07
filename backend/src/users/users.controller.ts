@@ -16,6 +16,7 @@ import { Roles } from '../auth/roles.decorator';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AdminListUsersQueryDto } from './dto/admin-list-users-query.dto';
+import { AdminActivityQueryDto } from './dto/admin-activity-query.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -42,6 +43,22 @@ export class UsersController {
   @ApiOperation({ summary: 'Admin list users' })
   listUsers(@Query() query: AdminListUsersQueryDto) {
     return this.usersService.listForAdmin(query);
+  }
+
+  @Get('admin/summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin users summary metrics' })
+  getAdminSummary() {
+    return this.usersService.getAdminSummary();
+  }
+
+  @Get('admin/activity')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin users activity feed' })
+  getAdminActivity(@Query() query: AdminActivityQueryDto) {
+    return this.usersService.getAdminActivity(query);
   }
 
   @Delete(':id')
