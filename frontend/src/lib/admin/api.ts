@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 import type {
   AdminActivityItem,
+  AdminIncompleteCatalogEntry,
   AdminCatalogStats,
   AdminEventsSummary,
   AdminUsersSummary,
@@ -46,8 +47,14 @@ export const adminApi = {
       `/users/admin/activity?page=${page}&pageSize=20`,
     ),
   getCatalogStats: () => api.get<AdminCatalogStats>('/bgg/admin/catalog-stats'),
+  getIncompleteCatalog: (page = 1, pageSize = 100) =>
+    api.get<{
+      items: AdminIncompleteCatalogEntry[];
+      meta: { page: number; pageSize: number; total: number; hasNext: boolean };
+    }>(`/bgg/admin/incomplete-catalog?page=${page}&pageSize=${pageSize}`),
   deleteUser: (userId: string) => api.delete<void>(`/users/${userId}`),
   deleteEvent: (eventId: string) => api.delete<void>(`/events/admin/${eventId}`),
+  deleteGame: (gameId: string) => api.delete<void>(`/games/admin/${gameId}`),
   syncCatalogTop500: () =>
     api.post<AdminCatalogSyncResult>('/bgg/admin/import-top-catalog?limit=500'),
   repairCatalogIncomplete: () =>

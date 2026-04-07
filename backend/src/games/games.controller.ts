@@ -16,6 +16,8 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { GamesService } from './games.service';
 import { RateGameDto } from './dto/rate-game.dto';
 
@@ -49,6 +51,14 @@ export class GamesController {
   @ApiOperation({ summary: 'Remove game from collection' })
   removeFromCollection(@Request() req, @Param('gameId') gameId: string) {
     return this.gamesService.removeFromCollection(req.user.id, gameId);
+  }
+
+  @Delete('admin/:gameId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin delete game from catalog' })
+  removeGameForAdmin(@Param('gameId') gameId: string) {
+    return this.gamesService.deleteForAdmin(gameId);
   }
 
   @Post('rate')

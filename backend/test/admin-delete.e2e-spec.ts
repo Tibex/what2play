@@ -163,6 +163,28 @@ describeIfDb('Admin delete endpoints (e2e)', () => {
       });
   });
 
+  it('exposes incomplete catalog entries to admin only', async () => {
+    const nonAdmin = await registerUser('catalog-user');
+    const admin = await createAdminUser('catalog-admin');
+
+    await request(app.getHttpServer())
+      .get('/api/bgg/admin/incomplete-catalog?limit=5')
+      .set('Authorization', `Bearer ${nonAdmin.accessToken}`)
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .get('/api/bgg/admin/incomplete-catalog?limit=5')
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200)
+      .expect((res) => {
+        expect(Array.isArray(res.body.items)).toBe(true);
+        expect(typeof res.body.meta?.page).toBe('number');
+        expect(typeof res.body.meta?.pageSize).toBe('number');
+        expect(typeof res.body.meta?.total).toBe('number');
+        expect(typeof res.body.meta?.hasNext).toBe('boolean');
+      });
+  });
+
   async function createAdminUser(alias: string) {
     const registered = await registerUser(alias);
     await usersRepo.update(registered.user.id, { role: 'admin' });

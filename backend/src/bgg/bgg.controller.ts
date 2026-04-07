@@ -135,4 +135,19 @@ export class BggController {
   ) {
     return this.bggService.repairIncompleteCatalogData(limit);
   }
+
+  @Get('admin/incomplete-catalog')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({
+    summary:
+      'Admin: list catalog games missing year, player-count poll, or playtime',
+  })
+  getIncompleteCatalog(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('pageSize', new DefaultValuePipe(100), ParseIntPipe)
+    pageSize: number,
+  ) {
+    return this.bggService.getAdminIncompleteCatalogEntries(page, pageSize);
+  }
 }

@@ -414,4 +414,87 @@ export class GamesService {
       .map((row) => Number(row.bggId))
       .filter((id) => !Number.isNaN(id) && id > 0);
   }
+
+  async getCatalogEntriesForAdmin(
+    page = 1,
+    pageSize = 100,
+  ): Promise<{
+    items: Array<{
+      id: string;
+      bggId: number | null;
+      title: string;
+      yearPublished: number | null;
+      playingTime: number | null;
+      bggRating: number | null;
+      weight: number | null;
+      missingPoll: boolean;
+      missingYear: boolean;
+      missingPlayingTime: boolean;
+      missingRating: boolean;
+      missingWeight: boolean;
+      isIncomplete: boolean;
+    }>;
+    meta: { page: number; pageSize: number; total: number; hasNext: boolean };
+  }> {
+    const normalizedPage = Math.max(1, Math.floor(page));
+    const normalizedPageSize = Math.min(200, Math.max(1, Math.floor(pageSize)));
+    const offset = (normalizedPage - 1) * normalizedPageSize;
+
+    const items = await this.gamesRepo.query(
+      `
+        SELECT
+          id,
+          "bggId",
+          title,
+          "yearPublished",
+          "playingTime",
+          "bggRating",
+          weight,
+          ("bggPlayerCountPoll" IS NULL OR "bggPlayerCountPoll" = '') AS "missingPoll",
+          ("yearPublished" IS NULL) AS "missingYear",
+          ("playingTime" IS NULL OR "playingTime" <= 0) AS "missingPlayingTime",
+          ("bggRating" IS NULL) AS "missingRating",
+          (weight IS NULL) AS "missingWeight",
+          (
+            "yearPublished" IS NULL
+            OR "playingTime" IS NULL
+            OR "playingTime" <= 0
+            OR "bggPlayerCountPoll" IS NULL
+            OR "bggPlayerCountPoll" = ''
+            OR "bggRating" IS NULL
+            OR weight IS NULL
+          ) AS "isIncomplete"
+        FROM games
+        ORDER BY "isIncomplete" DESC, title ASC
+        LIMIT $1 OFFSET $2
+      `,
+      [normalizedPageSize, offset],
+    );
+
+    const totalRows: Array<{ total: string }> = await this.gamesRepo.query(
+      `SELECT COUNT(*)::text AS total FROM games`,
+    );
+    const total = Number(totalRows[0]?.total ?? 0);
+
+    return {
+      items,
+      meta: {
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total,
+        hasNext: normalizedPage * normalizedPageSize < total,
+      },
+    };
+  }
+
+  async deleteForAdmin(gameId: string): Promise<void> {
+    const existing = await this.gamesRepo.findOne({
+      where: { id: gameId },
+      select: ['id'],
+    });
+    if (!existing) {
+      throw new NotFoundException('Game not found');
+    }
+    await this.gamesRepo.delete(gameId);
+  }
 }

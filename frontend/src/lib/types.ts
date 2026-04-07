@@ -349,3 +349,19 @@ export interface AdminActivityItem {
   userId: string;
   createdAt: string;
 }
+
+export interface AdminIncompleteCatalogEntry {
+  id: string;
+  bggId: number | null;
+  title: string;
+  yearPublished: number | null;
+  playingTime: number | null;
+  bggRating: number | null;
+  weight: number | null;
+  missingPoll: boolean;
+  missingYear: boolean;
+  missingPlayingTime: boolean;
+  missingRating: boolean;
+  missingWeight: boolean;
+  isIncomplete: boolean;
+}

@@ -470,6 +470,10 @@ export class BggService {
     };
   }
 
+  async getAdminIncompleteCatalogEntries(page = 1, pageSize = 100) {
+    return this.gamesService.getCatalogEntriesForAdmin(page, pageSize);
+  }
+
   private async fetchSearchHits(
     query: string,
     headers: Record<string, string>,

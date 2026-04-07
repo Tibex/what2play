@@ -10,6 +10,8 @@ import type { GameOwnership } from '@/lib/types';
 export default function CollectionPage() {
   const [collection, setCollection] = useState<GameOwnership[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   const sortedCollection = useMemo(
     () =>
@@ -38,10 +40,16 @@ export default function CollectionPage() {
       }),
     [collection],
   );
+  const pagedCollection = useMemo(
+    () => sortedCollection.slice((page - 1) * pageSize, page * pageSize),
+    [page, sortedCollection],
+  );
+  const hasNext = page * pageSize < sortedCollection.length;
 
   const loadCollection = async () => {
     const data = await api.get<GameOwnership[]>('/games/collection');
     setCollection(data);
+    setPage(1);
     setLoading(false);
   };
 
@@ -49,6 +57,7 @@ export default function CollectionPage() {
     const init = async () => {
       const data = await api.get<GameOwnership[]>('/games/collection');
       setCollection(data);
+      setPage(1);
       setLoading(false);
     };
     void init();
@@ -96,7 +105,7 @@ export default function CollectionPage() {
           </h2>
 
           <div className="space-y-3">
-            {sortedCollection.map((ownership) => (
+            {pagedCollection.map((ownership) => (
               <GameCard
                 key={ownership.id}
                 game={ownership.game}
@@ -150,6 +159,25 @@ export default function CollectionPage() {
                 }
               />
             ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span className="wt-muted text-sm">Page {page}</span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!hasNext}
+              className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+            >
+              Next
+            </button>
           </div>
         </div>
       )}
