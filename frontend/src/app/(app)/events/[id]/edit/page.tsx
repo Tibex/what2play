@@ -74,14 +74,26 @@ export default function EditEventPage() {
   };
 
   const handleSubmit = async (data: EventFormData) => {
-    const payload = {
-      ...data,
+    const usePoll = data.scheduleMode === 'poll';
+    const basePayload = {
+      title: data.title,
+      description: data.description || undefined,
       durationMinutes: Number(data.durationMinutes),
+      location: data.location || undefined,
+      type: data.type,
+      discoveryMode: data.discoveryMode,
       capacity: data.type === 'open' ? Number(data.capacity) : null,
     };
 
     await api.patch(`/events/${id}`, {
-      ...payload,
+      ...basePayload,
+      ...(usePoll
+        ? {
+            status: 'scheduling',
+            useAvailabilityPoll: true,
+            availabilitySlots: data.availabilitySlots,
+          }
+        : { dateTime: data.dateTime }),
     });
     toast.success('Event updated');
     router.push(`/events/${id}`);

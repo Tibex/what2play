@@ -1,15 +1,11 @@
-import { ApiPropertyOptional, PartialType, OmitType } from '@nestjs/swagger';
+import { ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { CreateEventDto } from './create-event.dto';
 import { IsOptional, IsISO8601, IsString, IsIn } from 'class-validator';
 
-export class UpdateEventDto extends PartialType(
-  OmitType(CreateEventDto, [
-    'useAvailabilityPoll',
-    'availabilitySlots',
-  ] as const),
-) {
+export class UpdateEventDto extends PartialType(CreateEventDto) {
   @ApiPropertyOptional({
     enum: [
+      'scheduling',
       'planning',
       'voting',
       'confirmed',
@@ -19,7 +15,15 @@ export class UpdateEventDto extends PartialType(
     ],
   })
   @IsOptional()
-  @IsIn(['planning', 'voting', 'confirmed', 'active', 'completed', 'cancelled'])
+  @IsIn([
+    'scheduling',
+    'planning',
+    'voting',
+    'confirmed',
+    'active',
+    'completed',
+    'cancelled',
+  ])
   status?: string;
 
   @ApiPropertyOptional()

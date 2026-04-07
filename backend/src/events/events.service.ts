@@ -247,6 +247,7 @@ export class EventsService {
     if (event.hostId !== userId)
       throw new ForbiddenException('Only host can update');
     const statusBeforeUpdate = event.status;
+    const useAvailabilityPoll = dto.useAvailabilityPoll === true;
 
     if (event.status === 'scheduling') {
       if (dto.dateTime !== undefined) {
@@ -258,6 +259,26 @@ export class EventsService {
         throw new BadRequestException(
           'Finalize the schedule before changing event status.',
         );
+      }
+    }
+
+    if (useAvailabilityPoll) {
+      if ((dto.type ?? event.type) === 'open') {
+        throw new BadRequestException(
+          'Open game nights need a fixed date. Use invite-only when polling availability.',
+        );
+      }
+      if (dto.dateTime !== undefined) {
+        throw new BadRequestException(
+          'Do not send dateTime when using availability polling',
+        );
+      }
+      const slotsIn = dto.availabilitySlots ?? [];
+      if (slotsIn.length < 1) {
+        throw new BadRequestException('Add at least one time option');
+      }
+      if (slotsIn.length > 32) {
+        throw new BadRequestException('Maximum 32 time options');
       }
     }
 
@@ -302,8 +323,15 @@ export class EventsService {
       votingDeadline: _ignoredVotingDeadline,
       capacity: _ignoredCapacity,
       type: _ignoredType,
+      useAvailabilityPoll: _ignoredUseAvailabilityPoll,
+      availabilitySlots: _ignoredAvailabilitySlots,
       ...rest
     } = dto;
+
+    if (useAvailabilityPoll) {
+      event.dateTime = null;
+      event.status = 'scheduling';
+    }
 
     Object.assign(event, {
       ...rest,
@@ -314,6 +342,27 @@ export class EventsService {
       votingDeadline: event.votingDeadline,
     });
     await this.eventsRepo.save(event);
+
+    if (useAvailabilityPoll) {
+      const slotsIn = dto.availabilitySlots ?? [];
+      await this.scheduleResponsesRepo.delete({ eventId: event.id });
+      await this.scheduleSlotsRepo.delete({ eventId: event.id });
+      const slotRows = slotsIn.map((s, i) =>
+        this.scheduleSlotsRepo.create({
+          eventId: event.id,
+          start: resolveEventDateTime(s.start, event.eventTimezone ?? 'UTC'),
+          label: s.label?.trim() || null,
+          sortOrder: i,
+        }),
+      );
+      for (const row of slotRows) {
+        if (Number.isNaN(row.start.getTime())) {
+          throw new BadRequestException('Invalid slot start time');
+        }
+      }
+      await this.scheduleSlotsRepo.save(slotRows);
+    }
+
     return this.findById(id);
   }
 
