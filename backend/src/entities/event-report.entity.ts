@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  JoinColumn,
   CreateDateColumn,
   Unique,
 } from 'typeorm';
@@ -16,16 +17,18 @@ export class EventReport {
   id: string;
 
   @ManyToOne(() => Event, (event) => event.reports, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'eventId' })
   event: Event;
 
   @Column()
   eventId: string;
 
   @ManyToOne(() => User, (user) => user.eventReports, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'reporterUserId' })
   reporter: User;
 
-  @Column()
-  reporterUserId: string;
+  @Column({ nullable: true })
+  reporterUserId: string | null;
 
   @Column({ type: 'varchar' })
   reason: string;
