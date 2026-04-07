@@ -71,12 +71,6 @@ export default function Navbar() {
             >
               Friends
             </Link>
-            <Link
-              href="/groups"
-              className="text-sm font-medium transition-colors hover:text-sky-200"
-            >
-              Groups
-            </Link>
             {user?.role === 'admin' && (
               <Link
                 href="/admin"
@@ -157,13 +151,6 @@ export default function Navbar() {
                 className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
               >
                 Friends
-              </Link>
-              <Link
-                href="/groups"
-                onClick={() => setMenuOpen(false)}
-                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
-              >
-                Groups
               </Link>
               {user?.role === 'admin' && (
                 <Link

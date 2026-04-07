@@ -3,14 +3,25 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
-import type { Group } from '@/lib/types';
+import { useAuthStore } from '@/lib/store';
+import type { Group, User } from '@/lib/types';
 
 export default function GroupsPage() {
+  const { user } = useAuthStore();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [friends, setFriends] = useState<User[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [selectedFriendByGroup, setSelectedFriendByGroup] = useState<
+    Record<string, string>
+  >({});
+  const [roleByGroup, setRoleByGroup] = useState<Record<string, 'member' | 'admin'>>(
+    {},
+  );
+  const [addingToGroupId, setAddingToGroupId] = useState<string | null>(null);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
 
   const loadGroups = async () => {
     const rows = await api.get<Group[]>('/groups');
@@ -18,9 +29,12 @@ export default function GroupsPage() {
   };
 
   useEffect(() => {
-    loadGroups()
+    Promise.all([
+      loadGroups(),
+      api.get<User[]>('/friends', { showErrorToast: false }).then(setFriends),
+    ])
       .catch(() => {
-        toast.error('Failed to load groups');
+        toast.error('Failed to load groups/friends');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -40,6 +54,35 @@ export default function GroupsPage() {
       toast.success('Group created');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const addMember = async (groupId: string) => {
+    const friendId = selectedFriendByGroup[groupId];
+    if (!friendId) return;
+    setAddingToGroupId(groupId);
+    try {
+      await api.post(`/groups/${groupId}/members`, {
+        userId: friendId,
+        role: roleByGroup[groupId] ?? 'member',
+      });
+      await loadGroups();
+      setSelectedFriendByGroup((prev) => ({ ...prev, [groupId]: '' }));
+      toast.success('Member added');
+    } finally {
+      setAddingToGroupId(null);
+    }
+  };
+
+  const removeMember = async (groupId: string, memberUserId: string) => {
+    const key = `${groupId}:${memberUserId}`;
+    setRemovingKey(key);
+    try {
+      await api.delete(`/groups/${groupId}/members/${memberUserId}`);
+      await loadGroups();
+      toast.success('Member removed');
+    } finally {
+      setRemovingKey(null);
     }
   };
 
@@ -91,6 +134,89 @@ export default function GroupsPage() {
                 <p className="wt-muted mt-1 text-xs">
                   {group.members?.length ?? 0} members
                 </p>
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Members
+                  </p>
+                  <ul className="space-y-1">
+                    {(group.members || []).map((member) => {
+                      const canRemove =
+                        member.userId !== user?.id && member.role !== 'owner';
+                      const removeBusy =
+                        removingKey === `${group.id}:${member.userId}`;
+                      return (
+                        <li
+                          key={member.id}
+                          className="flex items-center justify-between rounded border border-[var(--border)] px-2 py-1.5 text-sm"
+                        >
+                          <span>
+                            {member.user?.name || member.user?.email || member.userId}
+                            <span className="wt-muted ml-2 text-xs">({member.role})</span>
+                          </span>
+                          {canRemove ? (
+                            <button
+                              type="button"
+                              onClick={() => void removeMember(group.id, member.userId)}
+                              disabled={removeBusy}
+                              className="text-xs text-[var(--danger)] disabled:opacity-50"
+                            >
+                              {removeBusy ? 'Removing...' : 'Remove'}
+                            </button>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
+                  <select
+                    value={selectedFriendByGroup[group.id] || ''}
+                    onChange={(e) =>
+                      setSelectedFriendByGroup((prev) => ({
+                        ...prev,
+                        [group.id]: e.target.value,
+                      }))
+                    }
+                    className="wt-input text-sm"
+                  >
+                    <option value="">Add friend...</option>
+                    {friends
+                      .filter(
+                        (friend) =>
+                          !(group.members || []).some(
+                            (member) => member.userId === friend.id,
+                          ),
+                      )
+                      .map((friend) => (
+                        <option key={friend.id} value={friend.id}>
+                          {friend.name || friend.email}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    value={roleByGroup[group.id] || 'member'}
+                    onChange={(e) =>
+                      setRoleByGroup((prev) => ({
+                        ...prev,
+                        [group.id]: e.target.value as 'member' | 'admin',
+                      }))
+                    }
+                    className="wt-input text-sm"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void addMember(group.id)}
+                    disabled={
+                      addingToGroupId === group.id || !selectedFriendByGroup[group.id]
+                    }
+                    className="wt-btn wt-btn-secondary px-3 py-2 text-sm disabled:opacity-50"
+                  >
+                    {addingToGroupId === group.id ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

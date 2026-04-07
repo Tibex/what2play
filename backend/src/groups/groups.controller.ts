@@ -58,4 +58,10 @@ export class GroupsController {
   ) {
     return this.groupsService.removeMember(id, req.user.id, memberUserId);
   }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete group (owner only)' })
+  removeGroup(@Request() req, @Param('id') id: string) {
+    return this.groupsService.deleteGroup(id, req.user.id);
+  }
 }

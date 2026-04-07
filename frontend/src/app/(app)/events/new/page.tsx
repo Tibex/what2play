@@ -91,34 +91,14 @@ function NewEventPageInner() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl sm:text-2xl font-bold mb-4">New Game Night</h1>
-      {groups.length > 0 && (
-        <div className="wt-card mb-4 p-4">
-          <label htmlFor="group-select" className="mb-1 block text-sm font-medium">
-            Create for group (optional)
-          </label>
-          <select
-            id="group-select"
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            className="wt-input"
-          >
-            <option value="">No group</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          <p className="wt-muted mt-2 text-xs">
-            Group members are auto-invited as pending attendees.
-          </p>
-        </div>
-      )}
       <EventForm
         initial={initial}
         submitLabel="Create Night"
         submittingLabel="Creating..."
         onSubmit={handleSubmit}
+        groupOptions={groups.map((group) => ({ id: group.id, name: group.name }))}
+        selectedGroupId={groupId}
+        onGroupChange={setGroupId}
       />
     </div>
   );

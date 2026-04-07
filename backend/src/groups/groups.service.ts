@@ -105,6 +105,19 @@ export class GroupsService {
     return { ok: true };
   }
 
+  async deleteGroup(groupId: string, actorId: string): Promise<{ ok: true }> {
+    const group = await this.groupsRepo.findOne({
+      where: { id: groupId },
+      select: ['id', 'ownerId'],
+    });
+    if (!group) throw new NotFoundException('Group not found');
+    if (group.ownerId !== actorId) {
+      throw new ForbiddenException('Only group owner can delete group');
+    }
+    await this.groupsRepo.delete({ id: groupId });
+    return { ok: true };
+  }
+
   async assertMembership(groupId: string, userId: string): Promise<void> {
     const membership = await this.membersRepo.findOne({
       where: { groupId, userId },

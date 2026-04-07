@@ -22,6 +22,11 @@ export interface EventFormData {
   availabilitySlots: { start: string; label?: string }[];
 }
 
+type GroupOption = {
+  id: string;
+  name: string;
+};
+
 const POLL_DEFAULT_START = '19:00';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-places-script';
@@ -276,11 +281,17 @@ export default function EventForm({
   submitLabel,
   submittingLabel,
   onSubmit,
+  groupOptions = [],
+  selectedGroupId = '',
+  onGroupChange,
 }: Readonly<{
   initial: EventFormData;
   submitLabel: string;
   submittingLabel: string;
   onSubmit: (data: EventFormData) => Promise<void>;
+  groupOptions?: GroupOption[];
+  selectedGroupId?: string;
+  onGroupChange?: (groupId: string) => void;
 }>) {
   const [form, setForm] = useState<EventFormData>(initial);
   const [loading, setLoading] = useState(false);
@@ -760,6 +771,28 @@ export default function EventForm({
             <option value="open">Open</option>
           </select>
         </div>
+        {form.type === 'invite' && groupOptions.length > 0 && onGroupChange && (
+          <div className="mt-3">
+            <label className="mb-1 block text-sm font-medium">
+              Create for group (optional)
+            </label>
+            <select
+              value={selectedGroupId}
+              onChange={(e) => onGroupChange(e.target.value)}
+              className="wt-input"
+            >
+              <option value="">No group</option>
+              {groupOptions.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+            <p className="wt-muted mt-1 text-xs">
+              Group members are auto-invited as pending attendees.
+            </p>
+          </div>
+        )}
       </div>
 
       {form.type === 'open' && (

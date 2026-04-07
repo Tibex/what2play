@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddGroupsAndEventGroupLink1764620000000 implements MigrationInterface {
   name = 'AddGroupsAndEventGroupLink1764620000000';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -15,6 +15,7 @@ import GameSearchAdd, {
 import FeedbackSection from './feedback-section';
 import EventScheduleBlock from '@/components/events/EventScheduleBlock';
 import RecommendationPoolInsights from '@/components/events/RecommendationPoolInsights';
+import FriendPickerDropdown from '@/components/friends/FriendPickerDropdown';
 import type {
   Game,
   GameEvent,
@@ -946,38 +947,6 @@ function AttendeesSection({
   onOpenInviteFriends: () => void;
   onRemove: (attendeeId: string) => void;
 }) {
-  const [inviteDropdownOpen, setInviteDropdownOpen] = useState(false);
-  const [inviteQuery, setInviteQuery] = useState('');
-  const inviteDropdownRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (!inviteDropdownRef.current) return;
-      if (!inviteDropdownRef.current.contains(event.target as Node)) {
-        setInviteDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleDocumentClick);
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentClick);
-    };
-  }, []);
-
-  const openInviteDropdown = async () => {
-    setInviteDropdownOpen(true);
-    await onOpenInviteFriends();
-  };
-
-  const visibleInviteableFriends = inviteableFriends.filter((friend) => {
-    const q = inviteQuery.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      friend.name.toLowerCase().includes(q) ||
-      friend.email.toLowerCase().includes(q)
-    );
-  });
-
   const knownStatusGroups = [
     {
       key: 'pending',
@@ -1088,56 +1057,16 @@ function AttendeesSection({
               </span>
             ))}
             {isHost && group.key === 'going' && (
-              <div ref={inviteDropdownRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (inviteDropdownOpen) {
-                      setInviteDropdownOpen(false);
-                      return;
-                    }
-                    void openInviteDropdown();
-                  }}
-                  className="wt-btn wt-btn-secondary rounded-full px-3 py-1 text-sm font-medium"
-                  title="Invite friend"
-                  aria-label="Invite friend"
-                >
-                  +
-                </button>
-                {inviteDropdownOpen && (
-                  <div className="absolute z-20 mt-2 right-0 w-[calc(100vw-2rem)] sm:w-72 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-2 shadow-[var(--shadow-soft)]">
-                    <input
-                      type="text"
-                      value={inviteQuery}
-                      onChange={(e) => setInviteQuery(e.target.value)}
-                      placeholder="Search friends..."
-                      className="wt-input mb-2 w-full rounded-md px-2 py-1.5 text-sm"
-                    />
-                    <div className="max-h-56 overflow-y-auto">
-                      {loadingInviteableFriends ? (
-                        <p className="text-xs text-gray-500 px-1 py-2">Loading...</p>
-                      ) : visibleInviteableFriends.length === 0 ? (
-                        <p className="text-xs text-gray-500 px-1 py-2">No matching friends</p>
-                      ) : (
-                        visibleInviteableFriends.map((friend) => (
-                          <button
-                            key={friend.id}
-                            type="button"
-                            onClick={() => {
-                              onInviteFriend(friend.id);
-                            }}
-                            disabled={invitingFriends}
-                            className="w-full text-left rounded px-2 py-1.5 hover:bg-gray-100 disabled:opacity-50"
-                          >
-                            <span className="block text-sm text-gray-800 truncate">{friend.name}</span>
-                            <span className="block text-xs text-gray-500 truncate">{friend.email}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <FriendPickerDropdown
+                friends={inviteableFriends}
+                loading={loadingInviteableFriends}
+                onOpen={onOpenInviteFriends}
+                onSelect={(friendId) => {
+                  if (invitingFriends) return;
+                  onInviteFriend(friendId);
+                }}
+                buttonTitle="Invite friend"
+              />
             )}
           </div>
         </div>
