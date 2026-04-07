@@ -36,6 +36,7 @@ const sections: GuideSection[] = [
       'Import owned games from BGG usernames',
       'Use synced data while building candidate lists',
       'Reduce recommendation noise from unavailable titles',
+      'Blend owned-game picks with discovery-mode exploration',
     ],
   },
   {
@@ -56,7 +57,7 @@ const faqs: GuideFaq[] = [
   {
     question: 'Can multiple attendees use synced collections in one event?',
     answer:
-      'Yes. Event recommendations can account for libraries across all confirmed attendees.',
+      'Yes. Event recommendations can account for libraries across all attendees marked as going.',
   },
   {
     question: 'Is BoardGameGeek affiliation required?',

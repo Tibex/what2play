@@ -13,6 +13,9 @@ export default function SiteFooter() {
           <Link href="/resources" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
             Resources
           </Link>
+          <Link href="/faq" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
+            FAQ
+          </Link>
           <Link href="/about" className="hover:text-[var(--primary)] no-underline text-[var(--muted)]">
             About
           </Link>

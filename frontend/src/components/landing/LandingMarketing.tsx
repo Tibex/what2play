@@ -120,7 +120,7 @@ export function LandingMarketing() {
                 {
                   step: '2',
                   title: 'Create an event',
-                  body: 'Invite people, collect RSVPs, and set time, headcount, and complexity.',
+                  body: 'Set a fixed date or run an availability poll, then collect RSVPs and attendee preferences.',
                 },
                 {
                   step: '3',
@@ -130,7 +130,7 @@ export function LandingMarketing() {
                 {
                   step: '4',
                   title: 'Vote and improve',
-                  body: 'Rank choices, lock the game, then quick feedback shapes the next night.',
+                  body: 'Rank choices, lock a winner with fallback options, then quick feedback shapes the next night.',
                 },
               ].map((item) => (
                 <li key={item.step} className="wt-card p-6 relative overflow-hidden">
@@ -199,8 +199,12 @@ export function LandingMarketing() {
                   body: 'Ranked voting and host controls help groups commit instead of circling forever.',
                 },
                 {
-                  title: 'Built for recurring groups',
-                  body: 'Light post-event feedback can nudge future picks toward nights that land.',
+                  title: 'Works for private and open nights',
+                  body: 'Run invite-only events with friend tools, or host open events that players can discover from the dashboard.',
+                },
+                {
+                  title: 'See what your shelf actually delivers',
+                  body: 'Track which games from your collection get picked, how they rank in votes, and how much your group enjoys them.',
                 },
               ].map((block) => (
                 <div key={block.title} className="wt-subtle p-6">
@@ -225,31 +229,6 @@ export function LandingMarketing() {
           </div>
         </section>
 
-        <section className="border-t border-[var(--border)]">
-          <div className="wt-page px-4 sm:px-6 py-12 sm:py-14 max-w-3xl">
-            <h2 className="text-xl sm:text-2xl font-bold text-center">Frequently asked questions</h2>
-            <div className="mt-8 space-y-4">
-              <details className="wt-card p-5" open>
-                <summary className="font-semibold">How does What2Play choose board game recommendations?</summary>
-                <p className="mt-2 text-sm wt-muted">
-                  Recommendations consider your attendee count, preferred complexity, time budget, and which games people can actually bring.
-                </p>
-              </details>
-              <details className="wt-card p-5">
-                <summary className="font-semibold">Can groups vote on which board game to play?</summary>
-                <p className="mt-2 text-sm wt-muted">
-                  Yes. Run ranked voting rounds so everyone can submit preferences and the group can lock a fair outcome.
-                </p>
-              </details>
-              <details className="wt-card p-5">
-                <summary className="font-semibold">Can I sync my BoardGameGeek collection?</summary>
-                <p className="mt-2 text-sm wt-muted">
-                  Yes. Connect your BoardGameGeek username, sync owned games, and use that collection in recommendations and event planning.
-                </p>
-              </details>
-            </div>
-          </div>
-        </section>
       </main>
 
     </div>

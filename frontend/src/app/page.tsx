@@ -15,6 +15,8 @@ export const metadata: Metadata = createPageMetadata({
     'board game recommendation tool',
     'game night organizer',
     'boardgamegeek collection sync',
+    'board game availability poll',
+    'board game collection stats',
   ],
 });
 
@@ -44,6 +46,9 @@ export default function Home() {
         'Board game night planning',
         'Collection-aware recommendations',
         'Ranked voting for game selection',
+        'Availability polling for invite-only events',
+        'Open event discovery and RSVP',
+        'Fallback game options after vote lock-in',
         'BoardGameGeek collection linking',
       ],
     },
@@ -73,6 +78,22 @@ export default function Home() {
           acceptedAnswer: {
             '@type': 'Answer',
             text: 'Yes. You can link your BoardGameGeek username and use owned games in planning and recommendation flows.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Can we poll dates before locking a game night?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Yes. Hosts can run availability polls for invite-only events, then lock the final date and time.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'What happens if attendees drop after voting?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Hosts can set fallback game options so confirmed events can adapt if player count changes before game time.',
           },
         },
       ],

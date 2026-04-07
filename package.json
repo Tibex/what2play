@@ -2,7 +2,8 @@
   "name": "what2play",
   "private": true,
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "seo:rank-report": "node scripts/seo-rank-tracker.mjs"
   },
   "devDependencies": {
     "husky": "^9.1.7"

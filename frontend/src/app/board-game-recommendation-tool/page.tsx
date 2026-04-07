@@ -36,6 +36,7 @@ const sections: GuideSection[] = [
       'Filter by player count and time first',
       'Apply complexity preferences for the current group',
       'Highlight games attendees can bring now',
+      'Support fallback picks when turnout changes',
     ],
   },
   {
@@ -62,6 +63,11 @@ const faqs: GuideFaq[] = [
     question: 'Do recommendations replace host judgment?',
     answer:
       'No. Recommendations narrow options, and hosts still decide how strict constraints should be.',
+  },
+  {
+    question: 'Can hosts manually adjust recommendation lists?',
+    answer:
+      'Yes. Hosts can add or remove candidates before voting to reflect context that automation might miss.',
   },
 ];
 

@@ -27,6 +27,7 @@ const sections: GuideSection[] = [
     ],
     bullets: [
       'Single place for event setup, attendance, and game candidates',
+      'Date polling for invite-only groups before finalizing the event time',
       'Clear player-count and time-budget constraints',
       'Final decision workflow so planning does not stall',
     ],
@@ -56,7 +57,7 @@ const faqs: GuideFaq[] = [
   {
     question: 'Can hosts still override the vote result?',
     answer:
-      'Yes. Hosts can lock final selections when logistics require a manual decision.',
+      'Yes. Hosts can lock final selections when logistics require a manual decision, and keep fallback games ready if attendance changes.',
   },
   {
     question: 'Do players need accounts before joining?',

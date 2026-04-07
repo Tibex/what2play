@@ -30,6 +30,9 @@ This playbook documents the parts of the ranking plan that require ongoing execu
 Hub page for internal linking:
 - `/resources`
 
+Supplemental feature-intent page:
+- `/faq` (availability polling and collection performance insight queries)
+
 ## 3) Weekly Measurement Cadence
 
 Every week, review these metrics by landing page and query:

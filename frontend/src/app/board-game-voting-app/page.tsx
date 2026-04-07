@@ -61,7 +61,12 @@ const faqs: GuideFaq[] = [
   {
     question: 'What if the winning game is unavailable on event day?',
     answer:
-      'Hosts can lock a fallback option while preserving the voting record for future sessions.',
+      'Hosts can lock fallback options while preserving the voting record for future sessions.',
+  },
+  {
+    question: 'Can we keep results hidden until everyone has voted?',
+    answer:
+      'Yes. Results stay hidden until expected voters submit, so the process is fair and less biased.',
   },
 ];
 

@@ -68,6 +68,7 @@ export const KEYWORD_CLUSTERS: KeywordCluster[] = [
 
 export const INDEXABLE_MARKETING_PATHS = [
   '/',
+  '/faq',
   '/about',
   '/contact',
   '/privacy',
