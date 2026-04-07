@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { io, Socket } from 'socket.io-client';
 import ConfirmModal from '@/components/ConfirmModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
@@ -29,6 +30,14 @@ import type {
   EventScheduleDetail,
   RecommendationPoolStats,
 } from '@/lib/types';
+
+type VotingRealtimePayload = {
+  eventId: string;
+  results: VoteResult[];
+  votingStatus: VotingStatus;
+  eventStatus: string;
+  selectedGameId: string | null;
+};
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -68,6 +77,7 @@ export default function EventDetailPage() {
     null,
   );
   const [loadingPoolStats, setLoadingPoolStats] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   const sendRecommendationTelemetry = useCallback(
     async (eventName: string, payload?: Record<string, unknown>) => {
@@ -183,6 +193,63 @@ export default function EventDetailPage() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadEvent]);
+
+  useEffect(() => {
+    if (!event || !user?.id) return;
+    if (event.status !== 'voting' && event.status !== 'confirmed') return;
+
+    const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+    const baseUrl = rawApiUrl.endsWith('/api')
+      ? rawApiUrl.slice(0, -4)
+      : rawApiUrl.replace(/\/+$/, '');
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+
+    const socket: Socket = io(`${baseUrl}/voting`, {
+      transports: ['websocket'],
+      auth: { token },
+    });
+
+    socket.on('connect', () => {
+      setSocketConnected(true);
+      socket.emit('joinEvent', id);
+    });
+    socket.on('disconnect', () => {
+      setSocketConnected(false);
+    });
+    socket.on('votingState', (payload: VotingRealtimePayload) => {
+      if (!payload || payload.eventId !== id) return;
+      setResults(payload.results || []);
+      setVotingStatus(payload.votingStatus || null);
+      setEvent((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: payload.eventStatus || prev.status,
+              selectedGameId: payload.selectedGameId ?? prev.selectedGameId,
+            }
+          : prev,
+      );
+    });
+
+    return () => {
+      socket.emit('leaveEvent', id);
+      socket.disconnect();
+      setSocketConnected(false);
+    };
+  }, [event, id, user?.id]);
+
+  useEffect(() => {
+    if (!event) return;
+    if (event.status !== 'voting' && event.status !== 'confirmed') return;
+    if (socketConnected) return;
+    const timer = window.setInterval(() => {
+      void loadEvent(false);
+    }, 10000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [event, socketConnected, loadEvent]);
 
   useEffect(() => {
     if (!generatingRecommendations) return;

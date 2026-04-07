@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
 import { SyncAccount } from '../entities/sync-account.entity';
@@ -36,23 +35,18 @@ export class CalendarSyncService {
     @InjectRepository(EventAttendee)
     private readonly attendeeRepo: Repository<EventAttendee>,
     private readonly tokenCryptoService: TokenCryptoService,
-    private readonly config: ConfigService,
     private readonly googleAdapter: GoogleCalendarAdapter,
     private readonly appleAdapter: AppleCalendarAdapter,
   ) {}
 
   async getAccounts(userId: string): Promise<SyncAccount[]> {
-    const accounts = await this.syncAccountRepo.find({
+    return this.syncAccountRepo.find({
       where: {
         userId,
         provider: In([...CALENDAR_PROVIDERS]),
       },
       order: { updatedAt: 'DESC' },
     });
-    if (this.isAppleCalendarEnabled()) {
-      return accounts;
-    }
-    return accounts.filter((account) => account.provider !== 'apple');
   }
 
   async connectAccount(
@@ -61,12 +55,6 @@ export class CalendarSyncService {
     dto: ConnectCalendarDto,
   ): Promise<SyncAccount> {
     this.assertProvider(provider);
-    if (provider === 'apple' && !this.isAppleCalendarEnabled()) {
-      throw new BadRequestException(
-        'Apple Calendar sync is currently disabled while beta implementation is in progress',
-      );
-    }
-
     const existing = await this.syncAccountRepo.findOne({
       where: { userId, provider },
     });
@@ -502,10 +490,6 @@ export class CalendarSyncService {
     }
   }
 
-  private isAppleCalendarEnabled(): boolean {
-    return this.config.get<string>('CALENDAR_APPLE_BETA_ENABLED') === 'true';
-  }
-
   private async syncExistingUserEventsOnConnect(userId: string): Promise<void> {
     const activeStatuses = ['planning', 'voting', 'confirmed', 'active'];
     const [hostedEvents, attendeeRows] = await Promise.all([
@@ -590,16 +574,13 @@ export class CalendarSyncService {
     if (!uniqueUserIds.length) {
       return byUser;
     }
-    let accounts = await this.syncAccountRepo.find({
+    const accounts = await this.syncAccountRepo.find({
       where: {
         userId: In(uniqueUserIds),
         provider: In([...CALENDAR_PROVIDERS]),
       },
       order: { updatedAt: 'DESC' },
     });
-    if (!this.isAppleCalendarEnabled()) {
-      accounts = accounts.filter((account) => account.provider !== 'apple');
-    }
     for (const account of accounts) {
       const current = byUser.get(account.userId) ?? [];
       current.push(account);

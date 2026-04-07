@@ -5,6 +5,7 @@ import { RecommendationsService } from '../recommendations/recommendations.servi
 import { NotificationsService } from '../notifications/notifications.service';
 import { FeedbackService } from '../feedback/feedback.service';
 import { VotingService } from '../voting/voting.service';
+import { VotingGateway } from '../voting/voting.gateway';
 import { CalendarSyncService } from '../calendar/calendar-sync.service';
 
 describe('EventsController', () => {
@@ -23,6 +24,9 @@ describe('EventsController', () => {
   };
   const mockFeedbackService = {};
   const mockVotingService = {};
+  const mockVotingGateway = {
+    emitVotingState: jest.fn(),
+  };
   const mockCalendarSyncService = {
     queueEventSync: jest.fn(),
   };
@@ -39,6 +43,7 @@ describe('EventsController', () => {
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: FeedbackService, useValue: mockFeedbackService },
         { provide: VotingService, useValue: mockVotingService },
+        { provide: VotingGateway, useValue: mockVotingGateway },
         { provide: CalendarSyncService, useValue: mockCalendarSyncService },
       ],
     }).compile();
@@ -53,6 +58,7 @@ describe('EventsController', () => {
     mockNotificationsService.sendFriendAddedToEventNotification.mockResolvedValue(
       undefined,
     );
+    mockVotingGateway.emitVotingState.mockResolvedValue(undefined);
   });
 
   it('triggers schedule-finalized notification after finalizing poll', async () => {

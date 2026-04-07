@@ -38,7 +38,14 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
   useEffect(() => {
     api
       .get<GameEvent>(`/events/invite/${token}`, { auth: false })
-      .then(setEvent)
+      .then((loadedEvent) => {
+        setEvent(loadedEvent);
+        void api.post(
+          `/events/invite/${token}/telemetry`,
+          { eventName: 'invite_open' },
+          { auth: false, showErrorToast: false },
+        );
+      })
       .catch(() => setLoadError('Invalid invite link'))
       .finally(() => setLoading(false));
   }, [token]);
@@ -76,13 +83,31 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
     const hasToken = localStorage.getItem('accessToken');
     if (!hasToken) {
       localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token);
+      void api.post(
+        `/events/invite/${token}/telemetry`,
+        { eventName: 'invite_auth_handoff_started' },
+        { auth: false, showErrorToast: false },
+      );
       openLoginModal();
       return;
     }
     try {
       await api.post(`/events/invite/${token}/join`);
+      void api.post(
+        `/events/invite/${token}/telemetry`,
+        { eventName: 'invite_join_succeeded' },
+        { auth: false, showErrorToast: false },
+      );
       router.push(`/events/${event?.id}`);
     } catch (err: unknown) {
+      void api.post(
+        `/events/invite/${token}/telemetry`,
+        {
+          eventName: 'invite_join_failed',
+          payload: { message: err instanceof Error ? err.message : 'unknown' },
+        },
+        { auth: false, showErrorToast: false },
+      );
       setActionError(err instanceof Error ? err.message : 'Failed to join');
     }
   };
@@ -174,7 +199,7 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
               {hasAuthToken ? 'Join With Account' : 'Login and Join'}
             </button>
             <p className="wt-muted mt-3 text-xs">
-              Login with your account to join this event
+              Continue after login and we will bring you back here automatically.
             </p>
           </>
         )}

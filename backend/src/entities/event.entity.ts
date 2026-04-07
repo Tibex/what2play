@@ -15,6 +15,7 @@ import { EventVote } from './event-vote.entity';
 import { EventFeedback } from './event-feedback.entity';
 import { EventReport } from './event-report.entity';
 import { EventScheduleSlot } from './event-schedule-slot.entity';
+import { Group } from './group.entity';
 
 @Entity('events')
 export class Event {
@@ -26,6 +27,12 @@ export class Event {
 
   @Column()
   hostId: string;
+
+  @ManyToOne(() => Group, { nullable: true, onDelete: 'SET NULL' })
+  group: Group | null;
+
+  @Column({ nullable: true })
+  groupId: string | null;
 
   @Column()
   title: string;

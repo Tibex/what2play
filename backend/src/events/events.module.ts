@@ -16,6 +16,7 @@ import { FriendsModule } from '../friends/friends.module';
 import { EventsLifecycleService } from './events-lifecycle.service';
 import { RolesGuard } from '../auth/roles.guard';
 import { CalendarModule } from '../calendar/calendar.module';
+import { GroupsModule } from '../groups/groups.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { CalendarModule } from '../calendar/calendar.module';
     FeedbackModule,
     FriendsModule,
     CalendarModule,
+    GroupsModule,
   ],
   providers: [EventsService, EventsLifecycleService, RolesGuard],
   controllers: [EventsController],

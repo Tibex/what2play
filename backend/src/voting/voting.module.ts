@@ -7,14 +7,20 @@ import { VotingService } from './voting.service';
 import { VotingController } from './voting.controller';
 import { VotingGateway } from './voting.gateway';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EventAttendee } from '../entities/event-attendee.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([EventVote, Event, EventGameCandidate]),
+    TypeOrmModule.forFeature([
+      EventVote,
+      Event,
+      EventGameCandidate,
+      EventAttendee,
+    ]),
     forwardRef(() => NotificationsModule),
   ],
   providers: [VotingService, VotingGateway],
   controllers: [VotingController],
-  exports: [VotingService],
+  exports: [VotingService, VotingGateway],
 })
 export class VotingModule {}

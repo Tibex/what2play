@@ -16,6 +16,7 @@ import { FriendsModule } from './friends/friends.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { SupportModule } from './support/support.module';
+import { GroupsModule } from './groups/groups.module';
 import { createTypeOrmOptions } from './database/typeorm.config';
 
 function resolveEnvFiles(): string[] {
@@ -59,6 +60,7 @@ function resolveEnvFiles(): string[] {
     FriendsModule,
     NotificationsModule,
     CalendarModule,
+    GroupsModule,
     SupportModule,
   ],
 })

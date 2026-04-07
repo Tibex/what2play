@@ -1,10 +1,11 @@
 'use client';
 
-import { Suspense, useMemo } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import EventForm, { type EventFormData } from '@/components/EventForm';
 import { isoToDatetimeLocalValue } from '@/lib/datetime';
+import type { Group } from '@/lib/types';
 
 function defaultLocalDateTime(): string {
   const tomorrow = new Date();
@@ -17,6 +18,8 @@ function defaultLocalDateTime(): string {
 function NewEventPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [groupId, setGroupId] = useState<string>('');
 
   const browserTimeZone =
     typeof Intl !== 'undefined'
@@ -55,6 +58,13 @@ function NewEventPageInner() {
     };
   }, [searchParams]);
 
+  useEffect(() => {
+    api
+      .get<Group[]>('/groups', { showErrorToast: false })
+      .then((rows) => setGroups(rows))
+      .catch(() => setGroups([]));
+  }, []);
+
   const handleSubmit = async (data: EventFormData) => {
     const usePoll = data.scheduleMode === 'poll';
     const base = {
@@ -70,6 +80,7 @@ function NewEventPageInner() {
 
     const event = await api.post<{ id: string }>('/events', {
       ...base,
+      groupId: groupId || undefined,
       ...(usePoll
         ? { useAvailabilityPoll: true, availabilitySlots: data.availabilitySlots }
         : { dateTime: data.dateTime }),
@@ -80,6 +91,29 @@ function NewEventPageInner() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-xl sm:text-2xl font-bold mb-4">New Game Night</h1>
+      {groups.length > 0 && (
+        <div className="wt-card mb-4 p-4">
+          <label htmlFor="group-select" className="mb-1 block text-sm font-medium">
+            Create for group (optional)
+          </label>
+          <select
+            id="group-select"
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+            className="wt-input"
+          >
+            <option value="">No group</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          <p className="wt-muted mt-2 text-xs">
+            Group members are auto-invited as pending attendees.
+          </p>
+        </div>
+      )}
       <EventForm
         initial={initial}
         submitLabel="Create Night"

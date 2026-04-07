@@ -22,6 +22,11 @@ export interface VotingStatus {
   allVoted: boolean;
 }
 
+export interface VotingEventSnapshot {
+  status: string;
+  selectedGameId: string | null;
+}
+
 @Injectable()
 export class VotingService {
   constructor(
@@ -140,6 +145,18 @@ export class VotingService {
       expectedVoters,
       submittedVoters,
       allVoted: expectedVoters > 0 && submittedVoters >= expectedVoters,
+    };
+  }
+
+  async getEventSnapshot(eventId: string): Promise<VotingEventSnapshot> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      select: ['status', 'selectedGameId'],
+    });
+    if (!event) throw new BadRequestException('Event not found');
+    return {
+      status: event.status,
+      selectedGameId: event.selectedGameId ?? null,
     };
   }
 

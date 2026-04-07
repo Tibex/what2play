@@ -76,6 +76,7 @@ export interface GameRating {
 export interface GameEvent {
   id: string;
   hostId: string;
+  groupId?: string | null;
   host: User;
   title: string;
   description?: string;
@@ -161,6 +162,24 @@ export interface VotingStatus {
   expectedVoters: number;
   submittedVoters: number;
   allVoted: boolean;
+}
+
+export interface GroupMember {
+  id: string;
+  groupId: string;
+  userId: string;
+  role: 'owner' | 'admin' | 'member';
+  user?: User;
+}
+
+export interface Group {
+  id: string;
+  ownerId: string;
+  name: string;
+  description?: string | null;
+  members: GroupMember[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RecommendationPoolAttendeeShare {

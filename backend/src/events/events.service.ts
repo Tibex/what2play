@@ -29,6 +29,7 @@ import {
 } from './dto/set-event-schedule-responses.dto';
 import { resolveEventDateTime, resolveEventTimezone } from './timezone.utils';
 import { FriendsService } from '../friends/friends.service';
+import { GroupsService } from '../groups/groups.service';
 
 export type EventScheduleSlotSummary = {
   id: string;
@@ -79,6 +80,7 @@ export class EventsService {
     @InjectRepository(EventScheduleResponse)
     private readonly scheduleResponsesRepo: Repository<EventScheduleResponse>,
     private readonly friendsService: FriendsService,
+    private readonly groupsService: GroupsService,
   ) {}
 
   async create(hostId: string, dto: CreateEventDto): Promise<Event> {
@@ -86,6 +88,10 @@ export class EventsService {
     const type = dto.type === 'open' ? 'open' : 'invite';
     const capacity = type === 'open' ? (dto.capacity ?? null) : null;
     const usePoll = dto.useAvailabilityPoll === true;
+    const groupId = dto.groupId ?? null;
+    if (groupId) {
+      await this.groupsService.assertMembership(groupId, hostId);
+    }
 
     if (usePoll && type === 'open') {
       throw new BadRequestException(
@@ -116,6 +122,7 @@ export class EventsService {
         status: 'scheduling',
         discoveryMode: dto.discoveryMode ?? false,
         autoPromoteWaitlist: dto.autoPromoteWaitlist ?? false,
+        groupId,
       };
       const event = this.eventsRepo.create(schedulingPayload);
       const saved = await this.eventsRepo.save(event);
@@ -142,6 +149,9 @@ export class EventsService {
           rsvpStatus: 'going',
         }),
       );
+      if (groupId) {
+        await this.seedGroupMembersAsPending(saved.id, groupId, hostId);
+      }
 
       return this.findById(saved.id);
     }
@@ -163,6 +173,7 @@ export class EventsService {
       status: 'planning',
       discoveryMode: dto.discoveryMode ?? false,
       autoPromoteWaitlist: dto.autoPromoteWaitlist ?? false,
+      groupId,
     };
     const event = this.eventsRepo.create(planningPayload);
     const saved = await this.eventsRepo.save(event);
@@ -174,6 +185,9 @@ export class EventsService {
         rsvpStatus: 'going',
       }),
     );
+    if (groupId) {
+      await this.seedGroupMembersAsPending(saved.id, groupId, hostId);
+    }
 
     return this.findById(saved.id);
   }
@@ -183,6 +197,7 @@ export class EventsService {
       where: { id },
       relations: [
         'host',
+        'group',
         'attendees',
         'attendees.user',
         'candidates',
@@ -191,6 +206,35 @@ export class EventsService {
     });
     if (!event) throw new NotFoundException('Event not found');
     return event;
+  }
+
+  private async seedGroupMembersAsPending(
+    eventId: string,
+    groupId: string,
+    hostId: string,
+  ): Promise<void> {
+    const memberUserIds = await this.groupsService.getMemberUserIds(groupId);
+    const existingRows = await this.attendeesRepo.find({
+      where: { eventId },
+      select: ['userId'],
+    });
+    const existingUserIds = new Set(
+      existingRows.map((row) => row.userId).filter(Boolean),
+    );
+    const rows = memberUserIds
+      .filter((userId) => userId !== hostId && !existingUserIds.has(userId))
+      .map((userId) =>
+        this.attendeesRepo.create({
+          eventId,
+          userId,
+          rsvpStatus: 'pending',
+          waitlistPriority: null,
+          lastStatusChangeAt: new Date(),
+          cancellationReason: null,
+        }),
+      );
+    if (!rows.length) return;
+    await this.attendeesRepo.save(rows);
   }
 
   async findByIdForUser(id: string, userId: string): Promise<Event> {
@@ -248,6 +292,9 @@ export class EventsService {
       throw new ForbiddenException('Only host can update');
     const statusBeforeUpdate = event.status;
     const useAvailabilityPoll = dto.useAvailabilityPoll === true;
+    if (dto.groupId) {
+      await this.groupsService.assertMembership(dto.groupId, userId);
+    }
 
     if (event.status === 'scheduling') {
       if (dto.dateTime !== undefined) {
@@ -543,6 +590,27 @@ export class EventsService {
     const invite = await this.invitesRepo.findOne({ where: { token } });
     if (!invite) throw new NotFoundException('Invalid invite link');
     return this.findById(invite.eventId);
+  }
+
+  async trackInviteTelemetry(
+    token: string,
+    eventName: string,
+    payload?: Record<string, unknown>,
+  ): Promise<{ ok: true }> {
+    const invite = await this.invitesRepo.findOne({
+      where: { token },
+      select: ['eventId'],
+    });
+    if (!invite) throw new NotFoundException('Invalid invite link');
+    this.logger.log(
+      JSON.stringify({
+        type: 'invite_telemetry',
+        eventId: invite.eventId,
+        eventName,
+        payload: payload ?? {},
+      }),
+    );
+    return { ok: true };
   }
 
   async getAttendeeUserIds(eventId: string): Promise<string[]> {

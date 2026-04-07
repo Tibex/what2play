@@ -10,6 +10,7 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
   ValidateNested,
+  IsUUID,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -90,4 +91,11 @@ export class CreateEventDto {
   @IsOptional()
   @IsBoolean()
   autoPromoteWaitlist?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Optional recurring group ID to attach this event to',
+  })
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
 }

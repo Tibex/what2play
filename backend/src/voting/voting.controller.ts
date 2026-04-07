@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { VotingService } from './voting.service';
 import { SubmitVotesDto } from './dto/submit-votes.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { VotingGateway } from './voting.gateway';
 
 @ApiTags('voting')
 @ApiBearerAuth()
@@ -22,6 +23,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 export class VotingController {
   constructor(
     private readonly votingService: VotingService,
+    private readonly votingGateway: VotingGateway,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -45,6 +47,7 @@ export class VotingController {
         /* non-critical */
       });
     }
+    await this.votingGateway.emitVotingState(eventId);
     return result;
   }
 

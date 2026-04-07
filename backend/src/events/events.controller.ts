@@ -21,6 +21,7 @@ import { RecommendationsService } from '../recommendations/recommendations.servi
 import { NotificationsService } from '../notifications/notifications.service';
 import { FeedbackService } from '../feedback/feedback.service';
 import { VotingService } from '../voting/voting.service';
+import { VotingGateway } from '../voting/voting.gateway';
 import { CalendarSyncService } from '../calendar/calendar-sync.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -30,6 +31,7 @@ import { AdminListEventsQueryDto } from './dto/admin-list-events-query.dto';
 import { ReportEventDto } from './dto/report-event.dto';
 import { SetEventScheduleResponsesDto } from './dto/set-event-schedule-responses.dto';
 import { FinalizeEventScheduleDto } from './dto/finalize-event-schedule.dto';
+import { TrackInviteTelemetryDto } from './dto/track-invite-telemetry.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -39,6 +41,7 @@ export class EventsController {
     @Inject(forwardRef(() => RecommendationsService))
     private readonly recommendationsService: RecommendationsService,
     private readonly votingService: VotingService,
+    private readonly votingGateway: VotingGateway,
     private readonly notificationsService: NotificationsService,
     private readonly feedbackService: FeedbackService,
     private readonly calendarSyncService: CalendarSyncService,
@@ -112,6 +115,19 @@ export class EventsController {
         });
     }
     return result;
+  }
+
+  @Post('invite/:token/telemetry')
+  @ApiOperation({ summary: 'Track invite onboarding telemetry events' })
+  trackInviteTelemetry(
+    @Param('token') token: string,
+    @Body() dto: TrackInviteTelemetryDto,
+  ) {
+    return this.eventsService.trackInviteTelemetry(
+      token,
+      dto.eventName,
+      dto.payload,
+    );
   }
 
   @Get('invite/:token/recommendations')
@@ -215,6 +231,9 @@ export class EventsController {
       this.notificationsService.sendVotingStartedNotification(id).catch(() => {
         /* non-critical */
       });
+      this.votingGateway.emitVotingState(id).catch(() => {
+        /* non-critical */
+      });
     }
     if (updated.dateTime) {
       this.calendarSyncService.queueEventSync(id, 'event_updated').catch(() => {
@@ -270,11 +289,15 @@ export class EventsController {
     if (!event.fallbackGameId) {
       return { ok: false, message: 'No fallback game configured' };
     }
-    return this.votingService.selectWinner(
+    const selected = await this.votingService.selectWinner(
       id,
       req.user.id,
       event.fallbackGameId,
     );
+    this.votingGateway.emitVotingState(id).catch(() => {
+      /* non-critical */
+    });
+    return selected;
   }
 
   @Post(':id/invite-link')
