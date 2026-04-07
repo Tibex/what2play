@@ -14,6 +14,7 @@ import { EventReport } from '../entities/event-report.entity';
 import { EventScheduleSlot } from '../entities/event-schedule-slot.entity';
 import { EventScheduleResponse } from '../entities/event-schedule-response.entity';
 import { FriendsService } from '../friends/friends.service';
+import { GroupsService } from '../groups/groups.service';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -69,6 +70,11 @@ describe('EventsService', () => {
     getFriendIds: jest.fn(),
   };
 
+  const mockGroupsService = {
+    assertMembership: jest.fn(),
+    getMemberUserIds: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -92,6 +98,7 @@ describe('EventsService', () => {
           useValue: mockScheduleResponsesRepo,
         },
         { provide: FriendsService, useValue: mockFriendsService },
+        { provide: GroupsService, useValue: mockGroupsService },
       ],
     }).compile();
 
