@@ -7,7 +7,7 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
-  /** When false, omit Bearer token (for public endpoints). Avoids 401 + /login redirect with a stale session. */
+  /** When false, omit Bearer token (for public endpoints). Avoids 401-triggered login modal redirects with stale session. */
   auth?: boolean;
   /** When false, suppress the automatic error toast. Default true. */
   showErrorToast?: boolean;
@@ -16,9 +16,7 @@ interface RequestOptions {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const useAuth = options.auth !== false;
   const token =
-    useAuth && typeof window !== 'undefined'
-      ? localStorage.getItem('accessToken')
-      : null;
+    useAuth && globalThis.window !== undefined ? localStorage.getItem('accessToken') : null;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -45,10 +43,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (res.status === 401 && token) {
     const refreshed = await tryRefresh();
     if (refreshed) return request<T>(path, options);
-    if (typeof window !== 'undefined') {
+    if (globalThis.window !== undefined) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
+      const current = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+      const separator = current.includes('?') ? '&' : '?';
+      globalThis.location.href = `${current}${separator}m=login`;
     }
   }
 
@@ -64,7 +64,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 async function tryRefresh(): Promise<boolean> {
-  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+  const refreshToken =
+    globalThis.window === undefined ? null : localStorage.getItem('refreshToken');
   if (!refreshToken) return false;
 
   try {

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import GameCard from '@/components/GameCard';
 import { api } from '@/lib/api';
 import { type DemoComplexity, type DemoDuration } from '@/lib/landing-demo-recommendations';
+import { useLoginModalStore } from '@/lib/login-modal-store';
+import { useRegisterModalStore } from '@/lib/register-modal-store';
 import type { Game } from '@/lib/types';
 
 const DURATION_OPTIONS: { value: DemoDuration; label: string }[] = [
@@ -30,6 +31,8 @@ export function GuestRecommendationDemo() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStage, setLoadingStage] = useState(0);
   const [unavailableMessage, setUnavailableMessage] = useState('');
+  const openLoginModal = useLoginModalStore((s) => s.open);
+  const openRegisterModal = useRegisterModalStore((s) => s.open);
 
   useEffect(() => {
     if (!loading) return;
@@ -177,15 +180,20 @@ export function GuestRecommendationDemo() {
                 feedback that improves the next night.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
-                <Link href="/register" className="wt-btn wt-btn-primary px-4 py-2 text-sm font-semibold no-underline text-white">
+                <button
+                  type="button"
+                  onClick={openRegisterModal}
+                  className="wt-btn wt-btn-primary px-4 py-2 text-sm font-semibold no-underline text-white"
+                >
                   Create account
-                </Link>
-                <Link
-                  href="/login"
+                </button>
+                <button
+                  type="button"
+                  onClick={openLoginModal}
                   className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-semibold no-underline text-[var(--foreground)]"
                 >
                   Sign in
-                </Link>
+                </button>
               </div>
             </div>
           </div>

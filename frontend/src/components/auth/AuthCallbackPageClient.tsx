@@ -19,7 +19,7 @@ function CallbackHandler() {
     const userRaw = params.get('user');
 
     if (!accessToken || !refreshToken || !userRaw) {
-      window.location.href = '/login';
+      window.location.href = '/?m=login';
       return;
     }
 
@@ -28,7 +28,7 @@ function CallbackHandler() {
       login(user, accessToken, refreshToken);
       window.location.href = redirectPathAfterAuth();
     } catch {
-      window.location.href = '/login';
+      window.location.href = '/?m=login';
     }
   }, [params, login]);
 

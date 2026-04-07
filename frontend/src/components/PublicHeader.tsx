@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useLoginModalStore } from '@/lib/login-modal-store';
+import { useRegisterModalStore } from '@/lib/register-modal-store';
 
 const APP_ROUTE_PREFIXES = [
   '/dashboard',
@@ -19,6 +21,8 @@ function shouldShowPublicHeader(pathname: string): boolean {
 
 export default function PublicHeader() {
   const pathname = usePathname();
+  const openLoginModal = useLoginModalStore((s) => s.open);
+  const openRegisterModal = useRegisterModalStore((s) => s.open);
 
   if (!shouldShowPublicHeader(pathname)) {
     return null;
@@ -41,18 +45,20 @@ export default function PublicHeader() {
           What2Play
         </Link>
         <nav className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/login"
+          <button
+            type="button"
+            onClick={openLoginModal}
             className="wt-btn wt-btn-secondary px-3 py-2 text-sm font-semibold no-underline text-[var(--foreground)]"
           >
             Sign in
-          </Link>
-          <Link
-            href="/register"
+          </button>
+          <button
+            type="button"
+            onClick={openRegisterModal}
             className="wt-btn wt-btn-primary px-3 py-2 text-sm font-semibold no-underline text-white"
           >
             Get started
-          </Link>
+          </button>
         </nav>
       </div>
     </header>

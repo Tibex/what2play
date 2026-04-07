@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import RegisterPageClient from '@/components/auth/RegisterPageClient';
+import { redirect } from 'next/navigation';
 import { createPageMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = createPageMetadata({
@@ -10,5 +10,5 @@ export const metadata: Metadata = createPageMetadata({
 });
 
 export default function RegisterPage() {
-  return <RegisterPageClient />;
+  redirect('/?m=register');
 }

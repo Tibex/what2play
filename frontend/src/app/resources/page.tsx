@@ -102,7 +102,7 @@ export default function ResourcesPage() {
             Create an account to run events, gather RSVPs, generate recommendations, and lock decisions with ranked voting.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/register" className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white">
+            <Link href="/?m=register" className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white">
               Create free account
             </Link>
             <Link href="/" className="wt-btn wt-btn-secondary px-5 py-2.5 no-underline text-[var(--foreground)]">

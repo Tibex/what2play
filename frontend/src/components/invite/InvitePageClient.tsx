@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PENDING_INVITE_STORAGE_KEY } from '@/lib/auth-flow';
 import { formatEventDateTime } from '@/lib/datetime';
+import { useLoginModalStore } from '@/lib/login-modal-store';
 import type { GameEvent } from '@/lib/types';
 
 type InvitePageClientProps = {
@@ -14,6 +14,7 @@ type InvitePageClientProps = {
 
 export default function InvitePageClient({ token }: Readonly<InvitePageClientProps>) {
   const router = useRouter();
+  const openLoginModal = useLoginModalStore((s) => s.open);
   const [event, setEvent] = useState<GameEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -75,7 +76,7 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
     const hasToken = localStorage.getItem('accessToken');
     if (!hasToken) {
       localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token);
-      router.push('/login');
+      openLoginModal();
       return;
     }
     try {
@@ -99,13 +100,16 @@ export default function InvitePageClient({ token }: Readonly<InvitePageClientPro
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="mb-4 text-[var(--danger)]">{loadError}</p>
-          <Link
-            href="/login"
+          <button
+            type="button"
             className="text-[var(--primary)] hover:underline"
-            onClick={() => localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token)}
+            onClick={() => {
+              localStorage.setItem(PENDING_INVITE_STORAGE_KEY, token);
+              openLoginModal();
+            }}
           >
             Go to login
-          </Link>
+          </button>
         </div>
       </div>
     );

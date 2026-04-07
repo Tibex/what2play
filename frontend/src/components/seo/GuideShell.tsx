@@ -100,7 +100,7 @@ export default function GuideShell({
           <Link href="/resources" className="wt-btn wt-btn-secondary px-5 py-2.5 no-underline text-[var(--foreground)]">
             Browse all resources
           </Link>
-          <Link href="/register" className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white">
+          <Link href="/?m=register" className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white">
             Start with What2Play
           </Link>
         </div>

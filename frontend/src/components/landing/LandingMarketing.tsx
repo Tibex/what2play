@@ -5,6 +5,7 @@ import GameCard from '@/components/GameCard';
 import { GuestRecommendationDemo } from './GuestRecommendationDemo';
 import { getHeroRecommendationPreview } from '@/lib/landing-demo-recommendations';
 import { KEYWORD_CLUSTERS } from '@/lib/keyword-clusters';
+import { useRegisterModalStore } from '@/lib/register-modal-store';
 
 function HeroRecommendationPreview() {
   const rows = getHeroRecommendationPreview();
@@ -39,6 +40,8 @@ function HeroRecommendationPreview() {
 }
 
 export function LandingMarketing() {
+  const openRegisterModal = useRegisterModalStore((s) => s.open);
+
   return (
     <div className="min-h-screen flex flex-col text-[var(--foreground)]">
       <main className="flex-1">
@@ -53,9 +56,13 @@ export function LandingMarketing() {
                 Your group&apos;s collections, real constraints, and a fair vote—so you pick a game everyone can get to the table and enjoy.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/register" className="wt-btn wt-btn-primary px-5 py-3 text-base font-semibold no-underline text-white">
+                <button
+                  type="button"
+                  onClick={openRegisterModal}
+                  className="wt-btn wt-btn-primary px-5 py-3 text-base font-semibold no-underline text-white"
+                >
                   Create free account
-                </Link>
+                </button>
                 <a
                   href="#how-it-works"
                   className="wt-btn wt-btn-secondary px-5 py-3 text-base font-semibold no-underline text-[var(--foreground)]"

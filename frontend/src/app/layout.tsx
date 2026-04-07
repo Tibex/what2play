@@ -4,6 +4,9 @@ import ToastProvider from '@/components/ToastProvider';
 import PwaRegistration from '@/components/PwaRegistration';
 import PublicHeader from '@/components/PublicHeader';
 import SiteFooter from '@/components/SiteFooter';
+import LoginModalHost from '@/components/auth/LoginModalHost';
+import LoginModalQuerySync from '@/components/auth/LoginModalQuerySync';
+import RegisterModalHost from '@/components/auth/RegisterModalHost';
 import { getSiteUrl } from '@/lib/seo';
 import './globals.css';
 
@@ -77,6 +80,9 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased`}>
         <ToastProvider />
         <PwaRegistration />
+        <LoginModalQuerySync />
+        <LoginModalHost />
+        <RegisterModalHost />
         <PublicHeader />
         {children}
         <SiteFooter />

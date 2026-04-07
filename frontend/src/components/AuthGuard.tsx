@@ -2,10 +2,12 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLoginModalStore } from '@/lib/login-modal-store';
 import { useAuthStore } from '@/lib/store';
 
-export default function AuthGuard({ children }: { children: React.ReactNode }) {
+export default function AuthGuard({ children }: Readonly<{ children: React.ReactNode }>) {
   const { isAuthenticated, loadFromStorage } = useAuthStore();
+  const openLoginModal = useLoginModalStore((s) => s.open);
   const router = useRouter();
 
   useEffect(() => {
@@ -15,9 +17,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
-      router.push('/login');
+      openLoginModal();
+      router.replace('/');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, openLoginModal, router]);
 
   if (!isAuthenticated) {
     return (
