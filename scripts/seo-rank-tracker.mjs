@@ -3,6 +3,56 @@ import path from 'node:path';
 
 const ROOT = process.cwd();
 const TRACKER_PATH = path.join(ROOT, 'docs', 'seo-query-rank-tracker.csv');
+const DOCS_DIR = path.join(ROOT, 'docs');
+
+const REQUIRED_TRACKER_COLUMNS = [
+  'date',
+  'query',
+  'target_page',
+  'bucket',
+  'avg_position',
+  'clicks',
+  'impressions',
+  'ctr',
+  'top_20_status',
+  'notes',
+];
+
+const ACTION_RULES = [
+  {
+    match: (row) => `${row.bucket}`.toLowerCase() === 'easy',
+    actionType: 'title/meta',
+    action: 'Refresh title/meta for stronger intent match and CTR.',
+  },
+  {
+    match: (row) =>
+      normalizeQuery(row.query).includes('how to') ||
+      normalizeQuery(row.query).includes('checklist'),
+    actionType: 'content depth/FAQ',
+    action: 'Expand practical steps and add FAQ to capture informational intent.',
+  },
+  {
+    match: (row) =>
+      normalizeQuery(row.query).includes('poll') ||
+      normalizeQuery(row.query).includes('availability'),
+    actionType: 'internal links',
+    action: 'Add internal links from planner/resources pages and poll-focused anchors.',
+  },
+  {
+    match: (row) =>
+      row.target_page === '/faq' ||
+      normalizeQuery(row.query).includes('stats') ||
+      normalizeQuery(row.query).includes('picked') ||
+      normalizeQuery(row.query).includes('rating'),
+    actionType: 'content depth/FAQ',
+    action: 'Add examples, data callouts, and FAQ entries addressing this query.',
+  },
+  {
+    match: (row) => `${row.bucket}`.toLowerCase() === 'hard',
+    actionType: 'intro intent',
+    action: 'Rewrite intro to tightly match query intent and user job-to-be-done.',
+  },
+];
 
 function parseArgs(argv) {
   const args = { exportPath: '', date: '' };
@@ -69,6 +119,7 @@ function csvEscape(value) {
 function toNumber(value) {
   if (value == null) return Number.NaN;
   const cleaned = `${value}`.replaceAll(/[%,$\s]/g, '');
+  if (cleaned === '') return Number.NaN;
   const num = Number(cleaned);
   return Number.isFinite(num) ? num : Number.NaN;
 }
@@ -98,6 +149,27 @@ function ensureFileExists(filePath) {
   }
 }
 
+function ensureRequiredColumns(headers, requiredColumns, label) {
+  const missing = requiredColumns.filter((name) => !headers.includes(name));
+  if (missing.length > 0) {
+    throw new Error(`Missing required ${label} columns: ${missing.join(', ')}`);
+  }
+}
+
+function ensureNumericRange(value, min, max, label, query) {
+  if (Number.isFinite(value) && (value < min || value > max)) {
+    throw new Error(`Invalid ${label} for query "${query}": ${value} (expected ${min}-${max}).`);
+  }
+}
+
+function normalizeCtrPercent(rawValue, originalCell = '') {
+  const numeric = toNumber(rawValue);
+  if (!Number.isFinite(numeric)) return Number.NaN;
+  if (`${originalCell}`.includes('%')) return numeric;
+  if (numeric >= 0 && numeric <= 1) return numeric * 100;
+  return numeric;
+}
+
 function buildFeatureSegment(rows, matcher) {
   const segmentRows = rows.filter(matcher);
   const top20 = segmentRows.filter((r) => r.top_20_status === 'yes');
@@ -121,6 +193,79 @@ function buildFeatureSegment(rows, matcher) {
   };
 }
 
+function calcPriorityScore(row) {
+  const position = toNumber(row.avg_position);
+  const impressions = toNumber(row.impressions);
+  const ctr = toNumber(`${row.ctr}`.replace('%', ''));
+  if (!Number.isFinite(position) || !Number.isFinite(impressions)) return 0;
+
+  let positionWeight = 0;
+  if (position > 20 && position <= 30) positionWeight = 35;
+  else if (position > 30 && position <= 40) positionWeight = 25;
+  else if (position > 10 && position <= 20) positionWeight = 15;
+  else if (position > 40) positionWeight = 10;
+
+  const impressionWeight = Math.min(40, Math.log10(Math.max(1, impressions)) * 12);
+  const ctrWeight = Number.isFinite(ctr) ? Math.max(0, 25 - Math.min(25, ctr * 4)) : 12;
+
+  return Math.round((positionWeight + impressionWeight + ctrWeight) * 10) / 10;
+}
+
+function recommendationForRow(row) {
+  const matchedRule = ACTION_RULES.find((rule) => rule.match(row));
+  if (matchedRule) {
+    return { actionType: matchedRule.actionType, action: matchedRule.action };
+  }
+  return {
+    actionType: 'title/meta',
+    action: 'Improve title/meta and intro copy; validate query appears in filtered GSC export.',
+  };
+}
+
+function buildOpportunityRows(rows) {
+  return rows
+    .filter((row) => row.top_20_status === 'no' || row.top_20_status === 'unknown')
+    .map((row) => {
+      const recommendation = recommendationForRow(row);
+      return {
+        ...row,
+        priority_score: calcPriorityScore(row),
+        action_type: recommendation.actionType,
+        recommended_action: recommendation.action,
+      };
+    })
+    .sort((a, b) => b.priority_score - a.priority_score);
+}
+
+function getPreviousActionPlanPath(runDate) {
+  ensureFileExists(DOCS_DIR);
+  const files = fs
+    .readdirSync(DOCS_DIR)
+    .filter((name) => /^seo-action-plan-\d{4}-\d{2}-\d{2}\.md$/.test(name))
+    .map((name) => ({
+      name,
+      date: name.replace('seo-action-plan-', '').replace('.md', ''),
+    }))
+    .filter((item) => item.date < runDate)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  return files.length > 0 ? path.join(DOCS_DIR, files[0].name) : '';
+}
+
+function extractCarryOverQueries(previousActionPlanPath) {
+  if (!previousActionPlanPath || !fs.existsSync(previousActionPlanPath)) return [];
+  const content = fs.readFileSync(previousActionPlanPath, 'utf8');
+  const lines = content.split('\n');
+  const items = [];
+  for (const line of lines) {
+    const match = line.match(/^- \[ \] (.+?) - /);
+    if (match?.[1]) {
+      items.push(match[1].trim().toLowerCase());
+    }
+  }
+  return items;
+}
+
 function main() {
   const { exportPath, date } = parseArgs(process.argv);
   if (!exportPath) {
@@ -138,6 +283,7 @@ function main() {
   if (tracker.headers.length === 0) {
     throw new Error('Tracker CSV is empty.');
   }
+  ensureRequiredColumns(tracker.headers, REQUIRED_TRACKER_COLUMNS, 'tracker');
 
   const exportRaw = fs.readFileSync(exportAbsPath, 'utf8');
   const gsc = parseCsv(exportRaw);
@@ -159,10 +305,12 @@ function main() {
   for (const row of gsc.rows) {
     const key = normalizeQuery(row[queryCol]);
     if (!key) continue;
+    const ctrPercent = ctrCol ? normalizeCtrPercent(row[ctrCol], row[ctrCol]) : Number.NaN;
+    ensureNumericRange(ctrPercent, 0, 100, 'CTR', row[queryCol]);
     gscByQuery.set(key, {
       clicks: clicksCol ? toNumber(row[clicksCol]) : Number.NaN,
       impressions: impressionsCol ? toNumber(row[impressionsCol]) : Number.NaN,
-      ctrRaw: ctrCol ? toNumber(row[ctrCol]) : Number.NaN,
+      ctrRaw: ctrPercent,
       position: toNumber(row[positionCol]),
     });
   }
@@ -217,6 +365,8 @@ function main() {
 
   const top20 = newRows.filter((r) => r.top_20_status === 'yes');
   const unknown = newRows.filter((r) => r.top_20_status === 'unknown');
+  const coverageCount = newRows.length - unknown.length;
+  const coveragePct = ((coverageCount / Math.max(1, newRows.length)) * 100).toFixed(1);
   const outside = newRows
     .filter((r) => r.top_20_status === 'no')
     .sort((a, b) => toNumber(a.avg_position) - toNumber(b.avg_position));
@@ -230,7 +380,14 @@ function main() {
     .slice(0, 5);
 
   const reportPath = path.join(ROOT, 'docs', `seo-weekly-report-${runDate}.md`);
+  const actionPlanPath = path.join(ROOT, 'docs', `seo-action-plan-${runDate}.md`);
   const sortedTop20 = top20.toSorted((a, b) => toNumber(a.avg_position) - toNumber(b.avg_position));
+  const opportunities = buildOpportunityRows(newRows).slice(0, 10);
+  const fastWins = opportunities.filter((row) => row.action_type === 'title/meta' || row.action_type === 'internal links').slice(0, 3);
+  const deeperTasks = opportunities.filter((row) => row.action_type === 'content depth/FAQ' || row.action_type === 'intro intent').slice(0, 3);
+  const previousActionPlanPath = getPreviousActionPlanPath(runDate);
+  const previousQueries = extractCarryOverQueries(previousActionPlanPath);
+  const carryOverItems = opportunities.filter((row) => previousQueries.includes(normalizeQuery(row.query))).slice(0, 3);
   const pollingSegment = buildFeatureSegment(
     newRows,
     (row) =>
@@ -252,6 +409,7 @@ function main() {
     `- Queries in top 20: ${top20.length} / ${newRows.length}`,
     `- Queries outside top 20: ${outside.length}`,
     `- Queries not found in export: ${unknown.length}`,
+    `- Query coverage in export: ${coverageCount}/${newRows.length} (${coveragePct}%)`,
     `- Near wins (positions 20-30): ${nearWins.length}`,
     '',
     '### New/Current Top-20 Queries',
@@ -277,6 +435,16 @@ function main() {
         : ['- none']
     ),
     '',
+    '### Top SEO Opportunities This Week',
+    ...(
+      opportunities.length
+        ? opportunities.map(
+            (r) =>
+              `- ${r.query} (score ${r.priority_score}, pos ${r.avg_position || 'n/a'}, imp ${r.impressions || 'n/a'}, ctr ${r.ctr || 'n/a'}, page ${r.target_page || 'n/a'}, action ${r.action_type})`,
+          )
+        : ['- none']
+    ),
+    '',
     '### Feature Segment Snapshot',
     `- Availability polling queries: ${pollingSegment.top20}/${pollingSegment.total} in top 20, ${pollingSegment.outside} outside, ${pollingSegment.unknown} unknown, avg known position ${pollingSegment.avgPosition}`,
     `- Collection insight queries: ${collectionInsightsSegment.top20}/${collectionInsightsSegment.total} in top 20, ${collectionInsightsSegment.outside} outside, ${collectionInsightsSegment.unknown} unknown, avg known position ${collectionInsightsSegment.avgPosition}`,
@@ -285,9 +453,63 @@ function main() {
 
   fs.writeFileSync(reportPath, `${report}\n`, 'utf8');
 
+  const actionPlan = [
+    `## SEO Action Plan (${runDate})`,
+    '',
+    '### Top Priorities (This Week)',
+    ...(
+      opportunities.slice(0, 7).length
+        ? opportunities.slice(0, 7).map(
+            (r) =>
+              `- [ ] ${r.query} - ${r.target_page || 'n/a'} - ${r.action_type} - ${r.recommended_action} (pos ${r.avg_position || 'n/a'}, imp ${r.impressions || 'n/a'}, ctr ${r.ctr || 'n/a'}, score ${r.priority_score})`,
+          )
+        : ['- [ ] none']
+    ),
+    '',
+    '### Fast Wins',
+    ...(
+      fastWins.length
+        ? fastWins.map(
+            (r) =>
+              `- ${r.query} - ${r.action_type} on ${r.target_page || 'n/a'} (score ${r.priority_score})`,
+          )
+        : ['- none']
+    ),
+    '',
+    '### Deeper Content Tasks',
+    ...(
+      deeperTasks.length
+        ? deeperTasks.map(
+            (r) =>
+              `- ${r.query} - ${r.action_type} on ${r.target_page || 'n/a'} (score ${r.priority_score})`,
+          )
+        : ['- none']
+    ),
+    '',
+    '### Carry-Over from Last Week',
+    ...(
+      carryOverItems.length
+        ? carryOverItems.map(
+            (r) =>
+              `- ${r.query} - still outside top 20 (pos ${r.avg_position || 'n/a'}, score ${r.priority_score})`,
+          )
+        : ['- none']
+    ),
+    '',
+    '### Next 7 Days KPI Check',
+    `- Coverage: ${coverageCount}/${newRows.length} tracked queries present in export (${coveragePct}%).`,
+    `- Top 20 count baseline: ${top20.length}/${newRows.length}.`,
+    `- Near wins baseline: ${nearWins.length}.`,
+    '',
+  ].join('\n');
+
+  fs.writeFileSync(actionPlanPath, `${actionPlan}\n`, 'utf8');
+
   console.log(`Updated tracker: ${path.relative(ROOT, TRACKER_PATH)}`);
   console.log(`Generated report: ${path.relative(ROOT, reportPath)}`);
+  console.log(`Generated action plan: ${path.relative(ROOT, actionPlanPath)}`);
   console.log(`Top-20 queries: ${top20.length}/${newRows.length}`);
+  console.log(`Coverage: ${coverageCount}/${newRows.length} (${coveragePct}%)`);
 }
 
 main();
