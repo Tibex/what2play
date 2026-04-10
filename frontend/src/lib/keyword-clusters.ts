@@ -2,7 +2,7 @@ export type KeywordCluster = {
   id: string;
   path: string;
   primaryKeyword: string;
-  intent: 'transactional' | 'informational';
+  intent: "transactional" | "informational";
   pageTitle: string;
   metaDescription: string;
   summary: string;
@@ -10,70 +10,81 @@ export type KeywordCluster = {
 
 export const KEYWORD_CLUSTERS: KeywordCluster[] = [
   {
-    id: 'board-game-night-planner',
-    path: '/board-game-night-planner',
-    primaryKeyword: 'board game night planner',
-    intent: 'transactional',
-    pageTitle: 'Board Game Night Planner for Groups',
+    id: "board-game-night-planner",
+    path: "/board-game-night-planner",
+    primaryKeyword: "board game night planner",
+    intent: "transactional",
+    pageTitle: "Board Game Night Planner for Groups",
     metaDescription:
-      'Plan board game nights with scheduling, constraints, recommendations, and final game selection in one workflow.',
+      "Plan board game nights with scheduling, constraints, recommendations, and final game selection in one workflow.",
     summary:
-      'Coordinate your next session without juggling chat threads, spreadsheets, and separate voting tools.',
+      "Coordinate your next session without juggling chat threads, spreadsheets, and separate voting tools.",
   },
   {
-    id: 'board-game-voting-app',
-    path: '/board-game-voting-app',
-    primaryKeyword: 'board game voting app',
-    intent: 'transactional',
-    pageTitle: 'Board Game Voting App for Faster Decisions',
+    id: "board-game-cafe-table-planner",
+    path: "/board-game-cafe-table-planner",
+    primaryKeyword: "board game cafe table planner",
+    intent: "transactional",
+    pageTitle: "Board Game Cafe Table Planner for Multi-Table Events",
     metaDescription:
-      'Use ranked voting for board game nights so your group can choose fairly and lock a game quickly.',
+      "Plan board game cafe and club events with post-vote multi-table seating optimization and host override controls.",
     summary:
-      'Replace endless debates with a clear, transparent ranking process that helps groups commit.',
+      "Assign attendees across multiple games and tables with a seat-coverage-first workflow built for larger events.",
   },
   {
-    id: 'board-game-recommendation-tool',
-    path: '/board-game-recommendation-tool',
-    primaryKeyword: 'board game recommendation tool',
-    intent: 'transactional',
-    pageTitle: 'Board Game Recommendation Tool for Real Group Constraints',
+    id: "board-game-voting-app",
+    path: "/board-game-voting-app",
+    primaryKeyword: "board game voting app",
+    intent: "transactional",
+    pageTitle: "Board Game Voting App for Faster Decisions",
     metaDescription:
-      'Find the best board game for tonight using player count, duration, and complexity constraints.',
+      "Use ranked voting for board game nights so your group can choose fairly and lock a game quickly.",
     summary:
-      'Filter by the group you have right now and surface games people can actually bring and play.',
+      "Replace endless debates with a clear, transparent ranking process that helps groups commit.",
   },
   {
-    id: 'boardgamegeek-collection-sync',
-    path: '/boardgamegeek-collection-sync',
-    primaryKeyword: 'BoardGameGeek collection sync',
-    intent: 'transactional',
-    pageTitle: 'BoardGameGeek Collection Sync for Game Night Planning',
+    id: "board-game-recommendation-tool",
+    path: "/board-game-recommendation-tool",
+    primaryKeyword: "board game recommendation tool",
+    intent: "transactional",
+    pageTitle: "Board Game Recommendation Tool for Real Group Constraints",
     metaDescription:
-      'Connect your BoardGameGeek profile and use owned games in event recommendations, voting, and planning.',
+      "Find the best board game for tonight using player count, duration, and complexity constraints.",
     summary:
-      'Import and maintain your library once, then use it across recommendations and event setup.',
+      "Filter by the group you have right now and surface games people can actually bring and play.",
   },
   {
-    id: 'how-to-plan-a-board-game-night',
-    path: '/how-to-plan-a-board-game-night',
-    primaryKeyword: 'how to plan a board game night',
-    intent: 'informational',
-    pageTitle: 'How to Plan a Board Game Night (Practical Checklist)',
+    id: "boardgamegeek-collection-sync",
+    path: "/boardgamegeek-collection-sync",
+    primaryKeyword: "BoardGameGeek collection sync",
+    intent: "transactional",
+    pageTitle: "BoardGameGeek Collection Sync for Game Night Planning",
     metaDescription:
-      'Step-by-step guide to planning a board game night with invitations, game selection, voting, and follow-up.',
+      "Connect your BoardGameGeek profile and use owned games in event recommendations, voting, and planning.",
     summary:
-      'Use a repeatable planning checklist to reduce friction before, during, and after each session.',
+      "Import and maintain your library once, then use it across recommendations and event setup.",
+  },
+  {
+    id: "how-to-plan-a-board-game-night",
+    path: "/how-to-plan-a-board-game-night",
+    primaryKeyword: "how to plan a board game night",
+    intent: "informational",
+    pageTitle: "How to Plan a Board Game Night (Practical Checklist)",
+    metaDescription:
+      "Step-by-step guide to planning a board game night with invitations, game selection, voting, and follow-up.",
+    summary:
+      "Use a repeatable planning checklist to reduce friction before, during, and after each session.",
   },
 ];
 
 export const INDEXABLE_MARKETING_PATHS = [
-  '/',
-  '/faq',
-  '/about',
-  '/contact',
-  '/privacy',
-  '/terms',
-  '/resources',
+  "/",
+  "/faq",
+  "/about",
+  "/contact",
+  "/privacy",
+  "/terms",
+  "/resources",
   ...KEYWORD_CLUSTERS.map((cluster) => cluster.path),
 ];
 

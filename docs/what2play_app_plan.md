@@ -67,6 +67,11 @@ Ship a web-first, mobile-responsive app where groups can plan game nights, disco
   - Aggregate with ranked-choice style scoring (e.g., Borda count) + tie-break rules
   - Decision deadline and auto-close voting to reduce indecision
   - Host can lock selected game
+- Multi-table optimization (large events)
+  - After voting is finished and event is confirmed, auto-generate a multi-table seating plan
+  - Optimize table count automatically and assign players to games/tables
+  - Balanced objective: maximize seated attendees first, then maximize vote/preference fit
+  - Allow host lock-and-rerun controls for explainable overrides
 - Post-event feedback loop
   - Quick survey for attendees: enjoyment rating + did you finish at least one game?
   - Persist outcomes and feed recommendation weights for future events

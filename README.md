@@ -12,6 +12,7 @@ A web-first, mobile-responsive app for organizing board game nights with friends
 - **Smart Recommendations** — auto-generate game suggestions based on attendee collections, ratings, play history, time budget, and group fit
 - **Ranked Voting** — attendees rank games; Borda count aggregation with tie-breaks and host override
 - **Voting Lifecycle Automation** — voting deadline support, all-voted auto-close, and host fallback controls
+- **Multi-Table Optimizer (Large Events)** — after voting is confirmed, auto-generate a balanced multi-table seating plan that prioritizes seat coverage and then vote/preference fit, with host lock-and-rerun controls
 - **Post-Event Feedback** — enjoyment rating, completion tracking, and duration feel for improving future suggestions
 - **PWA Support** — installable web app with offline fallback
 - **Multi-channel Notifications** — webhook, push webhook, and SMTP email delivery paths
@@ -20,13 +21,13 @@ A web-first, mobile-responsive app for organizing board game nights with friends
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 16 + React 19 + TypeScript + Tailwind CSS |
-| Backend | NestJS + TypeORM + PostgreSQL |
+| Layer     | Technology                                                                                    |
+| --------- | --------------------------------------------------------------------------------------------- |
+| Frontend  | Next.js 16 + React 19 + TypeScript + Tailwind CSS                                             |
+| Backend   | NestJS + TypeORM + PostgreSQL                                                                 |
 | Real-time | Socket.io gateway (backend available; app currently uses API polling for vote/status refresh) |
-| Auth | JWT with refresh tokens (passport-jwt) |
-| API Docs | Swagger (OpenAPI) at `/api/docs` |
+| Auth      | JWT with refresh tokens (passport-jwt)                                                        |
+| API Docs  | Swagger (OpenAPI) at `/api/docs`                                                              |
 
 ## Planning Docs
 
@@ -110,30 +111,38 @@ what2play/
 
 ## API Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/auth/register` | Register new user |
-| POST | `/api/auth/login` | Login |
-| POST | `/api/auth/refresh` | Refresh token |
-| GET/PATCH | `/api/users/me` | Get/update profile |
-| GET | `/api/games/search?q=` | Search games |
-| GET/POST/DELETE | `/api/games/collection/:gameId` | Manage collection |
-| POST | `/api/games/rate` | Rate a game |
-| POST/GET/DELETE | `/api/bgg/link` | BGG account linking |
-| POST | `/api/bgg/sync` | Sync BGG collection |
-| POST/GET | `/api/events` | Create/list events |
-| GET | `/api/events/open` | Browse open events (auth required) |
-| GET/PATCH/DELETE | `/api/events/:id` | Event CRUD |
-| POST | `/api/events/:id/rsvp` | RSVP to event |
-| POST | `/api/events/:id/report` | Report open event |
-| POST | `/api/events/:id/invite-link` | Create invite link |
-| POST | `/api/events/:id/recommendations/generate` | Generate recommendations |
-| GET | `/api/events/:id/recommendations` | Get recommendations |
-| POST | `/api/events/:id/voting` | Submit ranked votes |
-| GET | `/api/events/:id/voting/results` | Get voting results |
-| POST | `/api/events/:id/use-fallback` | Host selects configured fallback game |
-| GET | `/api/events/:id/outcome-analytics` | Host view of recommended vs voted vs played outcomes |
-| POST | `/api/events/:id/feedback` | Submit feedback |
-| GET | `/api/notifications/metrics` | Notification delivery metrics |
-| GET/POST | `/api/friends` | Friends list / send request |
-| POST | `/api/friends/:id/accept` | Accept friend request |
+| Method           | Path                                             | Description                                          |
+| ---------------- | ------------------------------------------------ | ---------------------------------------------------- |
+| POST             | `/api/auth/register`                             | Register new user                                    |
+| POST             | `/api/auth/login`                                | Login                                                |
+| POST             | `/api/auth/refresh`                              | Refresh token                                        |
+| GET/PATCH        | `/api/users/me`                                  | Get/update profile                                   |
+| GET              | `/api/games/search?q=`                           | Search games                                         |
+| GET/POST/DELETE  | `/api/games/collection/:gameId`                  | Manage collection                                    |
+| POST             | `/api/games/rate`                                | Rate a game                                          |
+| POST/GET/DELETE  | `/api/bgg/link`                                  | BGG account linking                                  |
+| POST             | `/api/bgg/sync`                                  | Sync BGG collection                                  |
+| POST/GET         | `/api/events`                                    | Create/list events                                   |
+| GET              | `/api/events/open`                               | Browse open events (auth required)                   |
+| GET/PATCH/DELETE | `/api/events/:id`                                | Event CRUD                                           |
+| POST             | `/api/events/:id/rsvp`                           | RSVP to event                                        |
+| POST             | `/api/events/:id/report`                         | Report open event                                    |
+| POST             | `/api/events/:id/invite-link`                    | Create invite link                                   |
+| POST             | `/api/events/:id/recommendations/generate`       | Generate recommendations                             |
+| GET              | `/api/events/:id/recommendations`                | Get recommendations                                  |
+| POST             | `/api/events/:id/voting`                         | Submit ranked votes                                  |
+| GET              | `/api/events/:id/voting/results`                 | Get voting results                                   |
+| POST             | `/api/events/:id/voting/finish-now`              | Host finishes voting early and confirms event        |
+| POST             | `/api/events/:id/use-fallback`                   | Host selects configured fallback game                |
+| POST             | `/api/events/:id/multi-table/optimize`           | Run non-persisted multi-table optimization           |
+| POST             | `/api/events/:id/multi-table/runs`               | Create persisted multi-table optimizer run           |
+| GET              | `/api/events/:id/multi-table/runs/latest`        | Get latest multi-table optimizer run                 |
+| GET              | `/api/events/:id/multi-table/runs/:runId`        | Get optimizer run by ID                              |
+| POST             | `/api/events/:id/multi-table/runs/:runId/rerun`  | Rerun optimizer (optionally preserve locks)          |
+| POST             | `/api/events/:id/multi-table/runs/:runId/locks`  | Add or remove player/game locks                      |
+| POST             | `/api/events/:id/multi-table/runs/:runId/commit` | Commit optimizer run as active seating plan          |
+| GET              | `/api/events/:id/outcome-analytics`              | Host view of recommended vs voted vs played outcomes |
+| POST             | `/api/events/:id/feedback`                       | Submit feedback                                      |
+| GET              | `/api/notifications/metrics`                     | Notification delivery metrics                        |
+| GET/POST         | `/api/friends`                                   | Friends list / send request                          |
+| POST             | `/api/friends/:id/accept`                        | Accept friend request                                |

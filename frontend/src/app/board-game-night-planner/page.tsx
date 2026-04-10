@@ -1,10 +1,13 @@
-import type { Metadata } from 'next';
-import GuideShell, { type GuideFaq, type GuideSection } from '@/components/seo/GuideShell';
-import JsonLd from '@/components/seo/JsonLd';
-import { getKeywordCluster } from '@/lib/keyword-clusters';
-import { absoluteUrl, createPageMetadata } from '@/lib/seo';
+import type { Metadata } from "next";
+import GuideShell, {
+  type GuideFaq,
+  type GuideSection,
+} from "@/components/seo/GuideShell";
+import JsonLd from "@/components/seo/JsonLd";
+import { getKeywordCluster } from "@/lib/keyword-clusters";
+import { absoluteUrl, createPageMetadata } from "@/lib/seo";
 
-const cluster = getKeywordCluster('board-game-night-planner');
+const cluster = getKeywordCluster("board-game-night-planner");
 
 export const metadata: Metadata = createPageMetadata({
   title: cluster.pageTitle,
@@ -12,90 +15,96 @@ export const metadata: Metadata = createPageMetadata({
   path: cluster.path,
   keywords: [
     cluster.primaryKeyword,
-    'game night organizer app',
-    'plan board game meetup',
-    'board game event planning',
+    "game night organizer app",
+    "plan board game meetup",
+    "board game event planning",
+    "board game table assignment",
   ],
 });
 
 const sections: GuideSection[] = [
   {
-    heading: 'What a board game night planner should solve',
+    heading: "What a board game night planner should solve",
     paragraphs: [
-      'A useful planner must coordinate date, attendance, game options, and final selection in one flow. Splitting those steps across chat, polls, and notes creates friction every week.',
-      'When your process is centralized, people know where to RSVP, what games are in scope, and when a final pick is locked.',
+      "A useful planner must coordinate date, attendance, game options, and final selection in one flow. Splitting those steps across chat, polls, and notes creates friction every week.",
+      "When your process is centralized, people know where to RSVP, what games are in scope, and when a final pick is locked.",
     ],
     bullets: [
-      'Single place for event setup, attendance, and game candidates',
-      'Date polling for invite-only groups before finalizing the event time',
-      'Clear player-count and time-budget constraints',
-      'Final decision workflow so planning does not stall',
+      "Single place for event setup, attendance, and game candidates",
+      "Date polling for invite-only groups before finalizing the event time",
+      "Clear player-count and time-budget constraints",
+      "Final decision workflow so planning does not stall",
     ],
   },
   {
-    heading: 'Use event constraints before discussing games',
+    heading: "Use event constraints before discussing games",
     paragraphs: [
-      'Start with the real constraints: attendees, available time, and desired complexity. This immediately removes mismatched options and keeps the shortlist practical.',
-      'What2Play is designed around that sequence so recommendation and voting steps stay focused on playable options.',
+      "Start with the real constraints: attendees, available time, and desired complexity. This immediately removes mismatched options and keeps the shortlist practical.",
+      "What2Play is designed around that sequence so recommendation and voting steps stay focused on playable options.",
     ],
   },
   {
-    heading: 'Build a repeatable planning cycle',
+    heading: "Build a repeatable planning cycle",
     paragraphs: [
-      'Recurring groups benefit from a consistent pre-event and post-event loop: create event, shortlist games, vote, lock decision, collect lightweight feedback.',
-      'That cycle keeps each game night easier to organize than the previous one.',
+      "Recurring groups benefit from a consistent pre-event and post-event loop: create event, shortlist games, vote, lock decision, collect lightweight feedback.",
+      "That cycle keeps each game night easier to organize than the previous one.",
+    ],
+    bullets: [
+      "For larger confirmed events, generate multi-table seating from vote results",
+      "Optimize seat coverage first, then preference fit across tables",
+      "Lock seats and rerun when host constraints change",
     ],
   },
 ];
 
 const faqs: GuideFaq[] = [
   {
-    question: 'Is What2Play only for large game groups?',
+    question: "Is What2Play only for large game groups?",
     answer:
-      'No. It works for small recurring groups and larger communities because the same planning flow scales with attendee count.',
+      "No. It works for small recurring groups and larger communities, and includes multi-table seating support when attendance is high.",
   },
   {
-    question: 'Can hosts still override the vote result?',
+    question: "Can hosts still override the vote result?",
     answer:
-      'Yes. Hosts can lock final selections when logistics require a manual decision, and keep fallback games ready if attendance changes.',
+      "Yes. Hosts can lock final selections when logistics require a manual decision, and keep fallback games ready if attendance changes.",
   },
   {
-    question: 'Do players need accounts before joining?',
+    question: "Do players need accounts before joining?",
     answer:
-      'Hosts can share invite links and bring people into the planning flow quickly.',
+      "Hosts can share invite links and bring people into the planning flow quickly.",
   },
 ];
 
 export default function BoardGameNightPlannerPage() {
   const jsonLd = [
     {
-      '@context': 'https://schema.org',
-      '@type': 'WebPage',
+      "@context": "https://schema.org",
+      "@type": "WebPage",
       name: cluster.pageTitle,
       url: absoluteUrl(cluster.path),
       description: cluster.metaDescription,
     },
     {
-      '@context': 'https://schema.org',
-      '@type': 'SoftwareApplication',
-      name: 'What2Play',
-      applicationCategory: 'UtilitiesApplication',
-      operatingSystem: 'Web',
-      url: absoluteUrl('/'),
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "What2Play",
+      applicationCategory: "UtilitiesApplication",
+      operatingSystem: "Web",
+      url: absoluteUrl("/"),
       featureList: [
-        'Event setup and RSVP tracking',
-        'Recommendation shortlist',
-        'Ranked voting and final lock-in',
+        "Event setup and RSVP tracking",
+        "Recommendation shortlist",
+        "Ranked voting and final lock-in",
       ],
     },
     {
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
       mainEntity: faqs.map((faq) => ({
-        '@type': 'Question',
+        "@type": "Question",
         name: faq.question,
         acceptedAnswer: {
-          '@type': 'Answer',
+          "@type": "Answer",
           text: faq.answer,
         },
       })),
@@ -112,9 +121,10 @@ export default function BoardGameNightPlannerPage() {
         sections={sections}
         faqs={faqs}
         relatedPaths={[
-          '/board-game-voting-app',
-          '/board-game-recommendation-tool',
-          '/how-to-plan-a-board-game-night',
+          "/board-game-cafe-table-planner",
+          "/board-game-voting-app",
+          "/board-game-recommendation-tool",
+          "/how-to-plan-a-board-game-night",
         ]}
       />
     </>

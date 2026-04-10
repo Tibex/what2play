@@ -63,6 +63,14 @@ A web-first, mobile-responsive app that helps groups plan board game nights, dis
 2. Quick survey: enjoyment (1-5 stars), did you finish?, felt too long/just right/too short
 3. Data feeds into recommendation weights for future events
 
+### Multi-Table Optimizer (Large Confirmed Events)
+
+1. For larger events, host can run (or auto-trigger) a multi-table assignment after voting is confirmed
+2. System selects an optimized number of tables and games, then seats attendees across tables
+3. Objective is balanced: maximize seat coverage first, then maximize vote/preference fit quality
+4. Host can lock assignments and rerun to fine-tune without losing critical constraints
+5. Players see their assigned table/game with assignment rationale
+
 ### 8. Friends & Groups
 
 1. Add friends by username or invite link
