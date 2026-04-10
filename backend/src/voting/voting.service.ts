@@ -95,6 +95,14 @@ export class VotingService {
   }
 
   async getResults(eventId: string): Promise<VoteResult[]> {
+    const event = await this.eventsRepo.findOne({
+      where: { id: eventId },
+      select: ['status'],
+    });
+    if (!event) throw new BadRequestException('Event not found');
+    if (event.status === 'confirmed') {
+      return this.computeResults(eventId);
+    }
     const status = await this.getVotingStatus(eventId);
     if (!status.allVoted) return [];
     return this.computeResults(eventId);
@@ -261,6 +269,28 @@ export class VotingService {
       event.status = 'confirmed';
       await this.eventsRepo.save(event);
     }
+  }
+
+  async finishVotingNow(eventId: string, hostUserId: string): Promise<Event> {
+    const event = await this.eventsRepo.findOne({ where: { id: eventId } });
+    if (!event) throw new BadRequestException('Event not found');
+    if (event.hostId !== hostUserId) {
+      throw new ForbiddenException('Only host can finish voting');
+    }
+    if (event.status !== 'voting') {
+      throw new BadRequestException('Event is not in voting status');
+    }
+
+    const results = await this.computeResults(eventId);
+    if (results.length < 1) {
+      throw new BadRequestException(
+        'Cannot finish voting with no submitted votes',
+      );
+    }
+
+    event.selectedGameId = results[0].gameId;
+    event.status = 'confirmed';
+    return this.eventsRepo.save(event);
   }
 
   private async getValidCandidateGameIds(

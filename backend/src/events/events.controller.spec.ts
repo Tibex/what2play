@@ -7,6 +7,7 @@ import { FeedbackService } from '../feedback/feedback.service';
 import { VotingService } from '../voting/voting.service';
 import { VotingGateway } from '../voting/voting.gateway';
 import { CalendarSyncService } from '../calendar/calendar-sync.service';
+import { MultiTableOptimizerService } from './multi-table-optimizer.service';
 
 describe('EventsController', () => {
   let controller: EventsController;
@@ -30,6 +31,9 @@ describe('EventsController', () => {
   const mockCalendarSyncService = {
     queueEventSync: jest.fn(),
   };
+  const mockMultiTableOptimizerService = {
+    runForEvent: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -45,6 +49,10 @@ describe('EventsController', () => {
         { provide: VotingService, useValue: mockVotingService },
         { provide: VotingGateway, useValue: mockVotingGateway },
         { provide: CalendarSyncService, useValue: mockCalendarSyncService },
+        {
+          provide: MultiTableOptimizerService,
+          useValue: mockMultiTableOptimizerService,
+        },
       ],
     }).compile();
 

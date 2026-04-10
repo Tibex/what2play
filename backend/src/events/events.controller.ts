@@ -33,6 +33,10 @@ import { ReportEventDto } from './dto/report-event.dto';
 import { SetEventScheduleResponsesDto } from './dto/set-event-schedule-responses.dto';
 import { FinalizeEventScheduleDto } from './dto/finalize-event-schedule.dto';
 import { TrackInviteTelemetryDto } from './dto/track-invite-telemetry.dto';
+import { RunMultiTableOptimizerDto } from './dto/run-multi-table-optimizer.dto';
+import { MultiTableOptimizerService } from './multi-table-optimizer.service';
+import { UpdateMultiTableLocksDto } from './dto/update-multi-table-locks.dto';
+import { RerunMultiTableOptimizerDto } from './dto/rerun-multi-table-optimizer.dto';
 
 @ApiTags('events')
 @Controller('api/events')
@@ -46,6 +50,7 @@ export class EventsController {
     private readonly notificationsService: NotificationsService,
     private readonly feedbackService: FeedbackService,
     private readonly calendarSyncService: CalendarSyncService,
+    private readonly multiTableOptimizerService: MultiTableOptimizerService,
   ) {}
 
   @Post()
@@ -319,6 +324,101 @@ export class EventsController {
       /* non-critical */
     });
     return selected;
+  }
+
+  @Post(':id/multi-table/optimize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Run multi-table assignment optimizer for host',
+  })
+  runMultiTableOptimizer(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: RunMultiTableOptimizerDto,
+  ) {
+    return this.multiTableOptimizerService.runForEvent(id, req.user.id, dto);
+  }
+
+  @Post(':id/multi-table/runs')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create persisted multi-table optimizer run' })
+  createMultiTableRun(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: RunMultiTableOptimizerDto,
+  ) {
+    return this.multiTableOptimizerService.createRun(id, req.user.id, dto);
+  }
+
+  @Get(':id/multi-table/runs/latest')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get latest persisted multi-table run' })
+  getLatestMultiTableRun(@Param('id') id: string, @Request() req) {
+    return this.multiTableOptimizerService.getLatestRun(id, req.user.id);
+  }
+
+  @Get(':id/multi-table/runs/:runId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get specific persisted multi-table run' })
+  getMultiTableRun(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Request() req,
+  ) {
+    return this.multiTableOptimizerService.getRun(id, runId, req.user.id);
+  }
+
+  @Post(':id/multi-table/runs/:runId/rerun')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Rerun optimizer from a previous run' })
+  rerunMultiTableRun(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Request() req,
+    @Body() dto: RerunMultiTableOptimizerDto,
+  ) {
+    return this.multiTableOptimizerService.rerun(
+      id,
+      runId,
+      req.user.id,
+      dto.preserveLocks ?? true,
+    );
+  }
+
+  @Post(':id/multi-table/runs/:runId/locks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update run locks and create a rerun snapshot' })
+  updateMultiTableRunLocks(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Request() req,
+    @Body() dto: UpdateMultiTableLocksDto,
+  ) {
+    return this.multiTableOptimizerService.updateLocks(
+      id,
+      runId,
+      req.user.id,
+      dto.add,
+      dto.remove,
+    );
+  }
+
+  @Post(':id/multi-table/runs/:runId/commit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Commit a run as active seating plan' })
+  commitMultiTableRun(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Request() req,
+  ) {
+    return this.multiTableOptimizerService.commitRun(id, runId, req.user.id);
   }
 
   @Post(':id/invite-link')

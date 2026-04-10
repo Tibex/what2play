@@ -68,4 +68,17 @@ export class VotingController {
   getMyVotes(@Param('eventId') eventId: string, @Request() req) {
     return this.votingService.getUserVotes(eventId, req.user.id);
   }
+
+  @Post('finish-now')
+  @ApiOperation({
+    summary: 'Host can finish voting early with current submissions',
+  })
+  async finishNow(@Param('eventId') eventId: string, @Request() req) {
+    const updated = await this.votingService.finishVotingNow(
+      eventId,
+      req.user.id,
+    );
+    await this.votingGateway.emitVotingState(eventId);
+    return updated;
+  }
 }

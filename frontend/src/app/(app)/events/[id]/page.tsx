@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import toast from 'react-hot-toast';
-import { io, Socket } from 'socket.io-client';
-import ConfirmModal from '@/components/ConfirmModal';
-import { api } from '@/lib/api';
-import { useAuthStore } from '@/lib/store';
-import GameCard from '@/components/GameCard';
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import toast from "react-hot-toast";
+import { io, Socket } from "socket.io-client";
+import ConfirmModal from "@/components/ConfirmModal";
+import { api } from "@/lib/api";
+import { useAuthStore } from "@/lib/store";
+import GameCard from "@/components/GameCard";
 import GameSearchAdd, {
   type GameSearchAddResult,
-} from '@/components/GameSearchAdd';
-import FeedbackSection from './feedback-section';
-import EventScheduleBlock from '@/components/events/EventScheduleBlock';
-import RecommendationPoolInsights from '@/components/events/RecommendationPoolInsights';
-import FriendPickerDropdown from '@/components/friends/FriendPickerDropdown';
+} from "@/components/GameSearchAdd";
+import FeedbackSection from "./feedback-section";
+import EventScheduleBlock from "@/components/events/EventScheduleBlock";
+import RecommendationPoolInsights from "@/components/events/RecommendationPoolInsights";
+import FriendPickerDropdown from "@/components/friends/FriendPickerDropdown";
 import type {
   Game,
   GameEvent,
@@ -30,7 +30,8 @@ import type {
   Friendship,
   EventScheduleDetail,
   RecommendationPoolStats,
-} from '@/lib/types';
+  MultiTableRun,
+} from "@/lib/types";
 
 type VotingRealtimePayload = {
   eventId: string;
@@ -49,44 +50,61 @@ export default function EventDetailPage() {
   const [results, setResults] = useState<VoteResult[]>([]);
   const [myVotes, setMyVotes] = useState<EventVote[]>([]);
   const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null);
-  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | null>(null);
-  const [inviteLink, setInviteLink] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus | null>(
+    null,
+  );
+  const [inviteLink, setInviteLink] = useState("");
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [requestedFriendIds, setRequestedFriendIds] = useState<string[]>([]);
-  const [addingFriendUserId, setAddingFriendUserId] = useState<string | null>(null);
+  const [addingFriendUserId, setAddingFriendUserId] = useState<string | null>(
+    null,
+  );
   const [inviteableFriends, setInviteableFriends] = useState<User[]>([]);
-  const [loadingInviteableFriends, setLoadingInviteableFriends] = useState(false);
+  const [loadingInviteableFriends, setLoadingInviteableFriends] =
+    useState(false);
   const [invitingFriends, setInvitingFriends] = useState(false);
   const [updatingRsvp, setUpdatingRsvp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [nowTs] = useState(() => Date.now());
   const [savingFallback, setSavingFallback] = useState(false);
-  const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
+  const [generatingRecommendations, setGeneratingRecommendations] =
+    useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStage, setGenerationStage] = useState(0);
-  const [eventTab, setEventTab] = useState<'results' | 'fallback'>('results');
-  const [pendingAttendeeRemovalId, setPendingAttendeeRemovalId] = useState<string | null>(
+  const [eventTab, setEventTab] = useState<"results" | "fallback">("results");
+  const [pendingAttendeeRemovalId, setPendingAttendeeRemovalId] = useState<
+    string | null
+  >(null);
+  const [removingAttendeeId, setRemovingAttendeeId] = useState<string | null>(
     null,
   );
-  const [removingAttendeeId, setRemovingAttendeeId] = useState<string | null>(null);
   const [confirmDeleteEventOpen, setConfirmDeleteEventOpen] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState(false);
-  const [scheduleDetail, setScheduleDetail] = useState<EventScheduleDetail | null>(
-    null,
-  );
+  const [scheduleDetail, setScheduleDetail] =
+    useState<EventScheduleDetail | null>(null);
   const [poolStats, setPoolStats] = useState<RecommendationPoolStats | null>(
     null,
   );
   const [loadingPoolStats, setLoadingPoolStats] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [tablePlanRun, setTablePlanRun] = useState<MultiTableRun | null>(null);
+  const [runningTablePlan, setRunningTablePlan] = useState(false);
+  const [autoGeneratingTablePlan, setAutoGeneratingTablePlan] = useState(false);
+  const [tablePlannerExpanded, setTablePlannerExpanded] = useState(false);
+  const [autoPlanAttemptedForEventId, setAutoPlanAttemptedForEventId] =
+    useState<string | null>(null);
 
   const sendRecommendationTelemetry = useCallback(
     async (eventName: string, payload?: Record<string, unknown>) => {
       try {
-        await api.post(`/events/${id}/recommendations/telemetry`, {
-          eventName,
-          payload: payload ?? {},
-        }, { showErrorToast: false });
+        await api.post(
+          `/events/${id}/recommendations/telemetry`,
+          {
+            eventName,
+            payload: payload ?? {},
+          },
+          { showErrorToast: false },
+        );
       } catch {
         /* best effort telemetry */
       }
@@ -94,81 +112,132 @@ export default function EventDetailPage() {
     [id],
   );
 
-  const loadEvent = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    let ev: GameEvent;
-    try {
-      ev = await api.get<GameEvent>(`/events/${id}`, { showErrorToast: false });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load event';
-      if (message === 'Event not found') {
-        toast('You no longer have access to this event');
-        router.push('/dashboard');
-      } else {
-        toast.error(message);
-      }
-      if (showLoading) setLoading(false);
-      return null;
-    }
-    setEvent(ev);
-    if (ev.status === 'scheduling') {
+  const loadEvent = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoading(true);
+      let ev: GameEvent;
       try {
-        const s = await api.get<EventScheduleDetail>(`/events/${id}/schedule`, {
+        ev = await api.get<GameEvent>(`/events/${id}`, {
           showErrorToast: false,
         });
-        setScheduleDetail(s);
-      } catch {
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load event";
+        if (message === "Event not found") {
+          toast("You no longer have access to this event");
+          router.push("/dashboard");
+        } else {
+          toast.error(message);
+        }
+        if (showLoading) setLoading(false);
+        return null;
+      }
+      setEvent(ev);
+      if (ev.status === "scheduling") {
+        try {
+          const s = await api.get<EventScheduleDetail>(
+            `/events/${id}/schedule`,
+            {
+              showErrorToast: false,
+            },
+          );
+          setScheduleDetail(s);
+        } catch {
+          setScheduleDetail(null);
+        }
+      } else {
         setScheduleDetail(null);
       }
-    } else {
-      setScheduleDetail(null);
-    }
-    try {
-      const [friends, sentPending] = await Promise.all([
-        api.get<User[]>('/friends', { showErrorToast: false }),
-        api.get<Friendship[]>('/friends/pending/sent', { showErrorToast: false }),
-      ]);
-      setFriendIds(friends.map((f) => f.id));
-      setRequestedFriendIds(sentPending.map((request) => request.addresseeId));
-    } catch {
-      /* best effort for attendee friend actions */
-    }
-    try {
-      const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`, { showErrorToast: false });
-      setCandidates(c);
-    } catch { /* no candidates yet */ }
-    if (ev.status === 'planning') {
       try {
-        setLoadingPoolStats(true);
-        const stats = await api.get<RecommendationPoolStats>(
-          `/events/${id}/recommendations/pool-stats`,
+        const [friends, sentPending] = await Promise.all([
+          api.get<User[]>("/friends", { showErrorToast: false }),
+          api.get<Friendship[]>("/friends/pending/sent", {
+            showErrorToast: false,
+          }),
+        ]);
+        setFriendIds(friends.map((f) => f.id));
+        setRequestedFriendIds(
+          sentPending.map((request) => request.addresseeId),
+        );
+      } catch {
+        /* best effort for attendee friend actions */
+      }
+      try {
+        const c = await api.get<EventGameCandidate[]>(
+          `/events/${id}/recommendations`,
           { showErrorToast: false },
         );
-        setPoolStats(stats);
+        setCandidates(c);
       } catch {
+        /* no candidates yet */
+      }
+      if (ev.status === "planning") {
+        try {
+          setLoadingPoolStats(true);
+          const stats = await api.get<RecommendationPoolStats>(
+            `/events/${id}/recommendations/pool-stats`,
+            { showErrorToast: false },
+          );
+          setPoolStats(stats);
+        } catch {
+          setPoolStats(null);
+        } finally {
+          setLoadingPoolStats(false);
+        }
+      } else {
         setPoolStats(null);
-      } finally {
         setLoadingPoolStats(false);
       }
-    } else {
-      setPoolStats(null);
-      setLoadingPoolStats(false);
-    }
-    try {
-      const r = await api.get<VoteResult[]>(`/events/${id}/voting/results`, { showErrorToast: false });
-      setResults(r);
-      const mv = await api.get<EventVote[]>(`/events/${id}/voting/my-votes`, { showErrorToast: false });
-      setMyVotes(mv);
-      const vs = await api.get<VotingStatus>(`/events/${id}/voting/status`, { showErrorToast: false });
-      setVotingStatus(vs);
-    } catch { /* no votes yet */ }
-    try {
-      const fs = await api.get<FeedbackStatus>(`/events/${id}/feedback/status`, { showErrorToast: false });
-      setFeedbackStatus(fs);
-    } catch { /* no feedback status yet */ }
-    if (showLoading) setLoading(false);
-    return ev;
-  }, [id, router]);
+      const goingCountForPlanner =
+        ev.attendees?.filter((attendee) => attendee.rsvpStatus === "going")
+          .length ?? 0;
+      if (
+        ev.status === "confirmed" &&
+        goingCountForPlanner >= 9 &&
+        user?.id === ev.hostId
+      ) {
+        try {
+          const latestRun = await api.get<MultiTableRun | null>(
+            `/events/${id}/multi-table/runs/latest`,
+            { showErrorToast: false },
+          );
+          setTablePlanRun(latestRun);
+        } catch {
+          setTablePlanRun(null);
+        }
+      } else {
+        setTablePlanRun(null);
+      }
+      try {
+        const r = await api.get<VoteResult[]>(`/events/${id}/voting/results`, {
+          showErrorToast: false,
+        });
+        setResults(r);
+        const mv = await api.get<EventVote[]>(`/events/${id}/voting/my-votes`, {
+          showErrorToast: false,
+        });
+        setMyVotes(mv);
+        const vs = await api.get<VotingStatus>(`/events/${id}/voting/status`, {
+          showErrorToast: false,
+        });
+        setVotingStatus(vs);
+      } catch {
+        /* no votes yet */
+      }
+      try {
+        const fs = await api.get<FeedbackStatus>(
+          `/events/${id}/feedback/status`,
+          { showErrorToast: false },
+        );
+        setFeedbackStatus(fs);
+      } catch {
+        /* no feedback status yet */
+      }
+      if (showLoading) setLoading(false);
+      return ev;
+    },
+    [id, router],
+  );
 
   useEffect(() => {
     // Defer to microtask queue to satisfy react-hooks/set-state-in-effect.
@@ -182,43 +251,43 @@ export default function EventDetailPage() {
       void loadEvent(false);
     };
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === "visible") {
         refresh();
       }
     };
 
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [loadEvent]);
 
   useEffect(() => {
     if (!event || !user?.id) return;
-    if (event.status !== 'voting' && event.status !== 'confirmed') return;
+    if (event.status !== "voting" && event.status !== "confirmed") return;
 
-    const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-    const baseUrl = rawApiUrl.endsWith('/api')
+    const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+    const baseUrl = rawApiUrl.endsWith("/api")
       ? rawApiUrl.slice(0, -4)
-      : rawApiUrl.replace(/\/+$/, '');
-    const token = localStorage.getItem('accessToken');
+      : rawApiUrl.replace(/\/+$/, "");
+    const token = localStorage.getItem("accessToken");
     if (!token) return;
 
     const socket: Socket = io(`${baseUrl}/voting`, {
-      transports: ['websocket'],
+      transports: ["websocket"],
       auth: { token },
     });
 
-    socket.on('connect', () => {
+    socket.on("connect", () => {
       setSocketConnected(true);
-      socket.emit('joinEvent', id);
+      socket.emit("joinEvent", id);
     });
-    socket.on('disconnect', () => {
+    socket.on("disconnect", () => {
       setSocketConnected(false);
     });
-    socket.on('votingState', (payload: VotingRealtimePayload) => {
+    socket.on("votingState", (payload: VotingRealtimePayload) => {
       if (!payload || payload.eventId !== id) return;
       setResults(payload.results || []);
       setVotingStatus(payload.votingStatus || null);
@@ -234,7 +303,7 @@ export default function EventDetailPage() {
     });
 
     return () => {
-      socket.emit('leaveEvent', id);
+      socket.emit("leaveEvent", id);
       socket.disconnect();
       setSocketConnected(false);
     };
@@ -242,7 +311,7 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     if (!event) return;
-    if (event.status !== 'voting' && event.status !== 'confirmed') return;
+    if (event.status !== "voting" && event.status !== "confirmed") return;
     if (socketConnected) return;
     const timer = window.setInterval(() => {
       void loadEvent(false);
@@ -275,56 +344,110 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     if (!candidates.length) return;
-    sendRecommendationTelemetry('recommendation_impression', {
+    sendRecommendationTelemetry("recommendation_impression", {
       count: candidates.length,
       gameIds: candidates.map((candidate) => candidate.gameId),
     }).catch(() => undefined);
   }, [candidates, sendRecommendationTelemetry]);
 
+  useEffect(() => {
+    if (loading || !event) return;
+    const isHost = user?.id === event.hostId;
+    const attendeeCount =
+      event.attendees?.filter((attendee) => attendee.rsvpStatus === "going")
+        .length || 0;
+    const showTablePlanner =
+      isHost && event.status === "confirmed" && attendeeCount >= 9;
+    if (!showTablePlanner) return;
+    if (tablePlanRun) return;
+    if (autoGeneratingTablePlan) return;
+    if (autoPlanAttemptedForEventId === event.id) return;
+
+    const runAutoPlanner = async () => {
+      setAutoGeneratingTablePlan(true);
+      setAutoPlanAttemptedForEventId(event.id);
+      try {
+        const run = await api.post<MultiTableRun>(
+          `/events/${id}/multi-table/runs`,
+          {},
+        );
+        setTablePlanRun(run);
+      } catch {
+        /* toast auto-shown */
+      } finally {
+        setAutoGeneratingTablePlan(false);
+      }
+    };
+
+    void runAutoPlanner();
+  }, [
+    loading,
+    event,
+    user?.id,
+    tablePlanRun,
+    autoGeneratingTablePlan,
+    autoPlanAttemptedForEventId,
+    id,
+  ]);
+
   if (loading || !event) {
-    return <div className="flex justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" /></div>;
+    return (
+      <div className="flex justify-center py-20">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[var(--primary)]" />
+      </div>
+    );
   }
 
   const isHost = user?.id === event.hostId;
-  const attendeeCount = event.attendees?.filter((a) => a.rsvpStatus === 'going').length || 0;
-  const votingStartAttendeeCount = event.votingStartedAttendeeCount ?? attendeeCount;
+  const attendeeCount =
+    event.attendees?.filter((a) => a.rsvpStatus === "going").length || 0;
+  const votingStartAttendeeCount =
+    event.votingStartedAttendeeCount ?? attendeeCount;
   const showFallbackControls =
     isHost &&
-    event.status === 'confirmed' &&
+    event.status === "confirmed" &&
     votingStartAttendeeCount > 0 &&
     attendeeCount < votingStartAttendeeCount;
   const myAttendee = event.attendees?.find((a) => a.userId === user?.id);
-  const isPlanning = event.status === 'planning';
-  const isScheduling = event.status === 'scheduling';
-  const isPastEvent = event.status === 'past' || event.status === 'completed';
+  const isPlanning = event.status === "planning";
+  const isVoting = event.status === "voting";
+  const isConfirmed = event.status === "confirmed";
+  const showTablePlanner = isHost && isConfirmed && attendeeCount >= 9;
+  const isScheduling = event.status === "scheduling";
+  const isPastEvent = event.status === "past" || event.status === "completed";
   const canRemoveAttendees =
-    isHost && !isPastEvent && event.status !== 'cancelled';
-  const canManageEvent =
-    !isPastEvent && event.status !== 'cancelled';
-  const canRsvp = !isPastEvent && event.status !== 'cancelled';
-  const isGoingAttendee = myAttendee?.rsvpStatus === 'going';
-  const isPendingInvite = myAttendee?.rsvpStatus === 'pending';
-  const canViewSchedulePoll =
-    isHost || isGoingAttendee || isPendingInvite;
+    isHost && !isPastEvent && event.status !== "cancelled";
+  const canManageEvent = !isPastEvent && event.status !== "cancelled";
+  const canRsvp = !isPastEvent && event.status !== "cancelled";
+  const isGoingAttendee = myAttendee?.rsvpStatus === "going";
+  const isPendingInvite = myAttendee?.rsvpStatus === "pending";
+  const canViewSchedulePoll = isHost || isGoingAttendee || isPendingInvite;
   const canViewEventBody = isHost || isGoingAttendee;
   const canEditRecommendations = isHost || isGoingAttendee;
-  const eventTimeZone = event.eventTimezone || 'UTC';
+  const hasRenderableTablePlan = Boolean(
+    tablePlanRun &&
+    tablePlanRun.result &&
+    tablePlanRun.result.objective &&
+    Array.isArray(tablePlanRun.result.tables) &&
+    Array.isArray(tablePlanRun.result.unseated),
+  );
+  const eventTimeZone = event.eventTimezone || "UTC";
   const hasEventDate = event.dateTime != null;
   const eventDate = hasEventDate ? new Date(event.dateTime as string) : null;
   const shortEventDate = eventDate
     ? new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
+        month: "short",
+        day: "numeric",
         timeZone: eventTimeZone,
       }).format(eventDate)
-    : 'TBD';
+    : "TBD";
   const shortEventTime = eventDate
     ? new Intl.DateTimeFormat(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
+        hour: "numeric",
+        minute: "2-digit",
         timeZone: eventTimeZone,
       }).format(eventDate)
-    : '';
+    : "";
   const eventEndsAt = eventDate
     ? eventDate.getTime() + (event.durationMinutes ?? 0) * 60_000
     : Number.POSITIVE_INFINITY;
@@ -339,11 +462,11 @@ export default function EventDetailPage() {
 
   const handleRsvp = async (status: string) => {
     if (!canRsvp) {
-      toast.error('RSVP is closed for this event');
+      toast.error("RSVP is closed for this event");
       return;
     }
-    if (isHost && status === 'not_going') {
-      toast.error('Event creator cannot leave this event');
+    if (isHost && status === "not_going") {
+      toast.error("Event creator cannot leave this event");
       return;
     }
     if (updatingRsvp) {
@@ -353,15 +476,18 @@ export default function EventDetailPage() {
     try {
       await api.post(`/events/${id}/rsvp`, { status });
       toast.success(
-        status === 'not_going' ? 'You left this event' : `RSVP updated to ${status}`,
+        status === "not_going"
+          ? "You left this event"
+          : `RSVP updated to ${status}`,
       );
-      if (status === 'not_going' && event.type === 'invite' && !isHost) {
-        router.push('/dashboard');
+      if (status === "not_going" && event.type === "invite" && !isHost) {
+        router.push("/dashboard");
         return;
       }
       await loadEvent();
-    } catch { /* toast auto-shown */ }
-    finally {
+    } catch {
+      /* toast auto-shown */
+    } finally {
       setUpdatingRsvp(false);
     }
   };
@@ -370,7 +496,7 @@ export default function EventDetailPage() {
     setSavingFallback(true);
     try {
       await api.patch(`/events/${id}`, { fallbackGameId: gameId });
-      toast.success('Fallback game saved');
+      toast.success("Fallback game saved");
       loadEvent();
     } catch {
       /* toast auto-shown */
@@ -389,7 +515,7 @@ export default function EventDetailPage() {
     setRemovingAttendeeId(pendingAttendeeRemovalId);
     try {
       await api.delete(`/events/${id}/attendees/${pendingAttendeeRemovalId}`);
-      toast.success('Attendee removed');
+      toast.success("Attendee removed");
       loadEvent();
     } catch {
       /* toast auto-shown */
@@ -406,32 +532,40 @@ export default function EventDetailPage() {
     const startedAt = Date.now();
     let generatedCandidates: EventGameCandidate[] | null = null;
     try {
-      sendRecommendationTelemetry('recommendation_generate_started').catch(
+      sendRecommendationTelemetry("recommendation_generate_started").catch(
         () => undefined,
       );
-      await api.post<EventGameCandidate[]>(`/events/${id}/recommendations/generate`);
-      const c = await api.get<EventGameCandidate[]>(`/events/${id}/recommendations`);
+      await api.post<EventGameCandidate[]>(
+        `/events/${id}/recommendations/generate`,
+      );
+      const c = await api.get<EventGameCandidate[]>(
+        `/events/${id}/recommendations`,
+      );
       generatedCandidates = c;
-      sendRecommendationTelemetry('recommendation_generate_succeeded', {
+      sendRecommendationTelemetry("recommendation_generate_succeeded", {
         count: c.length,
       }).catch(() => undefined);
       const elapsed = Date.now() - startedAt;
       const minDuration = 3200;
       if (elapsed < minDuration) {
-        await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
+        await new Promise((resolve) =>
+          setTimeout(resolve, minDuration - elapsed),
+        );
       }
       setGenerationProgress(97);
       if (c.length === 0) {
-        toast('No recommendations found for the current attendees');
+        toast("No recommendations found for the current attendees");
       } else {
-        toast.success('Recommendations generated');
+        toast.success("Recommendations generated");
       }
     } catch (err: unknown) {
-      sendRecommendationTelemetry('recommendation_generate_failed').catch(
+      sendRecommendationTelemetry("recommendation_generate_failed").catch(
         () => undefined,
       );
       toast.error(
-        err instanceof Error ? err.message : 'Failed to generate recommendations',
+        err instanceof Error
+          ? err.message
+          : "Failed to generate recommendations",
       );
     } finally {
       setGenerationProgress(100);
@@ -447,10 +581,14 @@ export default function EventDetailPage() {
 
   const handleCreateInvite = async () => {
     try {
-      const inv = await api.post<{ token: string }>(`/events/${id}/invite-link`);
+      const inv = await api.post<{ token: string }>(
+        `/events/${id}/invite-link`,
+      );
       setInviteLink(`${window.location.origin}/invite/${inv.token}`);
-      toast.success('Invite link created');
-    } catch { /* toast auto-shown */ }
+      toast.success("Invite link created");
+    } catch {
+      /* toast auto-shown */
+    }
   };
 
   const loadInviteableFriends = async () => {
@@ -473,16 +611,19 @@ export default function EventDetailPage() {
   const handleInviteFriend = async (userId: string) => {
     setInvitingFriends(true);
     try {
-      const result = await api.post<InviteFriendsResponse>(`/events/${id}/invite-friends`, {
-        userIds: [userId],
-      });
+      const result = await api.post<InviteFriendsResponse>(
+        `/events/${id}/invite-friends`,
+        {
+          userIds: [userId],
+        },
+      );
 
       if (result.invitedUserIds.length > 0) {
-        toast.success('Friend invited');
+        toast.success("Friend invited");
       } else if (result.alreadyAttendingUserIds.length > 0) {
-        toast('Already attending');
+        toast("Already attending");
       } else if (result.notFriendsUserIds.length > 0) {
-        toast.error('Only friends can be invited');
+        toast.error("Only friends can be invited");
       }
 
       await Promise.all([loadEvent(), loadInviteableFriends()]);
@@ -494,26 +635,32 @@ export default function EventDetailPage() {
   };
 
   const handleAddFriendFromAttendee = async (userId: string) => {
-    if (!userId || friendIds.includes(userId) || requestedFriendIds.includes(userId)) {
+    if (
+      !userId ||
+      friendIds.includes(userId) ||
+      requestedFriendIds.includes(userId)
+    ) {
       return;
     }
     setAddingFriendUserId(userId);
     try {
       const result = await api.post<FriendRequestByUserIdResponse>(
-        '/friends/request-by-user-id',
+        "/friends/request-by-user-id",
         { userId },
       );
-      if (result.status === 'already_friends') {
-        setFriendIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
-        toast('Already in your friends list');
+      if (result.status === "already_friends") {
+        setFriendIds((prev) =>
+          prev.includes(userId) ? prev : [...prev, userId],
+        );
+        toast("Already in your friends list");
       } else {
         setRequestedFriendIds((prev) =>
           prev.includes(userId) ? prev : [...prev, userId],
         );
         toast.success(
-          result.status === 'sent'
-            ? 'Friend request sent'
-            : 'Friend request already pending',
+          result.status === "sent"
+            ? "Friend request sent"
+            : "Friend request already pending",
         );
       }
     } catch {
@@ -527,11 +674,166 @@ export default function EventDetailPage() {
     try {
       const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       // Optimistic UI: lock recommendations immediately.
-      setEvent((prev) => (prev ? { ...prev, status: 'voting', votingDeadline: deadline } : prev));
-      await api.patch(`/events/${id}`, { status: 'voting', votingDeadline: deadline });
-      toast.success('Voting started!');
+      setEvent((prev) =>
+        prev ? { ...prev, status: "voting", votingDeadline: deadline } : prev,
+      );
+      await api.patch(`/events/${id}`, {
+        status: "voting",
+        votingDeadline: deadline,
+      });
+      toast.success("Voting started!");
       loadEvent();
-    } catch { /* toast auto-shown */ }
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const handleFinishVotingNow = async () => {
+    try {
+      await api.post(`/events/${id}/voting/finish-now`);
+      toast.success("Voting finished");
+      await loadEvent();
+    } catch {
+      /* toast auto-shown */
+    }
+  };
+
+  const handleRunTableOptimizer = async () => {
+    if (!isHost) return;
+    setRunningTablePlan(true);
+    try {
+      const run = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs`,
+        {},
+      );
+      setTablePlanRun(run);
+      toast.success("Multi-table plan generated");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
+  };
+
+  const handleRerunTableOptimizer = async () => {
+    if (!tablePlanRun) return;
+    setRunningTablePlan(true);
+    try {
+      const rerun = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs/${tablePlanRun.runId}/rerun`,
+        { preserveLocks: true },
+      );
+      setTablePlanRun(rerun);
+      toast.success("Table plan rerun completed");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
+  };
+
+  const handleCommitTablePlan = async () => {
+    if (!tablePlanRun) return;
+    setRunningTablePlan(true);
+    try {
+      const committed = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs/${tablePlanRun.runId}/commit`,
+      );
+      setTablePlanRun(committed);
+      toast.success("Table plan committed");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
+  };
+
+  const isPlayerLockedToGame = (userId: string, gameId: string) =>
+    (tablePlanRun?.locks || []).some(
+      (lock) =>
+        lock.type === "player_game" &&
+        lock.userId === userId &&
+        lock.gameId === gameId,
+    );
+
+  const handleLockPlayerToGame = async (userId: string, gameId: string) => {
+    if (!tablePlanRun) return;
+    setRunningTablePlan(true);
+    try {
+      const next = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs/${tablePlanRun.runId}/locks`,
+        {
+          add: [{ type: "player_game", userId, gameId }],
+        },
+      );
+      setTablePlanRun(next);
+      toast.success("Lock added");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
+  };
+
+  const handleUnlockPlayerFromGame = async (userId: string, gameId: string) => {
+    if (!tablePlanRun) return;
+    setRunningTablePlan(true);
+    try {
+      const next = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs/${tablePlanRun.runId}/locks`,
+        {
+          remove: [{ type: "player_game", userId, gameId }],
+        },
+      );
+      setTablePlanRun(next);
+      toast.success("Lock removed");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
+  };
+
+  const handleLockAllCurrentSeats = async () => {
+    if (!tablePlanRun) return;
+    const add = tablePlanRun.result.tables.flatMap((table) =>
+      table.players.map((player) => ({
+        type: "player_game" as const,
+        userId: player.userId,
+        gameId: table.gameId,
+      })),
+    );
+    if (add.length === 0) return;
+    setRunningTablePlan(true);
+    try {
+      const next = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs/${tablePlanRun.runId}/locks`,
+        { add },
+      );
+      setTablePlanRun(next);
+      toast.success("All current seats locked");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
+  };
+
+  const handleClearAllLocks = async () => {
+    if (!tablePlanRun || tablePlanRun.locks.length === 0) return;
+    setRunningTablePlan(true);
+    try {
+      const next = await api.post<MultiTableRun>(
+        `/events/${id}/multi-table/runs/${tablePlanRun.runId}/locks`,
+        { remove: tablePlanRun.locks },
+      );
+      setTablePlanRun(next);
+      toast.success("All locks cleared");
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRunningTablePlan(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -542,10 +844,11 @@ export default function EventDetailPage() {
     setDeletingEvent(true);
     try {
       await api.delete(`/events/${id}`);
-      toast.success('Event deleted');
-      router.push('/dashboard');
-    } catch { /* toast auto-shown */ }
-    finally {
+      toast.success("Event deleted");
+      router.push("/dashboard");
+    } catch {
+      /* toast auto-shown */
+    } finally {
       setDeletingEvent(false);
       setConfirmDeleteEventOpen(false);
     }
@@ -560,12 +863,14 @@ export default function EventDetailPage() {
               Recommendation Engine
             </div>
             <h3 className="text-lg font-semibold">
-              {[
-                'Collecting attendee preferences...',
-                'Scoring game fit across your group...',
-                'Applying BGG player-count intelligence...',
-                'Ranking top candidates...',
-              ][generationStage]}
+              {
+                [
+                  "Collecting attendee preferences...",
+                  "Scoring game fit across your group...",
+                  "Applying BGG player-count intelligence...",
+                  "Ranking top candidates...",
+                ][generationStage]
+              }
             </h3>
             <p className="mt-2 text-sm text-white/75">
               This can take a few seconds for larger collections.
@@ -586,7 +891,10 @@ export default function EventDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="min-w-0 max-w-[14rem] sm:max-w-[28rem] lg:max-w-[36rem] truncate text-xl sm:text-2xl font-bold" title={event.title}>
+              <h1
+                className="min-w-0 max-w-[14rem] sm:max-w-[28rem] lg:max-w-[36rem] truncate text-xl sm:text-2xl font-bold"
+                title={event.title}
+              >
                 {event.title}
               </h1>
               {isHost && canManageEvent && (
@@ -633,12 +941,12 @@ export default function EventDetailPage() {
               )}
             </div>
             <p className="wt-muted mt-1">
-              Hosted by {event.host?.name || 'Unknown'}
+              Hosted by {event.host?.name || "Unknown"}
               {hasEventDate ? (
                 <>
-                  {' · '}
+                  {" · "}
                   {shortEventDate}
-                  {' at '}
+                  {" at "}
                   {shortEventTime}
                 </>
               ) : (
@@ -649,25 +957,30 @@ export default function EventDetailPage() {
           <StatusBadge status={event.status} />
         </div>
 
-        {event.description && <p className="mb-4 text-[var(--foreground)]">{event.description}</p>}
+        {event.description && (
+          <p className="mb-4 text-[var(--foreground)]">{event.description}</p>
+        )}
 
         <div className="wt-muted mb-4 flex flex-wrap gap-4 text-sm">
           {event.location && <span>📍 {event.location}</span>}
           {event.durationMinutes && (
             <span>⏱ {formatDurationMinutes(event.durationMinutes)}</span>
           )}
-          <span>👥 {attendeeCount}{event.capacity ? `/${event.capacity}` : ''} going</span>
+          <span>
+            👥 {attendeeCount}
+            {event.capacity ? `/${event.capacity}` : ""} going
+          </span>
           {isPendingInvite && (
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
               Invitation pending
             </span>
           )}
           <span>
-            {event.status === 'completed'
-              ? '🗂 Past event'
-              : event.type === 'open'
-                ? '🌐 Open'
-                : '🔒 Invite only'}
+            {event.status === "completed"
+              ? "🗂 Past event"
+              : event.type === "open"
+                ? "🌐 Open"
+                : "🔒 Invite only"}
           </span>
           {event.lateCancellationCount ? (
             <span>⚠ {event.lateCancellationCount} late cancellations</span>
@@ -699,33 +1012,33 @@ export default function EventDetailPage() {
             <>
               {!myAttendee && (
                 <button
-                  onClick={() => handleRsvp('going')}
+                  onClick={() => handleRsvp("going")}
                   disabled={updatingRsvp}
                   className="wt-btn rounded-lg border border-[#3f6a3f] bg-[#3f6a3f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  {updatingRsvp ? 'Joining...' : 'Join'}
+                  {updatingRsvp ? "Joining..." : "Join"}
                 </button>
               )}
-              {myAttendee && myAttendee.rsvpStatus !== 'going' && (
+              {myAttendee && myAttendee.rsvpStatus !== "going" && (
                 <button
-                  onClick={() => handleRsvp('going')}
+                  onClick={() => handleRsvp("going")}
                   disabled={updatingRsvp}
                   className="wt-btn rounded-lg border border-[#3f6a3f] bg-[#3f6a3f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {updatingRsvp
-                    ? 'Joining...'
+                    ? "Joining..."
                     : isPendingInvite
-                      ? 'Join event'
-                      : 'Going'}
+                      ? "Join event"
+                      : "Going"}
                 </button>
               )}
-              {myAttendee && myAttendee.rsvpStatus === 'going' && !isHost && (
+              {myAttendee && myAttendee.rsvpStatus === "going" && !isHost && (
                 <button
-                  onClick={() => handleRsvp('not_going')}
+                  onClick={() => handleRsvp("not_going")}
                   disabled={updatingRsvp}
                   className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium disabled:opacity-50"
                 >
-                  {updatingRsvp ? 'Updating...' : "Can't make it"}
+                  {updatingRsvp ? "Updating..." : "Can't make it"}
                 </button>
               )}
             </>
@@ -733,43 +1046,60 @@ export default function EventDetailPage() {
           {isHost && canManageEvent && (
             <>
               {(isPlanning || isScheduling) && (
-                <button onClick={handleCreateInvite} className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium">
+                <button
+                  onClick={handleCreateInvite}
+                  className="wt-btn wt-btn-secondary px-4 py-2 text-sm font-medium"
+                >
                   Create Invite Link
                 </button>
               )}
-              {event.status === 'planning' && !isScheduling && (
+              {event.status === "planning" && !isScheduling && (
                 <button
                   onClick={handleGenerateRecommendations}
                   disabled={generatingRecommendations}
                   className="wt-btn wt-btn-primary px-4 py-2 text-sm font-medium"
                 >
                   {generatingRecommendations
-                    ? 'Generating...'
-                    : 'Generate Recommendations'}
+                    ? "Generating..."
+                    : "Generate Recommendations"}
                 </button>
               )}
-              {candidates.length > 0 && event.status === 'planning' && !isScheduling && (
-                <button onClick={handleStartVoting} className="wt-btn rounded-lg border border-[#4a7b90] bg-[#4a7b90] px-4 py-2 text-sm font-medium text-white">
-                  Start Voting
-                </button>
-              )}
+              {candidates.length > 0 &&
+                event.status === "planning" &&
+                !isScheduling && (
+                  <button
+                    onClick={handleStartVoting}
+                    className="wt-btn rounded-lg border border-[#4a7b90] bg-[#4a7b90] px-4 py-2 text-sm font-medium text-white"
+                  >
+                    Start Voting
+                  </button>
+                )}
             </>
           )}
         </div>
 
         {inviteLink && (
           <div className="wt-subtle mt-4 p-3">
-            <p className="mb-1 text-sm font-medium text-[var(--primary)]">Invite Link</p>
+            <p className="mb-1 text-sm font-medium text-[var(--primary)]">
+              Invite Link
+            </p>
             <div className="flex gap-2">
-              <input readOnly value={inviteLink} className="wt-input flex-1 py-1.5 text-sm" />
-              <button onClick={() => navigator.clipboard.writeText(inviteLink)} className="wt-btn wt-btn-primary px-3 py-1.5 text-sm">
+              <input
+                readOnly
+                value={inviteLink}
+                className="wt-input flex-1 py-1.5 text-sm"
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(inviteLink)}
+                className="wt-btn wt-btn-primary px-3 py-1.5 text-sm"
+              >
                 Copy
               </button>
             </div>
           </div>
         )}
 
-        {event.status === 'planning' && canViewEventBody && !hasPassed && (
+        {event.status === "planning" && canViewEventBody && !hasPassed && (
           <RecommendationPoolInsights
             stats={poolStats}
             loading={loadingPoolStats}
@@ -777,6 +1107,212 @@ export default function EventDetailPage() {
           />
         )}
 
+        {showTablePlanner && candidates.length > 0 && (
+          <div className="wt-subtle mt-4 p-4">
+            <button
+              type="button"
+              onClick={() => setTablePlannerExpanded((prev) => !prev)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Multi-table optimizer
+                </p>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {autoGeneratingTablePlan
+                    ? "Generating optimized table plan..."
+                    : hasRenderableTablePlan
+                      ? `Seated ${tablePlanRun!.result.objective.seatedCount}/${tablePlanRun!.result.objective.totalAttendees} (${Math.round(tablePlanRun!.result.objective.seatCoverageRate * 100)}%)`
+                      : "No plan available yet"}
+                </p>
+              </div>
+              <span
+                className={`text-sm text-[var(--muted)] transition-transform ${
+                  tablePlannerExpanded ? "rotate-90" : ""
+                }`}
+                aria-hidden="true"
+              >
+                ▶
+              </span>
+            </button>
+
+            {tablePlannerExpanded && (
+              <div className="mt-4 space-y-3">
+                {!hasRenderableTablePlan && autoGeneratingTablePlan && (
+                  <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
+                    Building plan from final votes and confirmed attendees...
+                  </div>
+                )}
+                {tablePlanRun && hasRenderableTablePlan && (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {tablePlanRun.locks.length > 0 && (
+                        <span className="rounded-full border border-indigo-400/40 bg-indigo-100/30 px-2 py-1 text-xs text-indigo-700">
+                          {tablePlanRun.locks.length} lock
+                          {tablePlanRun.locks.length === 1 ? "" : "s"}
+                        </span>
+                      )}
+                      {tablePlanRun.committedAt && (
+                        <span className="rounded-full border border-green-400/40 bg-green-100/30 px-2 py-1 text-xs text-green-700">
+                          Committed
+                        </span>
+                      )}
+                    </div>
+                    {tablePlanRun.locks.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                          Active locks
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {tablePlanRun.locks.map((lock) => {
+                            const gameTitle =
+                              tablePlanRun.result.tables.find(
+                                (table) => table.gameId === lock.gameId,
+                              )?.gameTitle ?? "Game";
+                            const playerName =
+                              tablePlanRun.result.tables
+                                .flatMap((table) => table.players)
+                                .find((player) => player.userId === lock.userId)
+                                ?.name ?? "Player";
+                            return (
+                              <button
+                                key={`${lock.userId}-${lock.gameId}`}
+                                type="button"
+                                onClick={() => {
+                                  void handleUnlockPlayerFromGame(
+                                    lock.userId,
+                                    lock.gameId,
+                                  );
+                                }}
+                                disabled={runningTablePlan}
+                                className="inline-flex items-center rounded-full border border-indigo-300/50 bg-indigo-100/30 px-2 py-1 text-xs text-indigo-800 disabled:opacity-50"
+                                title="Click to remove lock"
+                              >
+                                {playerName} {"->"} {gameTitle} ×
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {tablePlanRun.result.warnings.map((warning) => (
+                      <div
+                        key={warning}
+                        className="rounded-lg border border-amber-300/50 bg-amber-100/30 p-2 text-xs text-amber-800"
+                      >
+                        {warning}
+                      </div>
+                    ))}
+                    <div className="space-y-2">
+                      {tablePlanRun.result.tables.map((table) => (
+                        <div
+                          key={`${table.tableIndex}-${table.gameId}`}
+                          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3"
+                        >
+                          <p className="text-sm font-semibold">
+                            Table {table.tableIndex}: {table.gameTitle}
+                          </p>
+                          <p className="wt-muted text-xs">
+                            {table.players.length} players (min{" "}
+                            {table.minPlayers}, max {table.maxPlayers})
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {table.players.map((player) => (
+                              <button
+                                key={player.userId}
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    isPlayerLockedToGame(
+                                      player.userId,
+                                      table.gameId,
+                                    )
+                                  ) {
+                                    void handleUnlockPlayerFromGame(
+                                      player.userId,
+                                      table.gameId,
+                                    );
+                                    return;
+                                  }
+                                  void handleLockPlayerToGame(
+                                    player.userId,
+                                    table.gameId,
+                                  );
+                                }}
+                                disabled={runningTablePlan}
+                                className={`inline-flex items-center rounded-full border px-2 py-1 text-xs disabled:opacity-50 ${
+                                  player.userId === user?.id
+                                    ? "border-blue-500/60 bg-blue-100/60 text-blue-900 ring-1 ring-blue-400/40"
+                                    : isPlayerLockedToGame(
+                                          player.userId,
+                                          table.gameId,
+                                        )
+                                      ? "border-indigo-400/50 bg-indigo-100/40 text-indigo-800"
+                                      : "border-[var(--border)]"
+                                }`}
+                                title={
+                                  isPlayerLockedToGame(
+                                    player.userId,
+                                    table.gameId,
+                                  )
+                                    ? "Locked. Click to unlock."
+                                    : "Click to lock player to this game."
+                                }
+                              >
+                                {player.name}
+                                {player.userId === user?.id ? " (You)" : ""}
+                                {isPlayerLockedToGame(
+                                  player.userId,
+                                  table.gameId,
+                                )
+                                  ? " (locked)"
+                                  : ""}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {tablePlanRun.result.unseated.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-sm font-medium">Unseated</p>
+                        <div className="flex flex-wrap gap-2">
+                          {tablePlanRun.result.unseated.map((player) => (
+                            <span
+                              key={player.userId}
+                              className="inline-flex items-center rounded-full border border-red-300/50 bg-red-100/30 px-2 py-1 text-xs text-red-700"
+                              title={player.reason}
+                            >
+                              {player.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                {tablePlanRun &&
+                  !hasRenderableTablePlan &&
+                  !autoGeneratingTablePlan && (
+                    <div className="rounded-lg border border-amber-300/50 bg-amber-100/30 p-3 text-sm text-amber-800">
+                      Existing saved table plan data is incomplete for this
+                      event.
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleRunTableOptimizer();
+                        }}
+                        disabled={runningTablePlan}
+                        className="ml-2 underline underline-offset-2 disabled:opacity-50"
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-6">
@@ -810,35 +1346,37 @@ export default function EventDetailPage() {
               eventDurationMinutes={event.durationMinutes}
             />
           </div>
-        ) : event.status === 'voting' || event.status === 'confirmed' ? (
+        ) : event.status === "voting" || event.status === "confirmed" ? (
           <>
-            {event.status === 'confirmed' && showFallbackControls && (
+            {event.status === "confirmed" && showFallbackControls && (
               <div className="mb-4 flex items-center gap-2 border-b border-[var(--border)]">
                 <button
                   type="button"
-                  onClick={() => setEventTab('results')}
+                  onClick={() => setEventTab("results")}
                   className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
-                    eventTab === 'results'
-                      ? 'border-[var(--primary)] text-[var(--primary)]'
-                      : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
+                    eventTab === "results"
+                      ? "border-[var(--primary)] text-[var(--primary)]"
+                      : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
                   }`}
                 >
                   Results
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEventTab('fallback')}
+                  onClick={() => setEventTab("fallback")}
                   className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
-                    eventTab === 'fallback'
-                      ? 'border-[var(--primary)] text-[var(--primary)]'
-                      : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
+                    eventTab === "fallback"
+                      ? "border-[var(--primary)] text-[var(--primary)]"
+                      : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
                   }`}
                 >
                   Fallback options
                 </button>
               </div>
             )}
-            {event.status === 'confirmed' && showFallbackControls && eventTab === 'fallback' ? (
+            {event.status === "confirmed" &&
+            showFallbackControls &&
+            eventTab === "fallback" ? (
               <FallbackOptionsSection
                 candidates={candidates}
                 attendeeCount={attendeeCount}
@@ -855,8 +1393,10 @@ export default function EventDetailPage() {
                 myVotes={myVotes}
                 votingStatus={votingStatus}
                 status={event.status}
-                canSubmitVotes={myAttendee?.rsvpStatus === 'going'}
+                isHost={isHost}
+                canSubmitVotes={myAttendee?.rsvpStatus === "going"}
                 onVoted={loadEvent}
+                onFinishNow={handleFinishVotingNow}
                 onTelemetry={sendRecommendationTelemetry}
               />
             )}
@@ -865,7 +1405,7 @@ export default function EventDetailPage() {
           <RecommendationsSection
             eventId={id}
             candidates={candidates}
-            isPlanning={event.status === 'planning'}
+            isPlanning={event.status === "planning"}
             canEditRecommendations={canEditRecommendations}
             onChanged={loadEvent}
             onTelemetry={sendRecommendationTelemetry}
@@ -896,22 +1436,27 @@ export default function EventDetailPage() {
           void handleConfirmDelete();
         }}
       />
-
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    scheduling: 'bg-[#e2e8f4] text-[#3d4f6f]',
-    planning: 'bg-[#f1e0b8] text-[#6b521f]',
-    voting: 'bg-[#d8e4ea] text-[#2f586b]',
-    confirmed: 'bg-[#dbe8d3] text-[#355f39]',
-    active: 'bg-[#e1d8ea] text-[#5a3f78]',
-    completed: 'bg-[#e5dccf] text-[#5d5345]',
-    cancelled: 'bg-[#efd8d3] text-[#8a4137]',
+    scheduling: "bg-[#e2e8f4] text-[#3d4f6f]",
+    planning: "bg-[#f1e0b8] text-[#6b521f]",
+    voting: "bg-[#d8e4ea] text-[#2f586b]",
+    confirmed: "bg-[#dbe8d3] text-[#355f39]",
+    active: "bg-[#e1d8ea] text-[#5a3f78]",
+    completed: "bg-[#e5dccf] text-[#5d5345]",
+    cancelled: "bg-[#efd8d3] text-[#8a4137]",
   };
-  return <span className={`text-xs font-semibold px-3 py-1 rounded-full ${colors[status] || 'bg-[#e5dccf]'}`}>{status}</span>;
+  return (
+    <span
+      className={`text-xs font-semibold px-3 py-1 rounded-full ${colors[status] || "bg-[#e5dccf]"}`}
+    >
+      {status}
+    </span>
+  );
 }
 
 function AttendeesSection({
@@ -931,7 +1476,7 @@ function AttendeesSection({
   onOpenInviteFriends,
   onRemove,
 }: {
-  attendees: GameEvent['attendees'];
+  attendees: GameEvent["attendees"];
   isHost: boolean;
   canRemoveAttendees: boolean;
   hostUserId: string;
@@ -949,19 +1494,19 @@ function AttendeesSection({
 }) {
   const knownStatusGroups = [
     {
-      key: 'pending',
-      label: 'pending',
-      list: attendees.filter((a) => a.rsvpStatus === 'pending'),
+      key: "pending",
+      label: "pending",
+      list: attendees.filter((a) => a.rsvpStatus === "pending"),
     },
     {
-      key: 'going',
-      label: 'going',
-      list: attendees.filter((a) => a.rsvpStatus === 'going'),
+      key: "going",
+      label: "going",
+      list: attendees.filter((a) => a.rsvpStatus === "going"),
     },
     {
-      key: 'not_going',
-      label: 'not going',
-      list: attendees.filter((a) => a.rsvpStatus === 'not_going'),
+      key: "not_going",
+      label: "not going",
+      list: attendees.filter((a) => a.rsvpStatus === "not_going"),
     },
   ];
   const knownStatuses = new Set(knownStatusGroups.map((group) => group.key));
@@ -972,7 +1517,7 @@ function AttendeesSection({
     unknownStatusAttendees.length > 0
       ? [
           ...knownStatusGroups,
-          { key: 'other', label: 'other', list: unknownStatusAttendees },
+          { key: "other", label: "other", list: unknownStatusAttendees },
         ]
       : knownStatusGroups;
   const total = groups.reduce((sum, group) => sum + group.list.length, 0);
@@ -981,96 +1526,107 @@ function AttendeesSection({
   }
   return (
     <div className="space-y-4">
-      {groups.map((group) => group.list.length > 0 && (
-        <div key={group.key}>
-          <h3 className="wt-muted mb-2 text-sm font-semibold uppercase">
-            {group.label} ({group.list.length})
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {group.list.map((a) => (
-              <span key={a.id} className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] px-3 py-1 text-sm">
-                <span>{a.user?.name || 'Unknown attendee'}</span>
-                {a.userId &&
-                  a.userId !== currentUserId &&
-                  (friendIds.includes(a.userId) ? (
-                    <span
-                      className="inline-flex items-center justify-center text-green-600"
-                      title="Already friends"
-                      aria-label="Already friends"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <path d="M10 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM4.25 16.5A5.75 5.75 0 0 1 10 10.75a5.75 5.75 0 0 1 5.75 5.75.75.75 0 0 1-.75.75H5a.75.75 0 0 1-.75-.75Z" />
-                      </svg>
-                    </span>
-                  ) : requestedFriendIds.includes(a.userId) ? (
-                    <span
-                      className="inline-flex items-center justify-center text-amber-600"
-                      title="Request pending"
-                      aria-label="Request pending"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Zm.75 3.25a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 .3.6l2.5 1.875a.75.75 0 1 0 .9-1.2l-2.2-1.65V5.75Z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onAddFriend(a.userId!)}
-                      disabled={addingFriendUserId === a.userId}
-                      className="text-xs text-[var(--primary)] hover:text-[var(--primary-strong)] disabled:opacity-50"
-                    >
-                      {addingFriendUserId === a.userId ? 'Adding...' : '+'}
-                    </button>
-                  ))}
-                {a.cancellationReason ? (
-                  <span className="wt-muted text-xs" title={a.cancellationReason}>
-                    ({a.cancellationReason})
-                  </span>
-                ) : null}
-                {isHost && canRemoveAttendees && a.userId !== hostUserId && (
-                  <button
-                    type="button"
-                    onClick={() => onRemove(a.id)}
-                    className="text-sm font-bold leading-none text-red-600 hover:text-red-700"
-                    title="Remove attendee"
-                    aria-label="Remove attendee"
+      {groups.map(
+        (group) =>
+          group.list.length > 0 && (
+            <div key={group.key}>
+              <h3 className="wt-muted mb-2 text-sm font-semibold uppercase">
+                {group.label} ({group.list.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {group.list.map((a) => (
+                  <span
+                    key={a.id}
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] px-3 py-1 text-sm"
                   >
-                    ×
-                  </button>
+                    <span>{a.user?.name || "Unknown attendee"}</span>
+                    {a.userId &&
+                      a.userId !== currentUserId &&
+                      (friendIds.includes(a.userId) ? (
+                        <span
+                          className="inline-flex items-center justify-center text-green-600"
+                          title="Already friends"
+                          aria-label="Already friends"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          >
+                            <path d="M10 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM4.25 16.5A5.75 5.75 0 0 1 10 10.75a5.75 5.75 0 0 1 5.75 5.75.75.75 0 0 1-.75.75H5a.75.75 0 0 1-.75-.75Z" />
+                          </svg>
+                        </span>
+                      ) : requestedFriendIds.includes(a.userId) ? (
+                        <span
+                          className="inline-flex items-center justify-center text-amber-600"
+                          title="Request pending"
+                          aria-label="Request pending"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Zm.75 3.25a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 .3.6l2.5 1.875a.75.75 0 1 0 .9-1.2l-2.2-1.65V5.75Z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onAddFriend(a.userId!)}
+                          disabled={addingFriendUserId === a.userId}
+                          className="text-xs text-[var(--primary)] hover:text-[var(--primary-strong)] disabled:opacity-50"
+                        >
+                          {addingFriendUserId === a.userId ? "Adding..." : "+"}
+                        </button>
+                      ))}
+                    {a.cancellationReason ? (
+                      <span
+                        className="wt-muted text-xs"
+                        title={a.cancellationReason}
+                      >
+                        ({a.cancellationReason})
+                      </span>
+                    ) : null}
+                    {isHost &&
+                      canRemoveAttendees &&
+                      a.userId !== hostUserId && (
+                        <button
+                          type="button"
+                          onClick={() => onRemove(a.id)}
+                          className="text-sm font-bold leading-none text-red-600 hover:text-red-700"
+                          title="Remove attendee"
+                          aria-label="Remove attendee"
+                        >
+                          ×
+                        </button>
+                      )}
+                  </span>
+                ))}
+                {isHost && group.key === "going" && (
+                  <FriendPickerDropdown
+                    friends={inviteableFriends}
+                    loading={loadingInviteableFriends}
+                    onOpen={onOpenInviteFriends}
+                    onSelect={(friendId) => {
+                      if (invitingFriends) return;
+                      onInviteFriend(friendId);
+                    }}
+                    buttonTitle="Invite friend"
+                  />
                 )}
-              </span>
-            ))}
-            {isHost && group.key === 'going' && (
-              <FriendPickerDropdown
-                friends={inviteableFriends}
-                loading={loadingInviteableFriends}
-                onOpen={onOpenInviteFriends}
-                onSelect={(friendId) => {
-                  if (invitingFriends) return;
-                  onInviteFriend(friendId);
-                }}
-                buttonTitle="Invite friend"
-              />
-            )}
-          </div>
-        </div>
-      ))}
+              </div>
+            </div>
+          ),
+      )}
     </div>
   );
 }
@@ -1102,7 +1658,7 @@ function RecommendationsSection({
     try {
       let gameId = result.gameId;
       if (!gameId && result.bggId != null) {
-        const imported = await api.post<{ game: Game }>('/bgg/import-one', {
+        const imported = await api.post<{ game: Game }>("/bgg/import-one", {
           bggId: result.bggId,
         });
         gameId = imported.game.id;
@@ -1110,21 +1666,26 @@ function RecommendationsSection({
       if (!gameId) return;
 
       await api.post(`/events/${eventId}/recommendations/add`, { gameId });
-      onTelemetry('recommendation_manual_add', { gameId });
-      toast.success('Game added to recommendations');
+      onTelemetry("recommendation_manual_add", { gameId });
+      toast.success("Game added to recommendations");
       onChanged();
-    } catch { /* toast auto-shown */ }
+    } catch {
+      /* toast auto-shown */
+    }
   };
 
   const handleRemove = async (candidateId: string) => {
     setRemoving(candidateId);
     try {
       await api.delete(`/events/${eventId}/recommendations/${candidateId}`);
-      onTelemetry('recommendation_manual_remove', { candidateId });
-      toast.success('Game removed from recommendations');
+      onTelemetry("recommendation_manual_remove", { candidateId });
+      toast.success("Game removed from recommendations");
       onChanged();
-    } catch { /* toast auto-shown */ }
-    finally { setRemoving(null); }
+    } catch {
+      /* toast auto-shown */
+    } finally {
+      setRemoving(null);
+    }
   };
 
   return (
@@ -1148,7 +1709,10 @@ function RecommendationsSection({
       )}
 
       {!safeCandidates.length ? (
-        <p className="text-gray-500 text-center py-10">No recommendations yet. The host can generate them or add games manually.</p>
+        <p className="text-gray-500 text-center py-10">
+          No recommendations yet. The host can generate them or add games
+          manually.
+        </p>
       ) : (
         <div className="space-y-3">
           {safeCandidates.map((c) => (
@@ -1157,9 +1721,13 @@ function RecommendationsSection({
               game={c.game}
               explanation={c.explanation}
               showScore={Number(c.score)}
-              bggUrl={c.game.bggId ? `https://boardgamegeek.com/boardgame/${c.game.bggId}` : undefined}
+              bggUrl={
+                c.game.bggId
+                  ? `https://boardgamegeek.com/boardgame/${c.game.bggId}`
+                  : undefined
+              }
               onOpenExternal={() =>
-                onTelemetry('recommendation_click', {
+                onTelemetry("recommendation_click", {
                   gameId: c.gameId,
                   source: c.source,
                 })
@@ -1171,7 +1739,7 @@ function RecommendationsSection({
                     disabled={removing === c.id}
                     className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 transition"
                   >
-                    {removing === c.id ? 'Removing...' : 'Remove'}
+                    {removing === c.id ? "Removing..." : "Remove"}
                   </button>
                 ) : undefined
               }
@@ -1183,18 +1751,34 @@ function RecommendationsSection({
   );
 }
 
-function VotingSection({ eventId, candidates, results, myVotes, votingStatus, status, canSubmitVotes, onVoted, onTelemetry }: {
+function VotingSection({
+  eventId,
+  candidates,
+  results,
+  myVotes,
+  votingStatus,
+  status,
+  isHost,
+  canSubmitVotes,
+  onVoted,
+  onFinishNow,
+  onTelemetry,
+}: {
   eventId: string;
   candidates: EventGameCandidate[];
   results: VoteResult[];
   myVotes: EventVote[];
   votingStatus: VotingStatus | null;
   status: string;
+  isHost: boolean;
   canSubmitVotes: boolean;
   onVoted: () => void;
+  onFinishNow: () => void;
   onTelemetry: (eventName: string, payload?: Record<string, unknown>) => void;
 }) {
-  const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>([]);
+  const [rankings, setRankings] = useState<{ gameId: string; rank: number }[]>(
+    [],
+  );
   const [submitting, setSubmitting] = useState(false);
   const [draggingGameId, setDraggingGameId] = useState<string | null>(null);
   const hasSubmittedVotes = myVotes.length > 0;
@@ -1213,10 +1797,16 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
       .sort((a, b) => a.rank - b.rank);
 
     if (validMyVotes.length > 0) {
-      const rankedFromVotes = validMyVotes.map((v, i) => ({ gameId: v.gameId, rank: i + 1 }));
+      const rankedFromVotes = validMyVotes.map((v, i) => ({
+        gameId: v.gameId,
+        rank: i + 1,
+      }));
       const missingCandidates = candidates
         .filter((c) => !validMyVotes.some((v) => v.gameId === c.gameId))
-        .map((c, i) => ({ gameId: c.gameId, rank: rankedFromVotes.length + i + 1 }));
+        .map((c, i) => ({
+          gameId: c.gameId,
+          rank: rankedFromVotes.length + i + 1,
+        }));
       setRankings([...rankedFromVotes, ...missingCandidates]);
       return;
     }
@@ -1243,7 +1833,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
     setSubmitting(true);
     try {
       await api.post(`/events/${eventId}/voting`, { rankings });
-      onTelemetry('vote_submit', {
+      onTelemetry("vote_submit", {
         rankingCount: rankings.length,
         topGameIds: rankings.slice(0, 3).map((entry) => entry.gameId),
       });
@@ -1263,7 +1853,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
     setRankings(next.map((r, i) => ({ ...r, rank: i + 1 })));
-    onTelemetry('vote_rank_changed', {
+    onTelemetry("vote_rank_changed", {
       gameId: fromGameId,
       fromRank: fromIndex + 1,
       toRank: toIndex + 1,
@@ -1282,7 +1872,9 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
   const voteTiles = displayedRankings.map((r, idx) => {
     const game = gameMap.get(r.gameId);
     const bggUrl =
-      game?.bggId != null ? `https://boardgamegeek.com/boardgame/${game.bggId}` : undefined;
+      game?.bggId != null
+        ? `https://boardgamegeek.com/boardgame/${game.bggId}`
+        : undefined;
 
     return (
       <div
@@ -1293,7 +1885,8 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
         }}
         onDragOver={(e) => {
           e.preventDefault();
-          if (!hasSubmittedVotes && draggingGameId) reorderByGameId(draggingGameId, r.gameId);
+          if (!hasSubmittedVotes && draggingGameId)
+            reorderByGameId(draggingGameId, r.gameId);
         }}
         onDrop={(e) => {
           e.preventDefault();
@@ -1301,7 +1894,9 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
         }}
         onDragEnd={() => setDraggingGameId(null)}
         className={`flex items-center gap-3 bg-white border rounded-xl p-3 transition ${
-          draggingGameId === r.gameId ? 'border-indigo-300 opacity-60' : 'border-gray-200'
+          draggingGameId === r.gameId
+            ? "border-indigo-300 opacity-60"
+            : "border-gray-200"
         }`}
         title="Drag to reorder"
       >
@@ -1353,9 +1948,9 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
           <p className="text-xs text-gray-500 mt-0.5">
             {game?.minPlayers != null && game?.maxPlayers != null
               ? `${game.minPlayers}-${game.maxPlayers} players`
-              : ''}
-            {game?.playingTime != null ? ` · ${game.playingTime} min` : ''}
-            {game?.yearPublished != null ? ` · ${game.yearPublished}` : ''}
+              : ""}
+            {game?.playingTime != null ? ` · ${game.playingTime} min` : ""}
+            {game?.yearPublished != null ? ` · ${game.yearPublished}` : ""}
           </p>
         </div>
 
@@ -1385,7 +1980,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
 
   return (
     <div className="space-y-6">
-      {status === 'voting' && candidates.length > 0 && (
+      {status === "voting" && candidates.length > 0 && (
         <div>
           {!canSubmitVotes ? (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
@@ -1393,7 +1988,9 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
             </div>
           ) : !hasSubmittedVotes ? (
             <>
-              <h3 className="font-semibold mb-3">Rank your preferences (most wanted at top)</h3>
+              <h3 className="font-semibold mb-3">
+                Rank your preferences (most wanted at top)
+              </h3>
               <div className="space-y-2">{voteTiles}</div>
               <button
                 onClick={submitVotes}
@@ -1401,7 +1998,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
                 className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition"
                 type="button"
               >
-                {submitting ? 'Submitting...' : 'Submit Votes'}
+                {submitting ? "Submitting..." : "Submit Votes"}
               </button>
             </>
           ) : (
@@ -1410,64 +2007,78 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
         </div>
       )}
 
-      {votingStatus && !votingStatus.allVoted && (
+      {status === "voting" && votingStatus && !votingStatus.allVoted && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-          Results are hidden until everyone votes ({votingStatus.submittedVoters}/{votingStatus.expectedVoters} submitted).
+          Results are hidden until everyone votes (
+          {votingStatus.submittedVoters}/{votingStatus.expectedVoters}{" "}
+          submitted).
+          {status === "voting" && isHost && (
+            <button
+              type="button"
+              onClick={onFinishNow}
+              className="ml-2 underline underline-offset-2"
+            >
+              Finish voting now
+            </button>
+          )}
         </div>
       )}
 
-      {results.length > 0 && votingStatus?.allVoted && (
-        <div>
-          <h3 className="font-semibold mb-3">Current Results</h3>
-          <div className="space-y-2">
-            {results.map((r, idx) => {
-              const game = gameMap.get(r.gameId);
-              const bggUrl =
-                game?.bggId != null
-                  ? `https://boardgamegeek.com/boardgame/${game.bggId}`
-                  : undefined;
-              return (
-                <div
-                  key={r.gameId}
-                  className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3"
-                >
-                  <span className={`text-lg font-bold w-8 text-center ${idx === 0 ? 'text-yellow-500' : 'text-gray-400'}`}>
-                    {idx === 0 ? '🏆' : `#${idx + 1}`}
-                  </span>
-                  {game?.thumbnailUrl ? (
-                    <img
-                      src={game.thumbnailUrl}
-                      alt={game.title}
-                      className="w-10 h-10 object-cover rounded flex-shrink-0"
-                    />
-                  ) : null}
-                  {bggUrl ? (
-                    <a
-                      href={bggUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 font-medium truncate hover:underline"
-                      title="Open on BoardGameGeek"
+      {results.length > 0 &&
+        (status === "confirmed" || votingStatus?.allVoted) && (
+          <div>
+            <h3 className="font-semibold mb-3">Current Results</h3>
+            <div className="space-y-2">
+              {results.map((r, idx) => {
+                const game = gameMap.get(r.gameId);
+                const bggUrl =
+                  game?.bggId != null
+                    ? `https://boardgamegeek.com/boardgame/${game.bggId}`
+                    : undefined;
+                return (
+                  <div
+                    key={r.gameId}
+                    className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3"
+                  >
+                    <span
+                      className={`text-lg font-bold w-8 text-center ${idx === 0 ? "text-yellow-500" : "text-gray-400"}`}
                     >
-                      {game?.title || r.gameId}
-                    </a>
-                  ) : (
-                    <span className="flex-1 font-medium truncate">
-                      {game?.title || r.gameId}
+                      {idx === 0 ? "🏆" : `#${idx + 1}`}
                     </span>
-                  )}
-                  <span className="text-sm text-gray-500">
-                    {r.totalScore} pts
-                    {r.firstPlaceCount > 0
-                      ? ` · #1 votes: ${r.firstPlaceCount}`
-                      : ''}
-                  </span>
-                </div>
-              );
-            })}
+                    {game?.thumbnailUrl ? (
+                      <img
+                        src={game.thumbnailUrl}
+                        alt={game.title}
+                        className="w-10 h-10 object-cover rounded flex-shrink-0"
+                      />
+                    ) : null}
+                    {bggUrl ? (
+                      <a
+                        href={bggUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 font-medium truncate hover:underline"
+                        title="Open on BoardGameGeek"
+                      >
+                        {game?.title || r.gameId}
+                      </a>
+                    ) : (
+                      <span className="flex-1 font-medium truncate">
+                        {game?.title || r.gameId}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-500">
+                      {r.totalScore} pts
+                      {r.firstPlaceCount > 0
+                        ? ` · #1 votes: ${r.firstPlaceCount}`
+                        : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {hasSubmittedVotes && (
         <div className="mt-4">
@@ -1478,7 +2089,7 @@ function VotingSection({ eventId, candidates, results, myVotes, votingStatus, st
           >
             <span>My votes</span>
             <span aria-hidden className="text-gray-500">
-              {showMyVotes ? '▾' : '▸'}
+              {showMyVotes ? "▾" : "▸"}
             </span>
           </button>
 
@@ -1509,7 +2120,7 @@ function FallbackOptionsSection({
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
         <p className="text-sm text-gray-700">
           Sorry to hear some people could not make it. Here are games you might
-          still enjoy with the current group size ({attendeeCount}, down from{' '}
+          still enjoy with the current group size ({attendeeCount}, down from{" "}
           {votingStartAttendeeCount} when voting started).
         </p>
       </div>
@@ -1527,20 +2138,24 @@ function FallbackOptionsSection({
                 game={c.game}
                 explanation={c.explanation}
                 showScore={Number(c.score)}
-                bggUrl={c.game.bggId ? `https://boardgamegeek.com/boardgame/${c.game.bggId}` : undefined}
+                bggUrl={
+                  c.game.bggId
+                    ? `https://boardgamegeek.com/boardgame/${c.game.bggId}`
+                    : undefined
+                }
                 actions={
                   <button
                     onClick={() => onSetFallback(c.gameId)}
                     disabled={savingFallback}
                     className={`text-xs px-3 py-1 rounded-full transition ${
                       selectedFallbackGameId === c.gameId
-                        ? 'bg-orange-100 text-orange-800'
-                        : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                        ? "bg-orange-100 text-orange-800"
+                        : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
                     }`}
                   >
                     {selectedFallbackGameId === c.gameId
-                      ? 'Selected fallback'
-                      : 'Use as fallback'}
+                      ? "Selected fallback"
+                      : "Use as fallback"}
                   </button>
                 }
               />

@@ -3,12 +3,12 @@ export interface User {
   email: string;
   name: string;
   avatarUrl?: string;
-  socialProvider?: 'google' | 'apple' | string;
+  socialProvider?: "google" | "apple" | string;
   timezone?: string;
   preferredDuration?: number;
   preferredWeight?: number;
   subscriptionTier: string;
-  role: 'user' | 'admin';
+  role: "user" | "admin";
 }
 
 export interface Game {
@@ -85,7 +85,7 @@ export interface GameEvent {
   durationMinutes?: number;
   location?: string;
   capacity?: number;
-  type: 'invite' | 'open';
+  type: "invite" | "open";
   status: string;
   votingDeadline?: string;
   votingStartedAttendeeCount?: number;
@@ -168,7 +168,7 @@ export interface GroupMember {
   id: string;
   groupId: string;
   userId: string;
-  role: 'owner' | 'admin' | 'member';
+  role: "owner" | "admin" | "member";
   user?: User;
 }
 
@@ -245,7 +245,7 @@ export interface Friendship {
 }
 
 export interface FriendRequestByUserIdResponse {
-  status: 'sent' | 'already_friends' | 'request_pending';
+  status: "sent" | "already_friends" | "request_pending";
 }
 
 export interface InviteFriendsResponse {
@@ -257,7 +257,7 @@ export interface InviteFriendsResponse {
 export interface CalendarAccount {
   id: string;
   userId: string;
-  provider: 'google' | 'apple' | string;
+  provider: "google" | "apple" | string;
   status: string;
   scopes?: string[] | null;
   tokenExpiresAt?: string | null;
@@ -269,7 +269,7 @@ export interface EventCalendarSyncItem {
   id: string;
   eventId: string;
   userId: string;
-  provider: 'google' | 'apple' | string;
+  provider: "google" | "apple" | string;
   syncState: string;
   remoteEventId?: string | null;
   lastError?: string | null;
@@ -282,7 +282,7 @@ export interface EventCalendarSyncState {
   items: EventCalendarSyncItem[];
 }
 
-export type EventScheduleAnswer = 'yes' | 'no';
+export type EventScheduleAnswer = "yes" | "no";
 
 export interface EventScheduleSlotSummary {
   id: string;
@@ -309,12 +309,68 @@ export interface EventScheduleDetail {
   }[];
 }
 
+export interface MultiTablePlanSeat {
+  userId: string;
+  name: string;
+  fitScore: number;
+  reasons: string[];
+}
+
+export interface MultiTablePlanTable {
+  tableIndex: number;
+  gameId: string;
+  gameTitle: string;
+  minPlayers: number;
+  maxPlayers: number;
+  players: MultiTablePlanSeat[];
+}
+
+export interface MultiTablePlanResult {
+  eventId: string;
+  mode: "multi_table_optimizer";
+  objective: {
+    strategy: "coverage_then_fit";
+    seatedCount: number;
+    totalAttendees: number;
+    seatCoverageRate: number;
+    totalFitScore: number;
+  };
+  config: {
+    tableCount: number;
+    candidateGameCount: number;
+  };
+  tables: MultiTablePlanTable[];
+  unseated: {
+    userId: string;
+    name: string;
+    reasonCode: string;
+    reason: string;
+  }[];
+  warnings: string[];
+}
+
+export interface MultiTableRun {
+  runId: string;
+  eventId: string;
+  tableCount: number;
+  candidateGameIds: string[];
+  locks: Array<{
+    type: "player_game";
+    userId: string;
+    gameId: string;
+  }>;
+  parentRunId: string | null;
+  committedAt: string | null;
+  createdAt: string;
+  result: MultiTablePlanResult;
+}
+
 export interface AdminCatalogStats {
   syncState: {
     running: boolean;
     lastSuccessAt: string | null;
     lastAttemptAt: string | null;
-    lastAttemptStatus: 'success' | 'failed' | null;
+    lastAttemptStatus: "success" | "failed" | null;
     lastAttemptMessage: string | null;
     nextEligibleAt: string | null;
   };
@@ -343,7 +399,7 @@ export interface AdminUsersSummary {
 
 export interface AdminActivityItem {
   id: string;
-  type: 'user_created';
+  type: "user_created";
   title: string;
   subtitle: string;
   userId: string;

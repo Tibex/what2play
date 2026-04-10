@@ -167,6 +167,8 @@ export class RecommendationsService {
     const playerCount =
       (await this.eventsService.getGoingAttendeeCount?.(eventId)) ??
       attendeeIds.length;
+    const recommendationPlayerCount =
+      this.getRecommendationPlayerCount(playerCount);
 
     const ownedGames =
       await this.gamesService.getGamesOwnedByUsers(attendeeIds);
@@ -203,9 +205,18 @@ export class RecommendationsService {
     const scored: ScoredCandidate[] = [];
 
     for (const game of ownedGames) {
-      if (game.minPlayers > playerCount || game.maxPlayers < playerCount)
+      if (
+        !this.isGameCompatibleForRecommendation(
+          game,
+          playerCount,
+          recommendationPlayerCount,
+        )
+      )
         continue;
-      if (this.shouldExcludeByNotRecommendedPoll(game, playerCount)) continue;
+      if (
+        this.shouldExcludeByNotRecommendedPoll(game, recommendationPlayerCount)
+      )
+        continue;
 
       const explanation: Record<string, string> = {};
       const scoreBreakdown: Record<string, number> = {};
@@ -213,7 +224,9 @@ export class RecommendationsService {
       scoreBreakdown['base'] = RECOMMENDATION_WEIGHTS.base;
 
       explanation['players'] =
-        `Fits ${this.formatPlayerCountLabel(playerCount)} (${game.minPlayers}-${game.maxPlayers})`;
+        playerCount <= 8
+          ? `Fits ${this.formatPlayerCountLabel(playerCount)} (${game.minPlayers}-${game.maxPlayers})`
+          : `Table-fit for ~${recommendationPlayerCount} players (${game.minPlayers}-${game.maxPlayers})`;
 
       const gameRatings = ratingsByGame.get(game.id);
       const perUserRatings = ratingsByGameByUser.get(game.id);
@@ -354,17 +367,23 @@ export class RecommendationsService {
           `Duration fit: ${game.playingTime}m vs group pref ${Math.round(averagePreferredDuration)}m`;
       }
 
-      const bestPlayerFit = this.getBestPlayersFitScore(game, playerCount);
+      const bestPlayerFit = this.getBestPlayersFitScore(
+        game,
+        recommendationPlayerCount,
+      );
       const bestPlayerContribution =
         bestPlayerFit * RECOMMENDATION_WEIGHTS.bggBestPlayersFit;
       score += bestPlayerContribution;
       scoreBreakdown['best_players_fit'] = bestPlayerContribution;
       explanation['best_players'] = this.getBestPlayersExplanation(
         game,
-        playerCount,
+        recommendationPlayerCount,
         bestPlayerFit,
       );
-      const lowBestPenalty = this.getLowBestPlayerDampener(game, playerCount);
+      const lowBestPenalty = this.getLowBestPlayerDampener(
+        game,
+        recommendationPlayerCount,
+      );
       if (lowBestPenalty > 0) {
         score -= lowBestPenalty;
         scoreBreakdown['low_best_players_penalty'] = -lowBestPenalty;
@@ -412,13 +431,19 @@ export class RecommendationsService {
 
     if (shouldExpandDiscovery) {
       const discoveryPool = await this.gamesService.getDiscoveryGames(
-        playerCount,
+        recommendationPlayerCount,
         [...new Set([...(event.excludedGameIds || []), ...gameIds])],
         DISCOVERY_CANDIDATE_LIMIT,
       );
 
       for (const game of discoveryPool) {
-        if (this.shouldExcludeByNotRecommendedPoll(game, playerCount)) continue;
+        if (
+          this.shouldExcludeByNotRecommendedPoll(
+            game,
+            recommendationPlayerCount,
+          )
+        )
+          continue;
 
         const explanation: Record<string, string> = {
           source: 'External discovery candidate',
@@ -429,7 +454,9 @@ export class RecommendationsService {
         scoreBreakdown['base_discovery'] = score;
 
         explanation['players'] =
-          `Fits ${this.formatPlayerCountLabel(playerCount)} (${game.minPlayers}-${game.maxPlayers})`;
+          playerCount <= 8
+            ? `Fits ${this.formatPlayerCountLabel(playerCount)} (${game.minPlayers}-${game.maxPlayers})`
+            : `Table-fit for ~${recommendationPlayerCount} players (${game.minPlayers}-${game.maxPlayers})`;
 
         if (game.bggRating) {
           const bggFit = this.clamp(Number(game.bggRating) / 10, 0, 1);
@@ -471,17 +498,23 @@ export class RecommendationsService {
             `Complexity fit: ${Number(game.weight).toFixed(2)} vs group pref ${averagePreferredWeight.toFixed(2)}`;
         }
 
-        const bestPlayerFit = this.getBestPlayersFitScore(game, playerCount);
+        const bestPlayerFit = this.getBestPlayersFitScore(
+          game,
+          recommendationPlayerCount,
+        );
         const bestPlayerContribution =
           bestPlayerFit * RECOMMENDATION_WEIGHTS.bggBestPlayersFit;
         score += bestPlayerContribution;
         scoreBreakdown['best_players_fit'] = bestPlayerContribution;
         explanation['best_players'] = this.getBestPlayersExplanation(
           game,
-          playerCount,
+          recommendationPlayerCount,
           bestPlayerFit,
         );
-        const lowBestPenalty = this.getLowBestPlayerDampener(game, playerCount);
+        const lowBestPenalty = this.getLowBestPlayerDampener(
+          game,
+          recommendationPlayerCount,
+        );
         if (lowBestPenalty > 0) {
           score -= lowBestPenalty;
           scoreBreakdown['low_best_players_penalty'] = -lowBestPenalty;
@@ -1768,6 +1801,29 @@ export class RecommendationsService {
     if (!durations.length) return null;
     const sum = durations.reduce((acc, duration) => acc + duration, 0);
     return sum / durations.length;
+  }
+
+  private getRecommendationPlayerCount(attendeeCount: number): number {
+    if (attendeeCount <= 0) return 4;
+    if (attendeeCount <= 8) return attendeeCount;
+    // Large events are better modeled as multiple tables.
+    return 4;
+  }
+
+  private isGameCompatibleForRecommendation(
+    game: Game,
+    attendeeCount: number,
+    recommendationPlayerCount: number,
+  ): boolean {
+    if (attendeeCount <= 8) {
+      return !(
+        game.minPlayers > attendeeCount || game.maxPlayers < attendeeCount
+      );
+    }
+    return !(
+      game.minPlayers > recommendationPlayerCount ||
+      game.maxPlayers < recommendationPlayerCount
+    );
   }
 
   private formatPlayerCountLabel(playerCount: number): string {

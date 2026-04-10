@@ -6,6 +6,8 @@ import { EventInvite } from '../entities/event-invite.entity';
 import { EventReport } from '../entities/event-report.entity';
 import { EventScheduleSlot } from '../entities/event-schedule-slot.entity';
 import { EventScheduleResponse } from '../entities/event-schedule-response.entity';
+import { EventMultiTableRun } from '../entities/event-multi-table-run.entity';
+import { EventVote } from '../entities/event-vote.entity';
 import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
 import { RecommendationsModule } from '../recommendations/recommendations.module';
@@ -17,6 +19,7 @@ import { EventsLifecycleService } from './events-lifecycle.service';
 import { RolesGuard } from '../auth/roles.guard';
 import { CalendarModule } from '../calendar/calendar.module';
 import { GroupsModule } from '../groups/groups.module';
+import { MultiTableOptimizerService } from './multi-table-optimizer.service';
 
 @Module({
   imports: [
@@ -27,6 +30,8 @@ import { GroupsModule } from '../groups/groups.module';
       EventReport,
       EventScheduleSlot,
       EventScheduleResponse,
+      EventMultiTableRun,
+      EventVote,
     ]),
     forwardRef(() => RecommendationsModule),
     VotingModule,
@@ -36,7 +41,12 @@ import { GroupsModule } from '../groups/groups.module';
     CalendarModule,
     GroupsModule,
   ],
-  providers: [EventsService, EventsLifecycleService, RolesGuard],
+  providers: [
+    EventsService,
+    EventsLifecycleService,
+    MultiTableOptimizerService,
+    RolesGuard,
+  ],
   controllers: [EventsController],
   exports: [EventsService],
 })
