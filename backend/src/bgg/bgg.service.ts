@@ -40,6 +40,8 @@ type BggSearchDetail = {
   yearPublished?: number;
 };
 
+type SyncSelectedItem = { gameId?: string; bggId?: number };
+
 @Injectable()
 export class BggService {
   private readonly logger = new Logger(BggService.name);
@@ -283,6 +285,95 @@ export class BggService {
     });
     await this.gamesService.addToCollection(userId, game.id);
     return { game };
+  }
+
+  async syncSelectedToBggCollection(
+    userId: string,
+    selectedItems: SyncSelectedItem[],
+  ): Promise<{
+    added: number;
+    skipped: Array<{ item: SyncSelectedItem; reason: string }>;
+    failed: Array<{ item: SyncSelectedItem; reason: string }>;
+  }> {
+    const account = await this.getLinkedAccount(userId);
+    if (!account?.externalUsername) {
+      throw new BadRequestException('No linked BGG account found');
+    }
+    const targetIds = new Set<number>();
+    for (const item of selectedItems) {
+      if (item.bggId != null) {
+        targetIds.add(item.bggId);
+        continue;
+      }
+      if (!item.gameId) continue;
+      const games = await this.gamesService.getUserOwnedGamesByIds(userId, [
+        item.gameId,
+      ]);
+      const game = games[0];
+      if (game?.bggId) targetIds.add(game.bggId);
+    }
+    const skipped: Array<{ item: SyncSelectedItem; reason: string }> = [];
+    const failed: Array<{ item: SyncSelectedItem; reason: string }> = [];
+    let added = 0;
+    for (const item of selectedItems) {
+      const bggId = item.bggId ?? null;
+      if (!bggId && !item.gameId) {
+        skipped.push({ item, reason: 'No gameId or bggId' });
+        continue;
+      }
+      const resolvedId =
+        bggId ??
+        (
+          await this.gamesService.getUserOwnedGamesByIds(userId, [
+            item.gameId as string,
+          ])
+        )[0]?.bggId;
+      if (!resolvedId) {
+        skipped.push({ item, reason: 'Item has no BGG mapping' });
+        continue;
+      }
+      try {
+        await this.addGameToBggCollection(account.externalUsername, resolvedId);
+        added++;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'sync failed';
+        failed.push({ item, reason: message });
+      }
+    }
+    return { added, skipped, failed };
+  }
+
+  async exportSelectionAsCsv(
+    userId: string,
+    gameIds: string[],
+  ): Promise<string> {
+    const games = await this.gamesService.getUserOwnedGamesByIds(
+      userId,
+      gameIds,
+    );
+    const rows = ['gameId,bggId,title'];
+    for (const game of games) {
+      const title = `"${(game.title || '').replace(/"/g, '""')}"`;
+      rows.push(`${game.id},${game.bggId ?? ''},${title}`);
+    }
+    return rows.join('\n');
+  }
+
+  async exportSelectionAsXml(
+    userId: string,
+    gameIds: string[],
+  ): Promise<string> {
+    const games = await this.gamesService.getUserOwnedGamesByIds(
+      userId,
+      gameIds,
+    );
+    const items = games
+      .map((game) => {
+        const escapedTitle = this.escapeXml(game.title || '');
+        return `<item objecttype="thing" objectid="${game.bggId ?? ''}" subtype="boardgame"><name>${escapedTitle}</name></item>`;
+      })
+      .join('');
+    return `<?xml version="1.0" encoding="utf-8"?><items>${items}</items>`;
   }
 
   async importTopRankedGames(
@@ -1366,6 +1457,32 @@ export class BggService {
 
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private escapeXml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  private async addGameToBggCollection(
+    username: string,
+    bggId: number,
+  ): Promise<void> {
+    const token = this.getBggHeaders().Authorization?.replace('Bearer ', '');
+    if (!token)
+      throw new BadRequestException('BGG_API_TOKEN is not configured.');
+    const url = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&id=${bggId}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new BadRequestException(`BGG sync failed (${response.status})`);
+    }
   }
 
   private decodeHtmlEntities(value: string): string {

@@ -9,9 +9,11 @@ import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
+import { VisionModule } from '../vision/vision.module';
 
 @Module({
   imports: [
+    VisionModule,
     TypeOrmModule.forFeature([
       Game,
       UserGameOwnership,

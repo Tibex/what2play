@@ -8,6 +8,8 @@ import { Event } from '../entities/event.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
+import { ConfigService } from '@nestjs/config';
+import { GoogleVisionService } from '../vision/google-vision.service';
 
 describe('GamesService', () => {
   let service: GamesService;
@@ -49,6 +51,8 @@ describe('GamesService', () => {
   const mockCandidatesRepo = {
     createQueryBuilder: jest.fn(),
   };
+  const mockConfig = { get: jest.fn() };
+  const mockVision = { detectTextBlocks: jest.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -73,6 +77,8 @@ describe('GamesService', () => {
           provide: getRepositoryToken(EventGameCandidate),
           useValue: mockCandidatesRepo,
         },
+        { provide: ConfigService, useValue: mockConfig },
+        { provide: GoogleVisionService, useValue: mockVision },
       ],
     }).compile();
 
@@ -118,5 +124,52 @@ describe('GamesService', () => {
         playingTime: 180,
       }),
     );
+  });
+
+  it('assigns stable detection numbers when parsing shelf photo', async () => {
+    mockVision.detectTextBlocks.mockResolvedValue([
+      {
+        text: 'Wingspan',
+        boundingBox: { x: 0.4, y: 0.2, width: 0.2, height: 0.1 },
+      },
+      {
+        text: 'Catan',
+        boundingBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.1 },
+      },
+    ]);
+    mockOwnershipRepo.find.mockResolvedValue([]);
+    jest
+      .spyOn(service, 'searchGames')
+      .mockImplementation(async (query: string) => {
+        if (query === 'Catan') {
+          return [
+            {
+              id: 'g-catan',
+              title: 'Catan',
+              minPlayers: 3,
+              maxPlayers: 4,
+            } as Game,
+          ];
+        }
+        if (query === 'Wingspan') {
+          return [
+            {
+              id: 'g-wing',
+              title: 'Wingspan',
+              minPlayers: 1,
+              maxPlayers: 5,
+            } as Game,
+          ];
+        }
+        return [];
+      });
+
+    const parsed = await service.parseShelfPhoto('u1', Buffer.from('image'));
+
+    expect(parsed.candidates).toHaveLength(2);
+    expect(parsed.candidates[0].detectionNumber).toBe(1);
+    expect(parsed.candidates[0].title).toBe('Catan');
+    expect(parsed.candidates[1].detectionNumber).toBe(2);
+    expect(parsed.candidates[1].title).toBe('Wingspan');
   });
 });

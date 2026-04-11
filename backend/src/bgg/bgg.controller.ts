@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
   Logger,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,6 +25,8 @@ import { BggService } from './bgg.service';
 import { LinkBggDto } from './dto/link-bgg.dto';
 import { ImportBggXmlDto } from './dto/import-bgg-xml.dto';
 import { ImportOneGameDto } from './dto/import-one-game.dto';
+import { SyncSelectedDto } from './dto/sync-selected.dto';
+import type { Response } from 'express';
 
 @ApiTags('bgg')
 @ApiBearerAuth()
@@ -83,6 +86,58 @@ export class BggController {
   })
   importOne(@Request() req, @Body() dto: ImportOneGameDto) {
     return this.bggService.importOneGame(req.user.id, dto.bggId);
+  }
+
+  @Post('collection/sync-selected')
+  @ApiOperation({ summary: 'Sync selected items to BGG collection' })
+  syncSelected(@Request() req, @Body() dto: SyncSelectedDto) {
+    return this.bggService.syncSelectedToBggCollection(req.user.id, dto.items);
+  }
+
+  @Get('collection/export.csv')
+  @ApiOperation({ summary: 'Export selected collection items as CSV' })
+  async exportCsv(
+    @Request() req,
+    @Query('gameIds') gameIdsParam: string,
+    @Res() res: Response,
+  ) {
+    const gameIds = (gameIdsParam || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const csv = await this.bggService.exportSelectionAsCsv(
+      req.user.id,
+      gameIds,
+    );
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="bgg-export.csv"',
+    );
+    res.send(csv);
+  }
+
+  @Get('collection/export.xml')
+  @ApiOperation({ summary: 'Export selected collection items as BGG XML' })
+  async exportXml(
+    @Request() req,
+    @Query('gameIds') gameIdsParam: string,
+    @Res() res: Response,
+  ) {
+    const gameIds = (gameIdsParam || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const xml = await this.bggService.exportSelectionAsXml(
+      req.user.id,
+      gameIds,
+    );
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="bgg-export.xml"',
+    );
+    res.send(xml);
   }
 
   @Post('admin/import-top-catalog')

@@ -13,10 +13,15 @@ interface RequestOptions {
   showErrorToast?: boolean;
 }
 
+function getAuthToken(useAuth: boolean): string | null {
+  return useAuth && globalThis.window !== undefined
+    ? localStorage.getItem('accessToken')
+    : null;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const useAuth = options.auth !== false;
-  const token =
-    useAuth && globalThis.window !== undefined ? localStorage.getItem('accessToken') : null;
+  const token = getAuthToken(useAuth);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -100,4 +105,52 @@ export const api = {
   ) => request<T>(path, { method: 'PATCH', body, ...opts }),
   delete: <T>(path: string, opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>) =>
     request<T>(path, { method: 'DELETE', ...opts }),
+  postForm: async <T>(
+    path: string,
+    formData: FormData,
+    opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>,
+  ) => {
+    const useAuth = opts?.auth !== false;
+    const token = getAuthToken(useAuth);
+    const headers: Record<string, string> = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+    };
+    const res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Request failed' }));
+      const msg = error.message || `HTTP ${res.status}`;
+      if (opts?.showErrorToast !== false) toast.error(msg);
+      throw new Error(msg);
+    }
+    const text = await res.text();
+    return text ? (JSON.parse(text) as T) : ({} as T);
+  },
+  download: async (
+    path: string,
+    opts?: Pick<RequestOptions, 'auth' | 'showErrorToast'>,
+  ): Promise<Blob> => {
+    const useAuth = opts?.auth !== false;
+    const token = getAuthToken(useAuth);
+    const headers: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
+    const res = await fetch(`${API_URL}${path}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const msg = `HTTP ${res.status}`;
+      if (opts?.showErrorToast !== false) toast.error(msg);
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
 };

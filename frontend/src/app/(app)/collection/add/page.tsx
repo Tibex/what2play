@@ -6,11 +6,21 @@ import { api } from '@/lib/api';
 import GameSearchAdd, {
   type GameSearchAddResult,
 } from '@/components/GameSearchAdd';
-import type { Game, GameOwnership } from '@/lib/types';
+import ShelfPhotoUpload from '@/components/ShelfPhotoUpload';
+import ShelfParseReview from '@/components/ShelfParseReview';
+import ShelfDetectionOverlay from '@/components/ShelfDetectionOverlay';
+import type {
+  Game,
+  GameOwnership,
+  ParseShelfPhotoResponse,
+  ShelfParseCandidate,
+} from '@/lib/types';
 
 export default function CollectionAddPage() {
   const [collection, setCollection] = useState<GameOwnership[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shelfCandidates, setShelfCandidates] = useState<ShelfParseCandidate[]>([]);
+  const [shelfImageUrl, setShelfImageUrl] = useState('');
 
   const refreshCollection = async () => {
     const data = await api.get<GameOwnership[]>('/games/collection');
@@ -59,6 +69,45 @@ export default function CollectionAddPage() {
     await refreshCollection();
   };
 
+  const handleShelfUpload = async (file: File, previewUrl: string) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const parsed = await api.postForm<ParseShelfPhotoResponse>(
+      '/games/collection/parse-shelf',
+      formData,
+    );
+    setShelfCandidates(parsed.candidates);
+    setShelfImageUrl(previewUrl);
+  };
+
+  const handleShelfConfirm = async (selected: ShelfParseCandidate[]) => {
+    const payload = {
+      items: selected.map((candidate) => ({
+        gameId: candidate.gameId,
+        bggId: candidate.bggId,
+        title: candidate.title,
+      })),
+    };
+    const result = await api.post<{ addedGameIds: string[] }>('/games/collection/batch-add', payload);
+    await api.post('/bgg/collection/sync-selected', {
+      items: payload.items.map((item) => ({ gameId: item.gameId, bggId: item.bggId })),
+    });
+    toast.success(`Added ${result.addedGameIds.length} game(s)`);
+    await refreshCollection();
+  };
+
+  const exportSelected = async (selected: ShelfParseCandidate[], format: 'csv' | 'xml') => {
+    const gameIds = selected.map((candidate) => candidate.gameId).filter(Boolean).join(',');
+    if (!gameIds) return;
+    const blob = await api.download(`/bgg/collection/export.${format}?gameIds=${encodeURIComponent(gameIds)}`);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bgg-export.${format}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -80,6 +129,18 @@ export default function CollectionAddPage() {
         onAdd={handleAdd}
         containerClassName="wt-card mb-6 p-6"
       />
+      <ShelfPhotoUpload onUpload={handleShelfUpload} />
+      {shelfImageUrl && shelfCandidates.length > 0 && (
+        <div className="space-y-4">
+          <ShelfDetectionOverlay imageUrl={shelfImageUrl} candidates={shelfCandidates} />
+          <ShelfParseReview
+            candidates={shelfCandidates}
+            onConfirm={handleShelfConfirm}
+            onExportCsv={(selected) => exportSelected(selected, 'csv')}
+            onExportXml={(selected) => exportSelected(selected, 'xml')}
+          />
+        </div>
+      )}
     </div>
   );
 }

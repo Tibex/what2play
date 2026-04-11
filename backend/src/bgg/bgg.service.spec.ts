@@ -38,6 +38,7 @@ describe('BggService', () => {
     findOrCreateByBggId: jest.fn(),
     addToCollection: jest.fn(),
     rateGame: jest.fn(),
+    getUserOwnedGamesByIds: jest.fn(),
   };
 
   const mockConfigService = {
@@ -256,5 +257,20 @@ describe('BggService', () => {
     expect(results).toHaveLength(1);
     expect(results[0].bggId).toBe(92);
     expect(results[0].title).toBe('Ticket to Ride');
+  });
+
+  it('exports selected games as CSV and XML', async () => {
+    mockGamesService.getUserOwnedGamesByIds.mockResolvedValue([
+      { id: 'g1', bggId: 13, title: 'Catan' },
+      { id: 'g2', bggId: 822, title: 'Carcassonne' },
+    ]);
+
+    const csv = await service.exportSelectionAsCsv('u1', ['g1', 'g2']);
+    const xml = await service.exportSelectionAsXml('u1', ['g1', 'g2']);
+
+    expect(csv).toContain('gameId,bggId,title');
+    expect(csv).toContain('g1,13,"Catan"');
+    expect(xml).toContain('<item objecttype="thing" objectid="13"');
+    expect(xml).toContain('<name>Carcassonne</name>');
   });
 });

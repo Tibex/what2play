@@ -8,6 +8,9 @@ import {
   Body,
   UseGuards,
   Request,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,13 +23,15 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { GamesService } from './games.service';
 import { RateGameDto } from './dto/rate-game.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { BatchAddCollectionDto } from './dto/batch-add-collection.dto';
 
 @ApiTags('games')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api/games')
 export class GamesController {
-  constructor(private gamesService: GamesService) {}
+  constructor(private readonly gamesService: GamesService) {}
 
   @Get('search')
   @ApiOperation({ summary: 'Search games by title' })
@@ -51,6 +56,39 @@ export class GamesController {
   @ApiOperation({ summary: 'Remove game from collection' })
   removeFromCollection(@Request() req, @Param('gameId') gameId: string) {
     return this.gamesService.removeFromCollection(req.user.id, gameId);
+  }
+
+  @Post('collection/parse-shelf')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      limits: { fileSize: 8 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        cb(
+          allowed.includes(file.mimetype)
+            ? null
+            : new BadRequestException('Unsupported image type'),
+          allowed.includes(file.mimetype),
+        );
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Parse shelf photo into candidate games' })
+  parseShelfPhoto(
+    @Request() req,
+    @UploadedFile() file?: { mimetype: string; buffer: Buffer },
+  ) {
+    if (!file) throw new BadRequestException('Missing photo upload');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      throw new BadRequestException('Unsupported image type');
+    }
+    return this.gamesService.parseShelfPhoto(req.user.id, file.buffer);
+  }
+
+  @Post('collection/batch-add')
+  @ApiOperation({ summary: 'Batch add selected games to collection' })
+  batchAddCollection(@Request() req, @Body() dto: BatchAddCollectionDto) {
+    return this.gamesService.batchAddToCollection(req.user.id, dto.items);
   }
 
   @Delete('admin/:gameId')

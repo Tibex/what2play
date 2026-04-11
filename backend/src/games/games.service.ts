@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Game } from '../entities/game.entity';
 import { UserGameOwnership } from '../entities/user-game-ownership.entity';
 import { UserGameRating } from '../entities/user-game-rating.entity';
@@ -9,6 +14,7 @@ import { EventAttendee } from '../entities/event-attendee.entity';
 import { EventFeedback } from '../entities/event-feedback.entity';
 import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
+import { GoogleVisionService } from '../vision/google-vision.service';
 
 type GameCollectionPerformance = {
   pickedCount: number;
@@ -21,6 +27,12 @@ type GameCollectionPerformance = {
 export type UserCollectionItem = UserGameOwnership & {
   game: Game;
   performance: GameCollectionPerformance;
+};
+
+type BatchAddItem = {
+  gameId?: string;
+  bggId?: number;
+  title?: string;
 };
 
 @Injectable()
@@ -40,6 +52,8 @@ export class GamesService {
     private votesRepo: Repository<EventVote>,
     @InjectRepository(EventGameCandidate)
     private candidatesRepo: Repository<EventGameCandidate>,
+    private config: ConfigService,
+    private vision: GoogleVisionService,
   ) {}
 
   async searchGames(query: string): Promise<Game[]> {
@@ -325,6 +339,269 @@ export class GamesService {
     return Array.from(gameMap.values());
   }
 
+  async parseShelfPhoto(
+    userId: string,
+    imageBuffer: Buffer,
+  ): Promise<{
+    candidates: Array<{
+      detectionNumber: number;
+      rawText: string;
+      confidence?: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+      title?: string;
+      gameId?: string;
+      bggId?: number;
+      source: 'local' | 'bgg';
+      isOwned: boolean;
+    }>;
+  }> {
+    const blocks = await this.vision.detectTextBlocks(imageBuffer);
+    const owned = await this.getUserCollection(userId);
+    const ownedGameIds = new Set(owned.map((o) => o.gameId));
+    const ownedBggIds = new Set(
+      owned.map((o) => o.game.bggId).filter((id): id is number => id != null),
+    );
+
+    const cleaned = this.cleanOcrBlocks(blocks);
+    const sorted = [...cleaned].sort((a, b) =>
+      a.boundingBox.y === b.boundingBox.y
+        ? a.boundingBox.x - b.boundingBox.x
+        : a.boundingBox.y - b.boundingBox.y,
+    );
+    const candidates: Array<{
+      detectionNumber: number;
+      rawText: string;
+      confidence?: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+      title?: string;
+      gameId?: string;
+      bggId?: number;
+      source: 'local' | 'bgg';
+      isOwned: boolean;
+    }> = [];
+
+    for (let i = 0; i < sorted.length; i++) {
+      const row = sorted[i];
+      const local = await this.searchGames(row.text);
+      const localBest = this.pickBestLocalMatch(row.text, local);
+      if (localBest) {
+        candidates.push({
+          detectionNumber: i + 1,
+          rawText: row.text,
+          confidence: row.confidence,
+          boundingBox: row.boundingBox,
+          title: localBest.title,
+          gameId: localBest.id,
+          bggId: localBest.bggId,
+          source: 'local',
+          isOwned:
+            ownedGameIds.has(localBest.id) ||
+            (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
+        });
+        continue;
+      }
+      const bgg = await this.fetchBestBggMatch(row.text);
+      if (bgg) {
+        candidates.push({
+          detectionNumber: i + 1,
+          rawText: row.text,
+          confidence: row.confidence,
+          boundingBox: row.boundingBox,
+          title: bgg.title,
+          bggId: bgg.bggId,
+          source: 'bgg',
+          isOwned: ownedBggIds.has(bgg.bggId),
+        });
+      }
+    }
+
+    const seenGameIds = new Set<string>();
+    const seenBggIds = new Set<number>();
+    const deduped = candidates.filter((candidate) => {
+      if (candidate.gameId) {
+        if (seenGameIds.has(candidate.gameId)) return false;
+        seenGameIds.add(candidate.gameId);
+      }
+      if (candidate.bggId != null) {
+        if (seenBggIds.has(candidate.bggId)) return false;
+        seenBggIds.add(candidate.bggId);
+      }
+      return true;
+    });
+    return { candidates: deduped };
+  }
+
+  async batchAddToCollection(
+    userId: string,
+    items: BatchAddItem[],
+  ): Promise<{ added: number; skipped: number; addedGameIds: string[] }> {
+    let added = 0;
+    let skipped = 0;
+    const addedGameIds: string[] = [];
+    for (const item of items) {
+      if (item.gameId) {
+        const result = await this.addToCollection(userId, item.gameId);
+        if (result) {
+          added++;
+          addedGameIds.push(item.gameId);
+        } else {
+          skipped++;
+        }
+        continue;
+      }
+      if (item.bggId != null) {
+        const details = await this.fetchBggThingById(item.bggId);
+        if (!details) {
+          skipped++;
+          continue;
+        }
+        const game = await this.findOrCreateByBggId(item.bggId, details);
+        await this.addToCollection(userId, game.id);
+        added++;
+        addedGameIds.push(game.id);
+        continue;
+      }
+      skipped++;
+    }
+    return { added, skipped, addedGameIds };
+  }
+
+  private cleanOcrBlocks(
+    blocks: Array<{
+      text: string;
+      confidence?: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+    }>,
+  ): Array<{
+    text: string;
+    confidence?: number;
+    boundingBox: { x: number; y: number; width: number; height: number };
+  }> {
+    const noiseWords = new Set(['edition', 'game', 'board', 'the']);
+    return blocks
+      .map((block) => ({
+        ...block,
+        text: block.text.replace(/\s+/g, ' ').trim(),
+      }))
+      .filter((block) => block.text.length >= 3)
+      .filter((block) => {
+        const normalized = block.text.toLowerCase().replace(/[^a-z0-9 ]+/g, '');
+        return !noiseWords.has(normalized);
+      });
+  }
+
+  private pickBestLocalMatch(query: string, games: Game[]): Game | null {
+    const normalizedQuery = this.normalizeTitle(query);
+    const ranked = games
+      .map((game) => ({
+        game,
+        score: this.scoreTitleMatch(normalizedQuery, game.title),
+      }))
+      .sort((a, b) => b.score - a.score);
+    return ranked[0] && ranked[0].score >= 40 ? ranked[0].game : null;
+  }
+
+  private normalizeTitle(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+
+  private scoreTitleMatch(query: string, title: string): number {
+    const normalizedTitle = this.normalizeTitle(title);
+    if (normalizedTitle === query) return 100;
+    if (normalizedTitle.startsWith(query)) return 80;
+    if (normalizedTitle.includes(query)) return 65;
+    const queryTokens = query.split(' ');
+    const titleTokens = normalizedTitle.split(' ');
+    let matches = 0;
+    for (const token of queryTokens) {
+      if (titleTokens.some((titleToken) => titleToken.startsWith(token)))
+        matches++;
+    }
+    return Math.floor((matches / Math.max(queryTokens.length, 1)) * 60);
+  }
+
+  private getBggToken(): string | null {
+    const token = this.config.get<string>('BGG_API_TOKEN');
+    if (!token || token === 'your-bgg-api-token') return null;
+    return token;
+  }
+
+  private async fetchBestBggMatch(
+    query: string,
+  ): Promise<{ bggId: number; title: string } | null> {
+    const token = this.getBggToken();
+    if (!token) return null;
+    const response = await fetch(
+      `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame&exact=1`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) return null;
+    const xml = await response.text();
+    const match = xml.match(
+      /<item[^>]*id="(\d+)"[^>]*>[\s\S]*?<name[^>]*type="primary"[^>]*value="([^"]+)"/,
+    );
+    if (!match) return null;
+    return {
+      bggId: Number.parseInt(match[1], 10),
+      title: this.decodeXml(match[2]),
+    };
+  }
+
+  private async fetchBggThingById(
+    bggId: number,
+  ): Promise<Partial<Game> | null> {
+    const token = this.getBggToken();
+    if (!token) {
+      throw new BadRequestException(
+        'BGG_API_TOKEN is required for BGG imports',
+      );
+    }
+    const response = await fetch(
+      `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) return null;
+    const xml = await response.text();
+    const title = xml.match(
+      /<name[^>]*type="primary"[^>]*value="([^"]+)"/,
+    )?.[1];
+    if (!title) return null;
+    const thumbnailUrl = xml.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
+    const imageUrl = xml.match(/<image>([^<]+)<\/image>/)?.[1];
+    const minPlayers = xml.match(/<minplayers[^>]*value="(\d+)"/)?.[1];
+    const maxPlayers = xml.match(/<maxplayers[^>]*value="(\d+)"/)?.[1];
+    const playingTime = xml.match(/<playingtime[^>]*value="(\d+)"/)?.[1];
+    const yearPublished = xml.match(/<yearpublished[^>]*value="(\d+)"/)?.[1];
+    return {
+      title: this.decodeXml(title),
+      thumbnailUrl,
+      imageUrl,
+      minPlayers: minPlayers ? Number.parseInt(minPlayers, 10) : undefined,
+      maxPlayers: maxPlayers ? Number.parseInt(maxPlayers, 10) : undefined,
+      playingTime: playingTime ? Number.parseInt(playingTime, 10) : undefined,
+      yearPublished: yearPublished
+        ? Number.parseInt(yearPublished, 10)
+        : undefined,
+    };
+  }
+
+  private decodeXml(value: string): string {
+    return value
+      .replace(/&amp;/g, '&')
+      .replace(/&apos;/g, "'")
+      .replace(/&#039;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  }
+
   async getOwnershipsByUsers(
     userIds: string[],
   ): Promise<Array<Pick<UserGameOwnership, 'userId' | 'gameId'>>> {
@@ -347,6 +624,18 @@ export class GamesService {
     return this.ratingsRepo.find({
       where: { userId: In(userIds), gameId: In(gameIds) },
     });
+  }
+
+  async getUserOwnedGamesByIds(
+    userId: string,
+    gameIds: string[],
+  ): Promise<Game[]> {
+    if (!gameIds.length) return [];
+    const ownerships = await this.ownershipRepo.find({
+      where: { userId, gameId: In(gameIds) },
+      relations: ['game'],
+    });
+    return ownerships.map((ownership) => ownership.game);
   }
 
   async getDiscoveryGames(

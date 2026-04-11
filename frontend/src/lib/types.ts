@@ -421,3 +421,26 @@ export interface AdminIncompleteCatalogEntry {
   missingWeight: boolean;
   isIncomplete: boolean;
 }
+
+export interface ShelfBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ShelfParseCandidate {
+  detectionNumber: number;
+  rawText: string;
+  confidence?: number;
+  boundingBox: ShelfBoundingBox;
+  title?: string;
+  gameId?: string;
+  bggId?: number;
+  source: "local" | "bgg";
+  isOwned: boolean;
+}
+
+export interface ParseShelfPhotoResponse {
+  candidates: ShelfParseCandidate[];
+}
