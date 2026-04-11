@@ -115,6 +115,7 @@ export default function BoardGameCafeTablePlannerPage() {
       <GuideShell
         title={cluster.pageTitle}
         keyword={cluster.primaryKeyword}
+        path={cluster.path}
         intro="Plan board game cafe and club events with a practical multi-table workflow that turns votes into seatable table assignments."
         sections={sections}
         faqs={faqs}

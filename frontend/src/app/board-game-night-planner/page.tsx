@@ -117,6 +117,7 @@ export default function BoardGameNightPlannerPage() {
       <GuideShell
         title={cluster.pageTitle}
         keyword={cluster.primaryKeyword}
+        path={cluster.path}
         intro="Plan your board game night from invitation to final game selection without juggling multiple tools."
         sections={sections}
         faqs={faqs}

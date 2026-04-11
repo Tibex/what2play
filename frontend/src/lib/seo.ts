@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
+import type { Metadata } from "next";
 
-const FALLBACK_SITE_URL = 'https://what2play.games';
+const FALLBACK_SITE_URL = "https://what2play.games";
 
 function normalizeSiteUrl(rawUrl: string): string {
   const withProtocol =
-    rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
+    rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
       ? rawUrl
       : `https://${rawUrl}`;
 
@@ -24,13 +24,13 @@ export function getSiteUrl(): string {
   );
 }
 
-export function absoluteUrl(path = '/'): string {
+export function absoluteUrl(path = "/"): string {
   const siteUrl = getSiteUrl();
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${siteUrl}${normalizedPath}`;
 }
 
-type MetadataType = 'website' | 'article';
+type MetadataType = "website" | "article";
 
 type PageMetadataOptions = {
   title: string;
@@ -41,13 +41,20 @@ type PageMetadataOptions = {
   type?: MetadataType;
 };
 
+const OG_IMAGE = {
+  url: "/opengraph-image.png",
+  width: 1200,
+  height: 630,
+  alt: "What2Play — Board Game Night Planner",
+};
+
 export function createPageMetadata({
   title,
   description,
   path,
   keywords,
   noindex = false,
-  type = 'website',
+  type = "website",
 }: PageMetadataOptions): Metadata {
   const canonicalUrl = absoluteUrl(path);
 
@@ -61,13 +68,15 @@ export function createPageMetadata({
       url: canonicalUrl,
       title,
       description,
-      siteName: 'What2Play',
-      locale: 'en_US',
+      siteName: "What2Play",
+      locale: "en_US",
+      images: [OG_IMAGE],
     },
     twitter: {
-      card: 'summary_large_image',
+      card: "summary_large_image",
       title,
       description,
+      images: [OG_IMAGE.url],
     },
     robots: noindex
       ? {

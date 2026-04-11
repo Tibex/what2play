@@ -1,5 +1,7 @@
-import Link from 'next/link';
-import { KEYWORD_CLUSTERS } from '@/lib/keyword-clusters';
+import Link from "next/link";
+import { KEYWORD_CLUSTERS } from "@/lib/keyword-clusters";
+import { absoluteUrl } from "@/lib/seo";
+import JsonLd from "./JsonLd";
 
 export type GuideSection = {
   heading: string;
@@ -19,6 +21,7 @@ type GuideShellProps = {
   sections: GuideSection[];
   relatedPaths: string[];
   faqs?: GuideFaq[];
+  path: string;
 };
 
 export default function GuideShell({
@@ -28,16 +31,61 @@ export default function GuideShell({
   sections,
   relatedPaths,
   faqs,
+  path,
 }: GuideShellProps) {
   const relatedClusters = KEYWORD_CLUSTERS.filter((cluster) =>
     relatedPaths.includes(cluster.path),
   );
 
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: absoluteUrl("/"),
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: title,
+        item: absoluteUrl(path),
+      },
+    ],
+  };
+
   return (
     <main className="wt-page px-4 sm:px-6 py-12 sm:py-16">
+      <JsonLd data={breadcrumbJsonLd} />
+
+      <nav aria-label="Breadcrumb" className="mb-6">
+        <ol
+          className="flex items-center gap-2 text-sm"
+          style={{ color: "var(--muted)" }}
+        >
+          <li>
+            <Link
+              href="/"
+              style={{ color: "var(--muted)" }}
+              className="hover:underline"
+            >
+              Home
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page" style={{ color: "var(--foreground)" }}>
+            {title}
+          </li>
+        </ol>
+      </nav>
+
       <header className="max-w-3xl">
         <p className="wt-chip">{keyword}</p>
-        <h1 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight">{title}</h1>
+        <h1 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight">
+          {title}
+        </h1>
         <p className="mt-4 text-lg wt-muted">{intro}</p>
       </header>
 
@@ -97,10 +145,16 @@ export default function GuideShell({
           ))}
         </ul>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/resources" className="wt-btn wt-btn-secondary px-5 py-2.5 no-underline text-[var(--foreground)]">
+          <Link
+            href="/resources"
+            className="wt-btn wt-btn-secondary px-5 py-2.5 no-underline text-[var(--foreground)]"
+          >
             Browse all resources
           </Link>
-          <Link href="/?m=register" className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white">
+          <Link
+            href="/?m=register"
+            className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white"
+          >
             Start with What2Play
           </Link>
         </div>

@@ -107,6 +107,7 @@ export default function BoardGameVotingAppPage() {
       <GuideShell
         title={cluster.pageTitle}
         keyword={cluster.primaryKeyword}
+        path={cluster.path}
         intro="Use ranked voting so your group can move from shortlist to final game decision quickly and fairly."
         sections={sections}
         faqs={faqs}

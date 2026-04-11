@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import Link from 'next/link';
 import RegisterForm from '@/components/auth/RegisterForm';
 
 type RegisterModalProps = Readonly<{
@@ -34,17 +33,9 @@ export default function RegisterModal({ isOpen, onClose, onRequestLogin }: Regis
       />
       <dialog
         open
-        aria-labelledby="register-modal-title"
         className="relative z-10 w-full max-w-md bg-transparent"
       >
-        <div className="mb-4 text-center">
-          <h2 id="register-modal-title" className="text-3xl font-bold text-[var(--primary)]">
-            <Link href="/" className="hover:underline" onClick={onClose}>
-              What2Play
-            </Link>
-          </h2>
-          <p className="wt-muted mt-2">Create your account</p>
-        </div>
+
         <RegisterForm onSuccess={onClose} onRequestLogin={onRequestLogin} />
       </dialog>
     </div>

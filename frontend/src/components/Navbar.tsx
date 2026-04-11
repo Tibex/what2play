@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/lib/store';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const toggleButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -41,70 +42,67 @@ export default function Navbar() {
 
   if (!isAuthenticated) return null;
 
+  const navLinks = [
+    { href: '/dashboard', label: 'Events' },
+    { href: '/collection', label: 'Collection' },
+    { href: '/friends', label: 'Friends' },
+    ...(user?.role === 'admin' ? [{ href: '/admin', label: 'Admin' }] : []),
+    { href: '/profile', label: 'Profile' },
+  ];
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
   return (
-    <nav className="overflow-x-clip border-b border-[var(--border-strong)] bg-[linear-gradient(90deg,#1f2f4d,#2a4677,#365fb3)] text-slate-50 shadow-[0_10px_20px_rgba(18,30,54,.22)]">
+    <nav className="border-b border-[var(--border)] bg-[var(--paper)] shadow-[0_2px_8px_rgba(26,28,25,0.07)]">
       <div className="wt-page px-4">
         <div className="flex items-center justify-between py-3">
           <Link
             href="/dashboard"
-            className="min-w-0 pr-2 text-base sm:text-xl font-bold tracking-tight leading-tight truncate"
+            className="min-w-0 pr-2 text-base sm:text-lg font-bold tracking-tight leading-tight truncate no-underline"
+            style={{ color: 'var(--foreground)' }}
           >
-            What2Play
+            What2<span style={{ color: 'var(--primary)' }}>Play</span>
           </Link>
 
-          <div className="hidden sm:flex items-center gap-6">
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium transition-colors hover:text-sky-200"
-            >
-              Events
-            </Link>
-            <Link
-              href="/collection"
-              className="text-sm font-medium transition-colors hover:text-sky-200"
-            >
-              Collection
-            </Link>
-            <Link
-              href="/friends"
-              className="text-sm font-medium transition-colors hover:text-sky-200"
-            >
-              Friends
-            </Link>
-            {user?.role === 'admin' && (
+          {/* Desktop nav */}
+          <div className="hidden sm:flex items-center gap-1">
+            {navLinks.map((link) => (
               <Link
-                href="/admin"
-                className="text-sm font-medium transition-colors hover:text-sky-200"
+                key={link.href}
+                href={link.href}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg no-underline transition-colors duration-150"
+                style={{
+                  color: isActive(link.href) ? 'var(--primary)' : 'var(--muted)',
+                  background: isActive(link.href) ? 'var(--primary-soft)' : 'transparent',
+                }}
               >
-                Admin
+                {link.label}
               </Link>
-            )}
-            <Link
-              href="/profile"
-              className="text-sm font-medium transition-colors hover:text-sky-200"
-            >
-              Profile
-            </Link>
+            ))}
 
-            <div className="ml-4 flex items-center gap-3 border-l border-blue-200/30 pl-4">
-              <span className="text-sm text-blue-100">{user?.name}</span>
+            <div className="ml-3 flex items-center gap-2.5 border-l border-[var(--border)] pl-3">
+              <span className="text-sm" style={{ color: 'var(--muted)' }}>
+                {user?.name}
+              </span>
               <button
                 onClick={handleLogout}
-                className="wt-btn rounded-md border border-blue-100/35 bg-blue-50/15 px-3 py-1.5 text-sm hover:bg-blue-50/25"
+                className="wt-btn wt-btn-secondary px-3 py-1.5 text-sm"
               >
                 Logout
               </button>
             </div>
           </div>
 
+          {/* Mobile hamburger */}
           <button
             ref={toggleButtonRef}
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="sm:hidden inline-flex items-center justify-center rounded-md p-2 transition-colors hover:bg-blue-50/20"
+            className="sm:hidden inline-flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-[var(--surface)]"
             aria-label="Open navigation menu"
             aria-expanded={menuOpen}
             aria-controls="mobile-nav-menu"
+            style={{ color: 'var(--muted)' }}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -124,62 +122,40 @@ export default function Navbar() {
           </button>
         </div>
 
+        {/* Mobile menu */}
         {menuOpen && (
           <div
             id="mobile-nav-menu"
             ref={menuRef}
             className="sm:hidden pb-4"
           >
-            <div className="flex flex-col gap-2 mt-2">
-              <Link
-                href="/dashboard"
-                onClick={() => setMenuOpen(false)}
-                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
-              >
-                Events
-              </Link>
-              <Link
-                href="/collection"
-                onClick={() => setMenuOpen(false)}
-                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
-              >
-                Collection
-              </Link>
-              <Link
-                href="/friends"
-                onClick={() => setMenuOpen(false)}
-                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
-              >
-                Friends
-              </Link>
-              {user?.role === 'admin' && (
+            <div className="flex flex-col gap-1 mt-2">
+              {navLinks.map((link) => (
                 <Link
-                  href="/admin"
+                  key={link.href}
+                  href={link.href}
                   onClick={() => setMenuOpen(false)}
-                  className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
+                  className="px-3 py-2 text-sm font-medium rounded-lg no-underline transition-colors duration-150"
+                  style={{
+                    color: isActive(link.href) ? 'var(--primary)' : 'var(--foreground)',
+                    background: isActive(link.href) ? 'var(--primary-soft)' : 'transparent',
+                  }}
                 >
-                  Admin
+                  {link.label}
                 </Link>
-              )}
-              <Link
-                href="/profile"
-                onClick={() => setMenuOpen(false)}
-                className="py-1 text-sm font-medium transition-colors hover:text-sky-200"
-              >
-                Profile
-              </Link>
+              ))}
 
-              <div className="mt-2 border-t border-blue-100/30 pt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-blue-100">{user?.name}</span>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="wt-btn rounded-md border border-blue-100/35 bg-blue-50/15 px-3 py-1.5 text-sm hover:bg-blue-50/25"
-                  >
-                    Logout
-                  </button>
-                </div>
+              <div className="mt-3 border-t border-[var(--border)] pt-3 flex items-center justify-between">
+                <span className="text-sm" style={{ color: 'var(--muted)' }}>
+                  {user?.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="wt-btn wt-btn-secondary px-3 py-1.5 text-sm"
+                >
+                  Logout
+                </button>
               </div>
             </div>
           </div>

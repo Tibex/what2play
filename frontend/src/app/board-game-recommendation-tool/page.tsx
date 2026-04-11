@@ -103,6 +103,7 @@ export default function BoardGameRecommendationToolPage() {
       <GuideShell
         title={cluster.pageTitle}
         keyword={cluster.primaryKeyword}
+        path={cluster.path}
         intro="Find playable game options for tonight by combining player count, duration, complexity, and collection availability."
         sections={sections}
         faqs={faqs}
