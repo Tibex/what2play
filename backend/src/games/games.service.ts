@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,6 +16,7 @@ import { EventFeedback } from '../entities/event-feedback.entity';
 import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { GoogleVisionService } from '../vision/google-vision.service';
+import { ClaudeVisionService } from '../vision/claude-vision.service';
 
 type GameCollectionPerformance = {
   pickedCount: number;
@@ -37,6 +39,8 @@ type BatchAddItem = {
 
 @Injectable()
 export class GamesService {
+  private readonly logger = new Logger(GamesService.name);
+
   constructor(
     @InjectRepository(Game)
     private gamesRepo: Repository<Game>,
@@ -54,6 +58,7 @@ export class GamesService {
     private candidatesRepo: Repository<EventGameCandidate>,
     private config: ConfigService,
     private vision: GoogleVisionService,
+    private claudeVision: ClaudeVisionService,
   ) {}
 
   async searchGames(query: string): Promise<Game[]> {
@@ -342,6 +347,7 @@ export class GamesService {
   async parseShelfPhoto(
     userId: string,
     imageBuffer: Buffer,
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
   ): Promise<{
     candidates: Array<{
       detectionNumber: number;
@@ -351,23 +357,42 @@ export class GamesService {
       title?: string;
       gameId?: string;
       bggId?: number;
+      thumbnailUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
     }>;
+    annotatedImageBase64?: string;
   }> {
-    const blocks = await this.vision.detectTextBlocks(imageBuffer);
     const owned = await this.getUserCollection(userId);
     const ownedGameIds = new Set(owned.map((o) => o.gameId));
     const ownedBggIds = new Set(
       owned.map((o) => o.game.bggId).filter((id): id is number => id != null),
     );
 
-    const cleaned = this.cleanOcrBlocks(blocks);
-    const sorted = [...cleaned].sort((a, b) =>
+    // Run Claude vision and OCR in parallel; Claude is primary when available
+    const [claudeResults, ocrBlocks] = await Promise.all([
+      this.claudeVision.detectBoardGames(imageBuffer, mediaType),
+      this.vision.detectTextBlocks(imageBuffer).catch(() => []),
+    ]);
+
+    const cleanedOcr = this.cleanOcrBlocks(ocrBlocks).sort((a, b) =>
       a.boundingBox.y === b.boundingBox.y
         ? a.boundingBox.x - b.boundingBox.x
         : a.boundingBox.y - b.boundingBox.y,
     );
+
+    // Use Claude results when available; fall back to OCR text blocks
+    const titlesToSearch: Array<{
+      title: string;
+      claudeBox?: { x: number; y: number; width: number; height: number };
+    }> =
+      claudeResults.length > 0
+        ? claudeResults.map((r) => ({
+            title: r.title,
+            claudeBox: r.boundingBox,
+          }))
+        : cleanedOcr.map((b) => ({ title: b.text }));
+
     const candidates: Array<{
       detectionNumber: number;
       rawText: string;
@@ -376,42 +401,71 @@ export class GamesService {
       title?: string;
       gameId?: string;
       bggId?: number;
+      thumbnailUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
     }> = [];
 
-    for (let i = 0; i < sorted.length; i++) {
-      const row = sorted[i];
-      const local = await this.searchGames(row.text);
-      const localBest = this.pickBestLocalMatch(row.text, local);
-      if (localBest) {
-        candidates.push({
+    // Process all detected titles in parallel — sequential BGG calls per game
+    // were causing 90 s+ timeouts when Claude detects 20+ games.
+    const settled = await Promise.allSettled(
+      titlesToSearch.map(async ({ title: rawText, claudeBox }, i) => {
+        // Box selection: prefer a plausible Claude box, else expand OCR region
+        const ocrMatch = this.findBestOcrMatch(rawText, cleanedOcr);
+        const rawOcrBox = ocrMatch?.boundingBox ?? null;
+        const claudeBoxIsReasonable =
+          claudeBox != null && this.isReasonableGameBox(claudeBox);
+        const boundingBox = claudeBoxIsReasonable
+          ? claudeBox
+          : rawOcrBox != null
+            ? this.expandOcrToGameBox(rawOcrBox)
+            : (claudeBox ?? { x: 0, y: 0, width: 0, height: 0 });
+        const confidence = ocrMatch?.confidence ?? undefined;
+
+        const local = await this.searchGames(rawText);
+        const localBest = this.pickBestLocalMatch(rawText, local);
+        if (localBest) {
+          return {
+            detectionNumber: i + 1,
+            rawText,
+            confidence,
+            boundingBox,
+            title: localBest.title,
+            gameId: localBest.id,
+            bggId: localBest.bggId ?? undefined,
+            thumbnailUrl: localBest.thumbnailUrl ?? undefined,
+            source: 'local' as const,
+            isOwned:
+              ownedGameIds.has(localBest.id) ||
+              (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
+          };
+        }
+
+        const bgg = await this.fetchBestBggMatch(rawText);
+        if (!bgg) return null;
+
+        // Fetch full BGG details in parallel with nothing else — thumbnail needed
+        const details = await this.fetchBggThingById(bgg.bggId).catch(
+          () => null,
+        );
+        return {
           detectionNumber: i + 1,
-          rawText: row.text,
-          confidence: row.confidence,
-          boundingBox: row.boundingBox,
-          title: localBest.title,
-          gameId: localBest.id,
-          bggId: localBest.bggId,
-          source: 'local',
-          isOwned:
-            ownedGameIds.has(localBest.id) ||
-            (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
-        });
-        continue;
-      }
-      const bgg = await this.fetchBestBggMatch(row.text);
-      if (bgg) {
-        candidates.push({
-          detectionNumber: i + 1,
-          rawText: row.text,
-          confidence: row.confidence,
-          boundingBox: row.boundingBox,
+          rawText,
+          confidence,
+          boundingBox,
           title: bgg.title,
+          gameId: undefined,
           bggId: bgg.bggId,
-          source: 'bgg',
+          thumbnailUrl: details?.thumbnailUrl ?? undefined,
+          source: 'bgg' as const,
           isOwned: ownedBggIds.has(bgg.bggId),
-        });
+        };
+      }),
+    );
+
+    for (const result of settled) {
+      if (result.status === 'fulfilled' && result.value !== null) {
+        candidates.push(result.value);
       }
     }
 
@@ -428,7 +482,99 @@ export class GamesService {
       }
       return true;
     });
-    return { candidates: deduped };
+
+    // Reassign detectionNumber 1..N after dedupe to remove gaps
+    const renumbered = deduped.map((candidate, index) => ({
+      ...candidate,
+      detectionNumber: index + 1,
+    }));
+
+    // Draw bounding boxes directly on the image so the frontend can display
+    // an annotated photo without fragile CSS overlay positioning.
+    const annotatedBuffer = await this.claudeVision
+      .drawAnnotations(imageBuffer, renumbered)
+      .catch((err) => {
+        this.logger.warn('Failed to draw shelf annotations', err);
+        return null;
+      });
+    const annotatedImageBase64 = annotatedBuffer
+      ? `data:image/jpeg;base64,${annotatedBuffer.toString('base64')}`
+      : undefined;
+
+    return { candidates: renumbered, annotatedImageBase64 };
+  }
+
+  /**
+   * Returns true when a bounding box looks like a plausible single game box.
+   * Rejects boxes that are too tiny (positioning noise) or too large (likely
+   * Claude wrapped an entire shelf section instead of one box).
+   */
+  private isReasonableGameBox(box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): boolean {
+    return (
+      box.width >= 0.02 &&
+      box.height >= 0.03 &&
+      // A single game box can legitimately fill most of a close-up frame.
+      // Only reject degenerate boxes that cover effectively the whole image.
+      box.width <= 0.95 &&
+      box.height <= 0.95 &&
+      box.x >= -0.02 &&
+      box.y >= -0.02 &&
+      box.x + box.width <= 1.05 &&
+      box.y + box.height <= 1.05
+    );
+  }
+
+  /**
+   * Expands an OCR text region to estimate the full game box it belongs to.
+   * Game box faces are much larger than the text region — typically 3-5× taller
+   * and 1.2-1.5× wider than the title text area.
+   */
+  private expandOcrToGameBox(textBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): { x: number; y: number; width: number; height: number } {
+    const expandedWidth = Math.min(1, textBox.width * 1.4);
+    const expandedHeight = Math.min(1, Math.max(textBox.height * 5, 0.12));
+    const centerX = textBox.x + textBox.width / 2;
+    const centerY = textBox.y + textBox.height / 2;
+    const x = Math.max(0, centerX - expandedWidth / 2);
+    const y = Math.max(0, centerY - expandedHeight / 2);
+    return {
+      x,
+      y,
+      width: Math.min(expandedWidth, 1 - x),
+      height: Math.min(expandedHeight, 1 - y),
+    };
+  }
+
+  private findBestOcrMatch(
+    title: string,
+    ocrBlocks: Array<{
+      text: string;
+      confidence?: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+    }>,
+  ): {
+    text: string;
+    confidence?: number;
+    boundingBox: { x: number; y: number; width: number; height: number };
+  } | null {
+    const normalizedTitle = this.normalizeTitle(title);
+    let best: { block: (typeof ocrBlocks)[0]; score: number } | null = null;
+    for (const block of ocrBlocks) {
+      const score = this.scoreTitleMatch(normalizedTitle, block.text);
+      if (score >= 40 && (!best || score > best.score)) {
+        best = { block, score };
+      }
+    }
+    return best?.block ?? null;
   }
 
   async batchAddToCollection(
@@ -537,20 +683,49 @@ export class GamesService {
   ): Promise<{ bggId: number; title: string } | null> {
     const token = this.getBggToken();
     if (!token) return null;
+    // Prefer exact match (precise); fall back to non-exact when exact finds nothing
+    return (
+      (await this.doBggSearch(query, true, token)) ??
+      (await this.doBggSearch(query, false, token))
+    );
+  }
+
+  private async doBggSearch(
+    query: string,
+    exact: boolean,
+    token: string,
+  ): Promise<{ bggId: number; title: string } | null> {
+    const qs = `query=${encodeURIComponent(query)}&type=boardgame${exact ? '&exact=1' : ''}`;
     const response = await fetch(
-      `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(query)}&type=boardgame&exact=1`,
+      `https://boardgamegeek.com/xmlapi2/search?${qs}`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!response.ok) return null;
     const xml = await response.text();
-    const match = xml.match(
-      /<item[^>]*id="(\d+)"[^>]*>[\s\S]*?<name[^>]*type="primary"[^>]*value="([^"]+)"/,
-    );
-    if (!match) return null;
-    return {
-      bggId: Number.parseInt(match[1], 10),
-      title: this.decodeXml(match[2]),
-    };
+    // For non-exact search BGG returns many results; pick the one whose primary
+    // name best matches the query rather than blindly taking the first.
+    const itemPattern =
+      /<item[^>]*id="(\d+)"[^>]*>[\s\S]*?<name[^>]*type="primary"[^>]*value="([^"]+)"/g;
+    const hits: Array<{ bggId: number; title: string }> = [];
+    let m: RegExpExecArray | null;
+    while ((m = itemPattern.exec(xml)) !== null) {
+      hits.push({
+        bggId: Number.parseInt(m[1], 10),
+        title: this.decodeXml(m[2]),
+      });
+      if (hits.length >= 10) break; // cap to avoid O(n) on huge result sets
+    }
+    if (!hits.length) return null;
+    if (exact) return hits[0]; // exact search: first hit is the only hit
+    // Non-exact: score each candidate by title similarity and pick the best
+    const normalizedQuery = this.normalizeTitle(query);
+    const ranked = hits
+      .map((h) => ({
+        ...h,
+        score: this.scoreTitleMatch(normalizedQuery, h.title),
+      }))
+      .sort((a, b) => b.score - a.score);
+    return ranked[0].score >= 30 ? ranked[0] : null;
   }
 
   private async fetchBggThingById(
@@ -572,8 +747,16 @@ export class GamesService {
       /<name[^>]*type="primary"[^>]*value="([^"]+)"/,
     )?.[1];
     if (!title) return null;
-    const thumbnailUrl = xml.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
-    const imageUrl = xml.match(/<image>([^<]+)<\/image>/)?.[1];
+    const rawThumbnailUrl = xml.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
+    const rawImageUrl = xml.match(/<image>([^<]+)<\/image>/)?.[1];
+    // BGG XML returns protocol-relative URLs like //cf.geekdo-images.com/...
+    // and sometimes HTML-encoded entities — normalize both.
+    const thumbnailUrl = rawThumbnailUrl
+      ? this.normalizeBggImageUrl(rawThumbnailUrl)
+      : undefined;
+    const imageUrl = rawImageUrl
+      ? this.normalizeBggImageUrl(rawImageUrl)
+      : undefined;
     const minPlayers = xml.match(/<minplayers[^>]*value="(\d+)"/)?.[1];
     const maxPlayers = xml.match(/<maxplayers[^>]*value="(\d+)"/)?.[1];
     const playingTime = xml.match(/<playingtime[^>]*value="(\d+)"/)?.[1];
@@ -600,6 +783,20 @@ export class GamesService {
       .replace(/&quot;/g, '"')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>');
+  }
+
+  /**
+   * Normalizes image URLs returned by the BGG XML API.
+   * BGG returns protocol-relative URLs (e.g. //cf.geekdo-images.com/...) and
+   * occasionally HTML-escaped characters. Browsers do support protocol-relative
+   * URLs, but they fail when the frontend is loaded via file:// or from a
+   * different scheme context, so we normalize to https explicitly.
+   */
+  private normalizeBggImageUrl(url: string): string {
+    const decoded = this.decodeXml(url).trim();
+    if (decoded.startsWith('//')) return `https:${decoded}`;
+    if (decoded.startsWith('http://')) return `https://${decoded.slice(7)}`;
+    return decoded;
   }
 
   async getOwnershipsByUsers(

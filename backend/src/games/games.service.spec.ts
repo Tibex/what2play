@@ -10,6 +10,7 @@ import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { ConfigService } from '@nestjs/config';
 import { GoogleVisionService } from '../vision/google-vision.service';
+import { ClaudeVisionService } from '../vision/claude-vision.service';
 
 describe('GamesService', () => {
   let service: GamesService;
@@ -53,6 +54,7 @@ describe('GamesService', () => {
   };
   const mockConfig = { get: jest.fn() };
   const mockVision = { detectTextBlocks: jest.fn() };
+  const mockClaudeVision = { detectBoardGames: jest.fn(), drawAnnotations: jest.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -79,6 +81,7 @@ describe('GamesService', () => {
         },
         { provide: ConfigService, useValue: mockConfig },
         { provide: GoogleVisionService, useValue: mockVision },
+        { provide: ClaudeVisionService, useValue: mockClaudeVision },
       ],
     }).compile();
 
@@ -127,6 +130,8 @@ describe('GamesService', () => {
   });
 
   it('assigns stable detection numbers when parsing shelf photo', async () => {
+    mockClaudeVision.detectBoardGames.mockResolvedValue([]);
+    mockClaudeVision.drawAnnotations.mockResolvedValue(Buffer.from('image'));
     mockVision.detectTextBlocks.mockResolvedValue([
       {
         text: 'Wingspan',
