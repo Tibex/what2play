@@ -516,7 +516,7 @@ export class GamesService {
     height: number;
   }): boolean {
     return (
-      box.width >= 0.02 &&
+      (box.width >= 0.02 || (box.width >= 0.005 && box.height / box.width >= 3)) &&
       box.height >= 0.03 &&
       // A single game box can legitimately fill most of a close-up frame.
       // Only reject degenerate boxes that cover effectively the whole image.
