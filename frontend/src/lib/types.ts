@@ -437,10 +437,13 @@ export interface ShelfParseCandidate {
   title?: string;
   gameId?: string;
   bggId?: number;
+  thumbnailUrl?: string;
+  imageUrl?: string;
   source: "local" | "bgg";
   isOwned: boolean;
 }
 
 export interface ParseShelfPhotoResponse {
   candidates: ShelfParseCandidate[];
+  annotatedImageBase64?: string;
 }

@@ -37,6 +37,32 @@ type BatchAddItem = {
   title?: string;
 };
 
+class Semaphore {
+  private running = 0;
+  private readonly queue: Array<() => void> = [];
+  constructor(private readonly max: number) {}
+  acquire(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.running < this.max) {
+        this.running++;
+        resolve();
+      } else {
+        this.queue.push(() => {
+          this.running++;
+          resolve();
+        });
+      }
+    });
+  }
+  release(): void {
+    this.running--;
+    const next = this.queue.shift();
+    if (next) next();
+  }
+}
+
+const bggSemaphore = new Semaphore(5);
+
 @Injectable()
 export class GamesService {
   private readonly logger = new Logger(GamesService.name);
@@ -358,6 +384,7 @@ export class GamesService {
       gameId?: string;
       bggId?: number;
       thumbnailUrl?: string;
+      imageUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
     }>;
@@ -402,6 +429,7 @@ export class GamesService {
       gameId?: string;
       bggId?: number;
       thumbnailUrl?: string;
+      imageUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
     }> = [];
@@ -434,6 +462,7 @@ export class GamesService {
             gameId: localBest.id,
             bggId: localBest.bggId ?? undefined,
             thumbnailUrl: localBest.thumbnailUrl ?? undefined,
+            imageUrl: undefined,
             source: 'local' as const,
             isOwned:
               ownedGameIds.has(localBest.id) ||
@@ -444,10 +473,11 @@ export class GamesService {
         const bgg = await this.fetchBestBggMatch(rawText);
         if (!bgg) return null;
 
-        // Fetch full BGG details in parallel with nothing else — thumbnail needed
-        const details = await this.fetchBggThingById(bgg.bggId).catch(
-          () => null,
-        );
+        // Fetch full BGG details — concurrency limited to avoid 429s
+        await bggSemaphore.acquire();
+        const details = await this.fetchBggThingById(bgg.bggId)
+          .catch(() => null)
+          .finally(() => bggSemaphore.release());
         return {
           detectionNumber: i + 1,
           rawText,
@@ -457,6 +487,7 @@ export class GamesService {
           gameId: undefined,
           bggId: bgg.bggId,
           thumbnailUrl: details?.thumbnailUrl ?? undefined,
+          imageUrl: details?.imageUrl ?? undefined,
           source: 'bgg' as const,
           isOwned: ownedBggIds.has(bgg.bggId),
         };
@@ -516,7 +547,8 @@ export class GamesService {
     height: number;
   }): boolean {
     return (
-      (box.width >= 0.02 || (box.width >= 0.005 && box.height / box.width >= 3)) &&
+      (box.width >= 0.02 ||
+        (box.width >= 0.005 && box.height / box.width >= 3)) &&
       box.height >= 0.03 &&
       // A single game box can legitimately fill most of a close-up frame.
       // Only reject degenerate boxes that cover effectively the whole image.

@@ -36,6 +36,12 @@ export class ShelfParseCandidateDto {
   @ApiProperty({ required: false })
   bggId?: number;
 
+  @ApiProperty({ required: false })
+  thumbnailUrl?: string;
+
+  @ApiProperty({ required: false })
+  imageUrl?: string;
+
   @ApiProperty({ enum: ['local', 'bgg'] })
   source: 'local' | 'bgg';
 
@@ -46,4 +52,11 @@ export class ShelfParseCandidateDto {
 export class ParseShelfPhotoResponseDto {
   @ApiProperty({ type: [ShelfParseCandidateDto] })
   candidates: ShelfParseCandidateDto[];
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Base64 JPEG of the shelf photo with numbered bounding boxes drawn on it',
+  })
+  annotatedImageBase64?: string;
 }
