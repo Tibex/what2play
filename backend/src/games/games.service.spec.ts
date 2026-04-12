@@ -54,7 +54,10 @@ describe('GamesService', () => {
   };
   const mockConfig = { get: jest.fn() };
   const mockVision = { detectTextBlocks: jest.fn() };
-  const mockClaudeVision = { detectBoardGames: jest.fn(), drawAnnotations: jest.fn() };
+  const mockClaudeVision = {
+    detectBoardGames: jest.fn(),
+    drawAnnotations: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -127,6 +130,78 @@ describe('GamesService', () => {
         playingTime: 180,
       }),
     );
+  });
+
+  describe('isReasonableGameBox', () => {
+    it('accepts a normal game box', () => {
+      expect(
+        (service as any).isReasonableGameBox({
+          x: 0.1,
+          y: 0.1,
+          width: 0.1,
+          height: 0.1,
+        }),
+      ).toBe(true);
+    });
+
+    it('accepts a spine-out box (width 0.01, height/width = 10, satisfies spine exception)', () => {
+      // width 0.01 >= 0.005 and height/width = 10 >= 3 → spine exception applies
+      expect(
+        (service as any).isReasonableGameBox({
+          x: 0,
+          y: 0,
+          width: 0.01,
+          height: 0.1,
+        }),
+      ).toBe(true);
+    });
+
+    it('accepts a spine-out box (width 0.007, height 0.03 — tall aspect ratio >= 3)', () => {
+      // width 0.007 < 0.02, height/width ≈ 4.3 >= 3, width >= 0.005 → spine rule passes
+      expect(
+        (service as any).isReasonableGameBox({
+          x: 0.1,
+          y: 0.1,
+          width: 0.007,
+          height: 0.03,
+        }),
+      ).toBe(true);
+    });
+
+    it('rejects a spine-out box whose width is too tiny (< 0.005)', () => {
+      // width 0.003 < 0.005 fails spine exception; height 0.02 < 0.03 also fails height check
+      expect(
+        (service as any).isReasonableGameBox({
+          x: 0,
+          y: 0,
+          width: 0.003,
+          height: 0.02,
+        }),
+      ).toBe(false);
+    });
+
+    it('rejects a box that covers too large a fraction of the image (width > 0.95)', () => {
+      expect(
+        (service as any).isReasonableGameBox({
+          x: 0,
+          y: 0,
+          width: 0.96,
+          height: 0.5,
+        }),
+      ).toBe(false);
+    });
+
+    it('rejects a box with x coordinate below the allowed lower bound (< -0.02)', () => {
+      // x = -0.1 < -0.02 → out of bounds
+      expect(
+        (service as any).isReasonableGameBox({
+          x: -0.1,
+          y: 0,
+          width: 0.1,
+          height: 0.1,
+        }),
+      ).toBe(false);
+    });
   });
 
   it('assigns stable detection numbers when parsing shelf photo', async () => {

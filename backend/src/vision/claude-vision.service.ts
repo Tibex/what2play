@@ -131,14 +131,18 @@ Board games appear in many orientations:
 - Stacked horizontally with cover on top
 - Tilted or partially behind another box
 
+Pay special attention to games visible spine-out — the spine text may be rotated 90° or 180°.
+
 For EACH game you find, note its title EXACTLY as printed on the box or spine.
 
 Common misses to watch for: games tucked at shelf ends, small boxes in front of large ones, expansion boxes, games without spine labels (check covers).
 
+Exclude titles that are clearly NOT a board game box: price tags, shelf labels, decorations, books, or other non-game items.
+
 Return ONLY a JSON array of titles — no commentary, no numbering:
 ["Title 1", "Title 2", "Title 3"]
 
-Be exhaustive. A false positive is better than a missed game.
+Be exhaustive. A false positive is better than a missed game. However, skip obvious non-box items (barcodes, store labels, stickers).
 If no games are found: []`,
             },
           ],
@@ -155,8 +159,17 @@ If no games are found: []`,
     try {
       const parsed = JSON.parse(match[0]) as unknown;
       if (!Array.isArray(parsed)) return [];
+      const nonGamePatterns = [
+        /^\d+[.,]\d+$/,
+        /^[\d\s\-/]+$/,
+        /^(sale|price|label|tag|sticker)$/i,
+      ];
       return parsed.filter(
-        (t): t is string => typeof t === 'string' && t.length > 0,
+        (t): t is string =>
+          typeof t === 'string' &&
+          t.length > 0 &&
+          t.length < 100 &&
+          !nonGamePatterns.some((p) => p.test(t.trim())),
       );
     } catch {
       return [];
@@ -293,8 +306,7 @@ Return ONLY a JSON array in the same order as the list:
           }
 
           const r = item as Record<string, unknown>;
-          const parsedTitle =
-            typeof r.title === 'string' ? (r.title as string) : '';
+          const parsedTitle = typeof r.title === 'string' ? r.title : '';
 
           // --- Index-aligned matching with fuzzy fallback ---
           let canonicalTitle: string | null = null;
@@ -303,7 +315,9 @@ Return ONLY a JSON array in the same order as the list:
             // Primary: use the batch slot at the same index
             const parsedTokens = normalizeTitle(parsedTitle);
             const slotTokens = batchTokens[j];
-            if (tokenOverlap(parsedTokens, slotTokens) >= TOKEN_OVERLAP_THRESHOLD) {
+            if (
+              tokenOverlap(parsedTokens, slotTokens) >= TOKEN_OVERLAP_THRESHOLD
+            ) {
               // Sanity check passed — use the canonical batch title
               canonicalTitle = batch[j];
             } else {
