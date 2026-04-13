@@ -155,7 +155,9 @@ Important rules:
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
-      const parsed = JSON.parse(match[0]) as unknown;
+      // Normalize bare decimals like .41 → 0.41 (valid JS but not JSON)
+      const normalized = match[0].replace(/([^\d])\.([0-9])/g, '$10.$2').replace(/^\./gm, '0.');
+      const parsed = JSON.parse(normalized) as unknown;
       if (!Array.isArray(parsed)) return [];
 
       const results: Array<{
