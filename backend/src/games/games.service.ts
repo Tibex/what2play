@@ -508,11 +508,12 @@ export class GamesService {
           let thumb =
             localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
           let imageUrl = localBest.imageUrl?.trim();
-          if (!thumb && localBest.bggId != null) {
+          if (localBest.bggId != null) {
+            // Always fetch fresh from BGG — local DB thumbnails can be stale
             await bggSemaphore.acquire();
             try {
               const d = await this.fetchBggThingByIdWithRetry(localBest.bggId);
-              if (d) {
+              if (d?.thumbnailUrl || d?.imageUrl) {
                 thumb = d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
                 imageUrl = d.imageUrl?.trim() || imageUrl;
               }
@@ -530,7 +531,10 @@ export class GamesService {
             bggId: localBest.bggId ?? undefined,
             thumbnailUrl: thumb || undefined,
             imageUrl: imageUrl || undefined,
-            bggUrl: localBest.bggId != null ? `https://boardgamegeek.com/boardgame/${localBest.bggId}` : undefined,
+            bggUrl:
+              localBest.bggId != null
+                ? `https://boardgamegeek.com/boardgame/${localBest.bggId}`
+                : undefined,
             source: 'local' as const,
             isOwned:
               ownedGameIds.has(localBest.id) ||
@@ -1109,10 +1113,18 @@ export class GamesService {
         'BGG_API_TOKEN is required for BGG imports',
       );
     }
-    const response = await fetch(
+    let response = await fetch(
       `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
+    // BGG rate-limits heavily — retry once after a short back-off
+    if (response.status === 429) {
+      await new Promise((r) => setTimeout(r, 1500));
+      response = await fetch(
+        `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+    }
     if (!response.ok) return null;
     const xml = await response.text();
     const title = xml.match(
