@@ -387,7 +387,9 @@ export class GamesService {
       rawText: string;
       confidence?: number;
       boundingBox: { x: number; y: number; width: number; height: number };
+      polygon?: Array<[number, number]>;
       title?: string;
+      editionOrVersion?: string;
       gameId?: string;
       bggId?: number;
       thumbnailUrl?: string;
@@ -395,6 +397,10 @@ export class GamesService {
       bggUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
+      detectionConfidence?: number;
+      gameConfidence?: number;
+      occlusionLevel?: 'none' | 'low' | 'medium' | 'high';
+      titleCandidates?: string[];
     }>;
     annotatedImageBase64?: string;
   }> {
@@ -404,17 +410,29 @@ export class GamesService {
       owned.map((o) => o.game.bggId).filter((id): id is number => id != null),
     );
 
-    // Run all three detection sources in parallel for maximum coverage.
+    // Build known-games hint for Gemini from the user's collection titles.
+    // Passed as a soft constraint to improve title recognition on familiar games.
+    const knownGames = owned
+      .map((o) => o.game.title)
+      .filter((t): t is string => Boolean(t));
+
+    // Run all four detection sources in parallel for maximum coverage.
     // Gemini boxes are most accurate; Claude covers Gemini misses; OCR fills the rest.
-    const [geminiResults, claudeResults, ocrBlocks] = await Promise.all([
-      this.geminiVision
-        .detectBoardGames(imageBuffer, mediaType)
-        .catch(() => []),
-      this.claudeVision
-        .detectBoardGames(imageBuffer, mediaType)
-        .catch(() => []),
-      this.vision.detectTextBlocks(imageBuffer).catch(() => []),
-    ]);
+    // spineOut sends a 90°-rotated image to Gemini so spine-out games appear as normal
+    // horizontal boxes — dramatically improving detection of games stored like books.
+    const [geminiResults, claudeResults, ocrBlocks, spineOutResults] =
+      await Promise.all([
+        this.geminiVision
+          .detectBoardGames(imageBuffer, mediaType, knownGames)
+          .catch(() => []),
+        this.claudeVision
+          .detectBoardGames(imageBuffer, mediaType, knownGames)
+          .catch(() => []),
+        this.vision.detectTextBlocks(imageBuffer).catch(() => []),
+        this.geminiVision
+          .detectSpineOutGames(imageBuffer, mediaType, knownGames)
+          .catch(() => []),
+      ]);
 
     const cleanedOcr = this.cleanOcrBlocks(ocrBlocks).sort((a, b) =>
       a.boundingBox.y === b.boundingBox.y
@@ -426,7 +444,13 @@ export class GamesService {
     // anything Gemini missed, then OCR for anything neither AI caught.
     const titlesToSearch: Array<{
       title: string;
+      editionOrVersion?: string;
       claudeBox?: { x: number; y: number; width: number; height: number };
+      polygon?: Array<[number, number]>;
+      detectionConfidence?: number;
+      gameConfidence?: number;
+      occlusionLevel?: 'none' | 'low' | 'medium' | 'high';
+      titleCandidates?: string[];
       ocrHint?: {
         text: string;
         confidence?: number;
@@ -434,7 +458,13 @@ export class GamesService {
       };
     }> = geminiResults.map((r) => ({
       title: r.title,
+      editionOrVersion: r.editionOrVersion,
       claudeBox: r.boundingBox,
+      polygon: r.polygon,
+      detectionConfidence: r.detectionConfidence,
+      gameConfidence: r.gameConfidence,
+      occlusionLevel: r.occlusionLevel,
+      titleCandidates: r.candidates,
     }));
 
     for (const r of claudeResults) {
@@ -442,10 +472,54 @@ export class GamesService {
         this.isLikelySameTitle(r.title, t.title),
       );
       if (!existing) {
-        titlesToSearch.push({ title: r.title, claudeBox: r.boundingBox });
+        titlesToSearch.push({
+          title: r.title,
+          editionOrVersion: r.editionOrVersion,
+          claudeBox: r.boundingBox,
+          polygon: r.polygon,
+          titleCandidates: r.candidates?.map((c) => c.title),
+          detectionConfidence: r.detectionConfidence,
+          gameConfidence: r.gameConfidence,
+          occlusionLevel: r.occlusionLevel,
+        });
+      } else {
+        // Gemini detected this game — backfill any missing data from Claude
+        if (!existing.claudeBox && r.boundingBox) existing.claudeBox = r.boundingBox;
+        if (!existing.polygon && r.polygon) existing.polygon = r.polygon;
+        if (!existing.editionOrVersion && r.editionOrVersion)
+          existing.editionOrVersion = r.editionOrVersion;
+        if (!existing.detectionConfidence && r.detectionConfidence)
+          existing.detectionConfidence = r.detectionConfidence;
+        if (!existing.gameConfidence && r.gameConfidence)
+          existing.gameConfidence = r.gameConfidence;
+        if (!existing.occlusionLevel && r.occlusionLevel)
+          existing.occlusionLevel = r.occlusionLevel;
+        if (!existing.titleCandidates?.length && r.candidates?.length)
+          existing.titleCandidates = r.candidates.map((c) => c.title);
+      }
+    }
+
+    // Merge spine-out results (90°-rotated Gemini pass) — fills in games that
+    // were missed by the upright scan because their text was nearly unreadable
+    // as a narrow vertical strip.
+    for (const r of spineOutResults) {
+      const existing = titlesToSearch.find((t) =>
+        this.isLikelySameTitle(r.title, t.title),
+      );
+      if (!existing) {
+        titlesToSearch.push({
+          title: r.title,
+          editionOrVersion: r.editionOrVersion,
+          claudeBox: r.boundingBox,
+          polygon: r.polygon,
+          detectionConfidence: r.detectionConfidence,
+          gameConfidence: r.gameConfidence,
+          occlusionLevel: r.occlusionLevel,
+          titleCandidates: r.candidates,
+        });
       } else if (!existing.claudeBox && r.boundingBox) {
-        // Gemini detected this game but had no box — use Claude's box instead
         existing.claudeBox = r.boundingBox;
+        if (!existing.polygon && r.polygon) existing.polygon = r.polygon;
       }
     }
 
@@ -483,7 +557,9 @@ export class GamesService {
       rawText: string;
       confidence?: number;
       boundingBox: { x: number; y: number; width: number; height: number };
+      polygon?: Array<[number, number]>;
       title?: string;
+      editionOrVersion?: string;
       gameId?: string;
       bggId?: number;
       thumbnailUrl?: string;
@@ -491,92 +567,141 @@ export class GamesService {
       bggUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
+      detectionConfidence?: number;
+      gameConfidence?: number;
+      occlusionLevel?: 'none' | 'low' | 'medium' | 'high';
+      titleCandidates?: string[];
     }> = [];
 
     // Process all detected titles in parallel — sequential BGG calls per game
     // were causing 90 s+ timeouts when Claude detects 20+ games.
     const settled = await Promise.allSettled(
-      titlesToSearch.map(async ({ title: rawText, claudeBox, ocrHint }, i) => {
-        const ocrMatch = ocrHint ?? this.findBestOcrMatch(rawText, cleanedOcr);
-        const rawOcrBox = ocrMatch?.boundingBox ?? null;
-        const boundingBox = this.selectBestBoundingBox(claudeBox, rawOcrBox);
-        const confidence = ocrMatch?.confidence ?? undefined;
+      titlesToSearch.map(
+        async (
+          {
+            title: rawText,
+            editionOrVersion,
+            claudeBox,
+            polygon,
+            detectionConfidence,
+            gameConfidence,
+            occlusionLevel,
+            titleCandidates,
+            ocrHint,
+          },
+          i,
+        ) => {
+          const ocrMatch =
+            ocrHint ?? this.findBestOcrMatch(rawText, cleanedOcr);
+          const rawOcrBox = ocrMatch?.boundingBox ?? null;
+          const boundingBox = this.selectBestBoundingBox(claudeBox, rawOcrBox);
+          const confidence = ocrMatch?.confidence ?? undefined;
 
-        const local = await this.searchLocalCandidates(rawText);
-        const localBest = this.pickBestLocalMatch(rawText, local);
-        if (localBest) {
-          let thumb =
-            localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
-          let imageUrl = localBest.imageUrl?.trim();
-          // If no image in local DB, fetch from BGG and persist the update.
-          if (localBest.bggId != null && !thumb) {
-            await bggSemaphore.acquire();
-            try {
-              const d = await this.fetchBggThingByIdWithRetry(localBest.bggId);
-              if (d?.thumbnailUrl || d?.imageUrl) {
-                thumb = d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
-                imageUrl = d.imageUrl?.trim() || imageUrl;
-                await this.findOrCreateByBggId(localBest.bggId, d);
+          // Include edition in BGG search when Gemini identified one
+          const bggQuery = editionOrVersion
+            ? `${rawText} ${editionOrVersion}`
+            : rawText;
+
+          const local = await this.searchLocalCandidates(rawText);
+          const localBest = this.pickBestLocalMatch(rawText, local);
+          if (localBest) {
+            let thumb =
+              localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
+            let imageUrl = localBest.imageUrl?.trim();
+            // If no image in local DB, fetch from BGG and persist the update.
+            if (localBest.bggId != null && !thumb) {
+              await bggSemaphore.acquire();
+              try {
+                const d = await this.fetchBggThingByIdWithRetry(
+                  localBest.bggId,
+                );
+                if (d?.thumbnailUrl || d?.imageUrl) {
+                  thumb = d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
+                  imageUrl = d.imageUrl?.trim() || imageUrl;
+                  await this.findOrCreateByBggId(localBest.bggId, d);
+                }
+              } finally {
+                bggSemaphore.release();
               }
-            } finally {
-              bggSemaphore.release();
             }
+            return {
+              detectionNumber: i + 1,
+              rawText,
+              confidence,
+              boundingBox,
+              polygon,
+              title: localBest.title,
+              editionOrVersion,
+              gameId: localBest.id,
+              bggId: localBest.bggId ?? undefined,
+              thumbnailUrl: thumb || undefined,
+              imageUrl: imageUrl || undefined,
+              bggUrl:
+                localBest.bggId != null
+                  ? `https://boardgamegeek.com/boardgame/${localBest.bggId}`
+                  : undefined,
+              source: 'local' as const,
+              isOwned:
+                ownedGameIds.has(localBest.id) ||
+                (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
+              detectionConfidence,
+              gameConfidence,
+              occlusionLevel,
+              titleCandidates,
+            };
           }
+
+          const bgg = await this.fetchBestBggMatch(bggQuery);
+          if (!bgg) return null;
+
+          await bggSemaphore.acquire();
+          let details: Partial<Game> | null = null;
+          try {
+            details = await this.fetchBggThingByIdWithRetry(bgg.bggId);
+          } finally {
+            bggSemaphore.release();
+          }
+
+          // Persist the BGG game locally so future shelf scans find it in the DB.
+          const savedGame = details
+            ? await this.findOrCreateByBggId(bgg.bggId, details)
+            : null;
+
+          const bggThumb = details?.thumbnailUrl ?? details?.imageUrl;
+          // Prefer whichever title best matches the OCR text. The BGG /thing API
+          // can return a localized/alternate primary title that differs
+          // significantly from the search-result title that actually matched.
+          const thingTitle = savedGame?.title ?? details?.title;
+          const displayTitle =
+            thingTitle &&
+            this.scoreTitleMatch(rawText, thingTitle) >=
+              this.scoreTitleMatch(rawText, bgg.title)
+              ? thingTitle
+              : bgg.title;
           return {
             detectionNumber: i + 1,
             rawText,
             confidence,
             boundingBox,
-            title: localBest.title,
-            gameId: localBest.id,
-            bggId: localBest.bggId ?? undefined,
-            thumbnailUrl: thumb || undefined,
-            imageUrl: imageUrl || undefined,
-            bggUrl:
-              localBest.bggId != null
-                ? `https://boardgamegeek.com/boardgame/${localBest.bggId}`
-                : undefined,
+            polygon,
+            title: displayTitle,
+            editionOrVersion,
+            gameId: savedGame?.id,
+            bggId: bgg.bggId,
+            thumbnailUrl: bggThumb ?? undefined,
+            imageUrl: details?.imageUrl ?? undefined,
+            bggUrl: `https://boardgamegeek.com/boardgame/${bgg.bggId}`,
             source: 'local' as const,
             isOwned:
-              ownedGameIds.has(localBest.id) ||
-              (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
+              (savedGame != null && ownedGameIds.has(savedGame.id)) ||
+              ownedBggIds.has(bgg.bggId),
+            detectionConfidence,
+            gameConfidence,
+            occlusionLevel,
+            titleCandidates,
           };
-        }
-
-        const bgg = await this.fetchBestBggMatch(rawText);
-        if (!bgg) return null;
-
-        await bggSemaphore.acquire();
-        let details: Partial<Game> | null = null;
-        try {
-          details = await this.fetchBggThingByIdWithRetry(bgg.bggId);
-        } finally {
-          bggSemaphore.release();
-        }
-
-        // Persist the BGG game locally so future shelf scans find it in the DB.
-        const savedGame = details
-          ? await this.findOrCreateByBggId(bgg.bggId, details)
-          : null;
-
-        const bggThumb = details?.thumbnailUrl ?? details?.imageUrl;
-        return {
-          detectionNumber: i + 1,
-          rawText,
-          confidence,
-          boundingBox,
-          title: savedGame?.title ?? bgg.title,
-          gameId: savedGame?.id,
-          bggId: bgg.bggId,
-          thumbnailUrl: bggThumb ?? undefined,
-          imageUrl: details?.imageUrl ?? undefined,
-          bggUrl: `https://boardgamegeek.com/boardgame/${bgg.bggId}`,
-          source: 'local' as const,
-          isOwned:
-            (savedGame != null && ownedGameIds.has(savedGame.id)) ||
-            ownedBggIds.has(bgg.bggId),
-        };
-      }),
+        },
+      ),
     );
 
     for (const result of settled) {
@@ -1101,8 +1226,10 @@ export class GamesService {
       if (hits.length >= 10) break; // cap to avoid O(n) on huge result sets
     }
     if (!hits.length) return null;
-    if (exact) return hits[0]; // exact search: first hit is the only hit
-    // Non-exact: score each candidate by title similarity and pick the best
+    // Score all hits regardless of exact/non-exact mode.
+    // BGG's exact=1 can match on an *alternate* name while the XML primary
+    // name is completely different (e.g. searching "Century" may return a hit
+    // whose primary name is "il Secolo di Ferro"). Scoring catches this.
     const normalizedQuery = this.normalizeTitle(query);
     const ranked = hits
       .map((h) => ({

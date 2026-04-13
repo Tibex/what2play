@@ -83,10 +83,18 @@ export class ClaudeVisionService {
   async detectBoardGames(
     imageBuffer: Buffer,
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
+    knownGames: string[] = [],
   ): Promise<
     Array<{
       title: string;
+      editionOrVersion?: string;
+      ocrText?: string;
+      detectionConfidence?: number;
+      gameConfidence?: number;
+      candidates?: Array<{ title: string; confidence: number }>;
+      occlusionLevel?: 'none' | 'low' | 'medium' | 'high';
       boundingBox?: { x: number; y: number; width: number; height: number };
+      polygon?: Array<[number, number]>;
     }>
   > {
     if (!this.client) return [];
@@ -127,17 +135,24 @@ Board games appear in several orientations:
 - Partially obscured: tucked behind another box or cut off at the image edge
 
 For EACH game box you identify, return an object with:
-- "title": exact title as printed on the box or spine (best guess if partially obscured)
+- "title": best-guess title as printed on the box or spine; set to "UNKNOWN" when completely unreadable
+- "edition_or_version": edition, version, or variant name if identifiable (e.g. "Legacy Season 1", "Big Box", "2nd Edition"); null otherwise
+- "ocr_text": ALL text you can read verbatim from the box or spine, space-separated
+- "detection_confidence": 0.0-1.0 — how certain you are this object IS a board game box
+- "game_confidence": 0.0-1.0 — how certain you are about the title identity
+- "candidates": when game_confidence < 0.85, list up to 3 alternatives as [{"title":"...","confidence":0.N}]; omit or use [] when confident
+- "occlusion_level": how much of the box is hidden — "none", "low" (<25% hidden), "medium" (25-60%), or "high" (>60%)
+- "polygon": 4 clockwise corner points [TL, TR, BR, BL] as [[x,y],[x,y],[x,y],[x,y]], normalized 0.0-1.0; tightly outline the physical box including any rotation or skew
 - "x": left edge of the full physical cardboard box as a fraction of image width (0.0-1.0)
 - "y": top edge of the full physical cardboard box as a fraction of image height (0.0-1.0)
 - "width": box width as a fraction of image width (0.0-1.0)
 - "height": box height as a fraction of image height (0.0-1.0)
 
 Coordinates must describe the FULL physical cardboard box -- not just the title text, logo, or label.
-For spine-out boxes width will be small (0.01-0.06) and height will be larger.
-
+For spine-out boxes width will be small (0.01-0.06), height will be larger, and the polygon will reflect the narrow vertical shape.
+${knownGames.length > 0 ? `\nKnown games in this collection (soft hints for title matching — not an exclusive list):\n${JSON.stringify(knownGames.slice(0, 150))}\n` : ''}
 Return ONLY a JSON array -- no explanation, no markdown fences:
-[{"title":"Wingspan","x":0.12,"y":0.34,"width":0.13,"height":0.22},{"title":"Catan","x":0.27,"y":0.34,"width":0.12,"height":0.22}]
+[{"title":"Wingspan","edition_or_version":null,"ocr_text":"WINGSPAN A Game of Birds","detection_confidence":0.99,"game_confidence":0.97,"candidates":[],"occlusion_level":"none","polygon":[[0.12,0.34],[0.25,0.34],[0.25,0.56],[0.12,0.56]],"x":0.12,"y":0.34,"width":0.13,"height":0.22}]
 
 Rules:
 - Include every item you are reasonably confident is a board game, card game, or tabletop expansion (including small boxes)
@@ -170,7 +185,14 @@ Rules:
 
       const results: Array<{
         title: string;
+        editionOrVersion?: string;
+        ocrText?: string;
+        detectionConfidence?: number;
+        gameConfidence?: number;
+        candidates?: Array<{ title: string; confidence: number }>;
+        occlusionLevel?: 'none' | 'low' | 'medium' | 'high';
         boundingBox?: { x: number; y: number; width: number; height: number };
+        polygon?: Array<[number, number]>;
       }> = [];
 
       for (const item of parsed) {
@@ -181,6 +203,50 @@ Rules:
 
         const title = r.title.replace(/\s+/g, ' ').trim();
         if (title.length >= 100) continue;
+
+        const editionOrVersion =
+          typeof r.edition_or_version === 'string'
+            ? r.edition_or_version.trim() || undefined
+            : undefined;
+
+        const ocrText =
+          typeof r.ocr_text === 'string' ? r.ocr_text.trim() || undefined : undefined;
+
+        const clampConf = (v: unknown): number | undefined =>
+          typeof v === 'number' ? Math.max(0, Math.min(1, v)) : undefined;
+        const detectionConfidence = clampConf(r.detection_confidence);
+        const gameConfidence = clampConf(r.game_confidence);
+
+        const OCCLUSION_LEVELS = ['none', 'low', 'medium', 'high'] as const;
+        const occlusionLevel = OCCLUSION_LEVELS.includes(
+          r.occlusion_level as (typeof OCCLUSION_LEVELS)[number],
+        )
+          ? (r.occlusion_level as 'none' | 'low' | 'medium' | 'high')
+          : undefined;
+
+        const candidates = Array.isArray(r.candidates)
+          ? (r.candidates as unknown[])
+              .filter(
+                (c): c is { title: string; confidence: number } =>
+                  c !== null &&
+                  typeof c === 'object' &&
+                  typeof (c as Record<string, unknown>).title === 'string' &&
+                  typeof (c as Record<string, unknown>).confidence === 'number',
+              )
+              .slice(0, 3)
+          : undefined;
+
+        const rawPolygon = Array.isArray(r.polygon) ? r.polygon : null;
+        const polygon =
+          rawPolygon && rawPolygon.length === 4
+            ? this.clampPolygon(
+                rawPolygon.map((pt: unknown) =>
+                  Array.isArray(pt) && pt.length >= 2
+                    ? ([Number(pt[0]), Number(pt[1])] as [number, number])
+                    : ([0, 0] as [number, number]),
+                ) as Array<[number, number]>,
+              )
+            : undefined;
 
         const hasCoords =
           typeof r.x === 'number' &&
@@ -202,11 +268,11 @@ Rules:
           boundingBox &&
           (boundingBox.width < 0.005 || boundingBox.height < 0.005)
         ) {
-          results.push({ title });
+          results.push({ title, editionOrVersion, ocrText, detectionConfidence, gameConfidence, candidates, occlusionLevel, polygon });
           continue;
         }
 
-        results.push({ title, boundingBox });
+        results.push({ title, editionOrVersion, ocrText, detectionConfidence, gameConfidence, candidates, occlusionLevel, boundingBox, polygon });
       }
 
       return results;
@@ -226,6 +292,7 @@ Rules:
     candidates: Array<{
       detectionNumber: number;
       boundingBox?: { x: number; y: number; width: number; height: number };
+      polygon?: Array<[number, number]>;
     }>,
   ): Promise<Buffer> {
     const base = await sharp(imageBuffer).rotate().toBuffer();
@@ -257,10 +324,28 @@ Rules:
         const badgeCx = px + badgeR + 4;
         const badgeCy = py + badgeR + 4;
 
+        // Use polygon outline when available for a tighter fit; fall back to rect
+        const outline =
+          c.polygon && c.polygon.length === 4
+            ? (() => {
+                const pts = c.polygon!
+                  .map(
+                    ([nx, ny]: [number, number]) =>
+                      `${Math.round(nx * imgWidth)},${Math.round(ny * imgHeight)}`,
+                  )
+                  .join(' ');
+                return (
+                  `<polygon points="${pts}"` +
+                  ` fill="${color}" fill-opacity="0.12"` +
+                  ` stroke="${color}" stroke-width="${strokeWidth}"/>`
+                );
+              })()
+            : `<rect x="${px}" y="${py}" width="${pw}" height="${ph}"` +
+              ` fill="${color}" fill-opacity="0.12"` +
+              ` stroke="${color}" stroke-width="${strokeWidth}" rx="3"/>`;
+
         return (
-          `<rect x="${px}" y="${py}" width="${pw}" height="${ph}"` +
-          ` fill="${color}" fill-opacity="0.12"` +
-          ` stroke="${color}" stroke-width="${strokeWidth}" rx="3"/>` +
+          outline +
           `<circle cx="${badgeCx}" cy="${badgeCy}" r="${badgeR}" fill="${color}"/>` +
           `<text x="${badgeCx}" y="${badgeCy}"` +
           ` text-anchor="middle" dominant-baseline="central"` +
@@ -300,5 +385,13 @@ Rules:
       width: Math.min(width, 1 - x),
       height: Math.min(height, 1 - y),
     };
+  }
+
+  /** Clamps each point of a 4-corner polygon into the valid 0-1 range. */
+  private clampPolygon(
+    polygon: Array<[number, number]>,
+  ): Array<[number, number]> {
+    const clamp = (v: number): number => Math.max(0, Math.min(1, v));
+    return polygon.map(([x, y]) => [clamp(x), clamp(y)]);
   }
 }
