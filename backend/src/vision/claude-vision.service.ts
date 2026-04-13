@@ -96,7 +96,7 @@ export class ClaudeVisionService {
       const imageData = resizedBuffer.toString('base64');
 
       const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-opus-4-6',
         max_tokens: 4096,
         messages: [
           {
@@ -156,7 +156,9 @@ Important rules:
       if (!match) return [];
 
       // Normalize bare decimals like .41 → 0.41 (valid JS but not JSON)
-      const normalized = match[0].replace(/([^\d])\.([0-9])/g, '$10.$2').replace(/^\./gm, '0.');
+      const normalized = match[0]
+        .replace(/([^\d])\.([0-9])/g, '$10.$2')
+        .replace(/^\./gm, '0.');
       const parsed = JSON.parse(normalized) as unknown;
       if (!Array.isArray(parsed)) return [];
 
