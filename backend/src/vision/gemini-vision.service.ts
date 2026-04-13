@@ -205,7 +205,10 @@ Rules:
   > {
     if (!this.model) return [];
     try {
-      const { buffer: prepared } = await this.resizeImage(imageBuffer, mediaType);
+      const { buffer: prepared } = await this.resizeImage(
+        imageBuffer,
+        mediaType,
+      );
       // Rotate 90° CW: spine-out games become wide horizontal boxes
       const rotated = await sharp(prepared)
         .rotate(90)
