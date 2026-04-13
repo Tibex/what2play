@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { ShelfParseCandidate } from '@/lib/types';
+import { shelfDetectionColor } from '@/lib/shelfDetectionColors';
 
 type Props = {
   candidates: ShelfParseCandidate[];
@@ -9,15 +10,6 @@ type Props = {
   onExportCsv: (selected: ShelfParseCandidate[]) => Promise<void>;
   onExportXml: (selected: ShelfParseCandidate[]) => Promise<void>;
 };
-
-const COLORS = [
-  '#e63946', '#2a9d8f', '#e9c46a', '#f4a261', '#a8dadc',
-  '#457b9d', '#6a4c93', '#1982c4', '#8ac926', '#ff595e',
-];
-
-function detectionColor(n: number) {
-  return COLORS[(n - 1) % COLORS.length];
-}
 
 function GameIcon() {
   return (
@@ -75,7 +67,7 @@ export default function ShelfParseReview({
       <div className="space-y-2 mb-5">
         {candidates.map((candidate) => {
           const isRemoved = removedNumbers.has(candidate.detectionNumber);
-          const color = detectionColor(candidate.detectionNumber);
+          const color = shelfDetectionColor(candidate.detectionNumber);
           const imgSrc = candidate.thumbnailUrl ?? candidate.imageUrl ?? null;
           const imgFailed = imgErrors.has(candidate.detectionNumber);
           const showImg = imgSrc !== null && !imgFailed;

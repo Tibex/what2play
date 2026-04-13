@@ -381,6 +381,7 @@ export interface AdminCatalogStats {
     missingYear: number;
     missingPoll: number;
     missingPlayingTime: number;
+    missingThumbnail: number;
   };
 }
 
@@ -419,6 +420,7 @@ export interface AdminIncompleteCatalogEntry {
   missingPlayingTime: boolean;
   missingRating: boolean;
   missingWeight: boolean;
+  missingThumbnail: boolean;
   isIncomplete: boolean;
 }
 

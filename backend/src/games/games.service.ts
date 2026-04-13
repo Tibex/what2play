@@ -62,6 +62,11 @@ class Semaphore {
 }
 
 const bggSemaphore = new Semaphore(5);
+const OCR_MATCH_MIN_SCORE = 32;
+const LOCAL_MATCH_MIN_SCORE = 34;
+const BGG_MATCH_MIN_SCORE = 26;
+const TITLE_DUPLICATE_MATCH_SCORE = 58;
+const MAX_OCR_SUPPLEMENTAL_TITLES = 20;
 
 @Injectable()
 export class GamesService {
@@ -408,17 +413,51 @@ export class GamesService {
         : a.boundingBox.y - b.boundingBox.y,
     );
 
-    // Use Claude results when available; fall back to OCR text blocks
     const titlesToSearch: Array<{
       title: string;
       claudeBox?: { x: number; y: number; width: number; height: number };
-    }> =
-      claudeResults.length > 0
-        ? claudeResults.map((r) => ({
-            title: r.title,
-            claudeBox: r.boundingBox,
-          }))
-        : cleanedOcr.map((b) => ({ title: b.text }));
+      ocrHint?: {
+        text: string;
+        confidence?: number;
+        boundingBox: { x: number; y: number; width: number; height: number };
+      };
+    }> = claudeResults.map((r) => ({
+      title: r.title,
+      claudeBox: r.boundingBox,
+    }));
+
+    const supplementalOcrBlocks = cleanedOcr
+      .filter((block) => this.shouldUseOcrBlockAsTitle(block))
+      .filter((block) => {
+        return !titlesToSearch.some((titleCandidate) =>
+          this.isLikelySameTitle(block.text, titleCandidate.title),
+        );
+      })
+      .sort((a, b) => {
+        const confidenceDiff = (b.confidence ?? 0.7) - (a.confidence ?? 0.7);
+        if (confidenceDiff !== 0) return confidenceDiff;
+        const areaA = a.boundingBox.width * a.boundingBox.height;
+        const areaB = b.boundingBox.width * b.boundingBox.height;
+        return areaB - areaA;
+      })
+      .slice(0, MAX_OCR_SUPPLEMENTAL_TITLES);
+
+    for (const block of supplementalOcrBlocks) {
+      titlesToSearch.push({
+        title: block.text,
+        ocrHint: block,
+      });
+    }
+
+    // If Claude yields nothing useful, fall back to OCR-only mode.
+    if (titlesToSearch.length === 0) {
+      for (const block of cleanedOcr.slice(0, MAX_OCR_SUPPLEMENTAL_TITLES)) {
+        titlesToSearch.push({
+          title: block.text,
+          ocrHint: block,
+        });
+      }
+    }
 
     const candidates: Array<{
       detectionNumber: number;
@@ -437,22 +476,30 @@ export class GamesService {
     // Process all detected titles in parallel — sequential BGG calls per game
     // were causing 90 s+ timeouts when Claude detects 20+ games.
     const settled = await Promise.allSettled(
-      titlesToSearch.map(async ({ title: rawText, claudeBox }, i) => {
-        // Box selection: prefer a plausible Claude box, else expand OCR region
-        const ocrMatch = this.findBestOcrMatch(rawText, cleanedOcr);
+      titlesToSearch.map(async ({ title: rawText, claudeBox, ocrHint }, i) => {
+        const ocrMatch = ocrHint ?? this.findBestOcrMatch(rawText, cleanedOcr);
         const rawOcrBox = ocrMatch?.boundingBox ?? null;
-        const claudeBoxIsReasonable =
-          claudeBox != null && this.isReasonableGameBox(claudeBox);
-        const boundingBox = claudeBoxIsReasonable
-          ? claudeBox
-          : rawOcrBox != null
-            ? this.expandOcrToGameBox(rawOcrBox)
-            : (claudeBox ?? { x: 0, y: 0, width: 0, height: 0 });
+        const boundingBox = this.selectBestBoundingBox(claudeBox, rawOcrBox);
         const confidence = ocrMatch?.confidence ?? undefined;
 
-        const local = await this.searchGames(rawText);
+        const local = await this.searchLocalCandidates(rawText);
         const localBest = this.pickBestLocalMatch(rawText, local);
         if (localBest) {
+          let thumb =
+            localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
+          let imageUrl = localBest.imageUrl?.trim();
+          if (!thumb && localBest.bggId != null) {
+            await bggSemaphore.acquire();
+            try {
+              const d = await this.fetchBggThingByIdWithRetry(localBest.bggId);
+              if (d) {
+                thumb = d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
+                imageUrl = d.imageUrl?.trim() || imageUrl;
+              }
+            } finally {
+              bggSemaphore.release();
+            }
+          }
           return {
             detectionNumber: i + 1,
             rawText,
@@ -461,8 +508,8 @@ export class GamesService {
             title: localBest.title,
             gameId: localBest.id,
             bggId: localBest.bggId ?? undefined,
-            thumbnailUrl: localBest.thumbnailUrl ?? undefined,
-            imageUrl: undefined,
+            thumbnailUrl: thumb || undefined,
+            imageUrl: imageUrl || undefined,
             source: 'local' as const,
             isOwned:
               ownedGameIds.has(localBest.id) ||
@@ -473,11 +520,14 @@ export class GamesService {
         const bgg = await this.fetchBestBggMatch(rawText);
         if (!bgg) return null;
 
-        // Fetch full BGG details — concurrency limited to avoid 429s
         await bggSemaphore.acquire();
-        const details = await this.fetchBggThingById(bgg.bggId)
-          .catch(() => null)
-          .finally(() => bggSemaphore.release());
+        let details: Partial<Game> | null = null;
+        try {
+          details = await this.fetchBggThingByIdWithRetry(bgg.bggId);
+        } finally {
+          bggSemaphore.release();
+        }
+        const bggThumb = details?.thumbnailUrl ?? details?.imageUrl;
         return {
           detectionNumber: i + 1,
           rawText,
@@ -486,7 +536,7 @@ export class GamesService {
           title: bgg.title,
           gameId: undefined,
           bggId: bgg.bggId,
-          thumbnailUrl: details?.thumbnailUrl ?? undefined,
+          thumbnailUrl: bggThumb ?? undefined,
           imageUrl: details?.imageUrl ?? undefined,
           source: 'bgg' as const,
           isOwned: ownedBggIds.has(bgg.bggId),
@@ -546,6 +596,7 @@ export class GamesService {
     width: number;
     height: number;
   }): boolean {
+    const area = box.width * box.height;
     return (
       (box.width >= 0.02 ||
         (box.width >= 0.005 && box.height / box.width >= 3)) &&
@@ -554,6 +605,7 @@ export class GamesService {
       // Only reject degenerate boxes that cover effectively the whole image.
       box.width <= 0.95 &&
       box.height <= 0.95 &&
+      area <= 0.72 &&
       box.x >= -0.02 &&
       box.y >= -0.02 &&
       box.x + box.width <= 1.05 &&
@@ -572,12 +624,31 @@ export class GamesService {
     width: number;
     height: number;
   }): { x: number; y: number; width: number; height: number } {
-    const expandedWidth = Math.min(1, textBox.width * 1.4);
-    const expandedHeight = Math.min(1, Math.max(textBox.height * 5, 0.12));
+    const textAspect = textBox.height / Math.max(textBox.width, 0.0001);
+    const isLikelySpine = textAspect >= 2.2;
+    const expandedWidth = Math.min(
+      1,
+      Math.max(
+        textBox.width * (isLikelySpine ? 2.2 : 1.8),
+        isLikelySpine ? 0.022 : 0.06,
+      ),
+    );
+    const expandedHeight = Math.min(
+      1,
+      Math.max(
+        textBox.height * (isLikelySpine ? 2.8 : 4.6),
+        isLikelySpine ? 0.08 : 0.12,
+      ),
+    );
     const centerX = textBox.x + textBox.width / 2;
-    const centerY = textBox.y + textBox.height / 2;
+    // Front-facing covers usually print title in the upper half, so bias the
+    // expanded box downward. Spine text is typically centered.
+    const verticalAnchor = isLikelySpine ? 0.5 : 0.35;
     const x = Math.max(0, centerX - expandedWidth / 2);
-    const y = Math.max(0, centerY - expandedHeight / 2);
+    const y = Math.max(
+      0,
+      textBox.y + textBox.height / 2 - expandedHeight * verticalAnchor,
+    );
     return {
       x,
       y,
@@ -602,7 +673,7 @@ export class GamesService {
     let best: { block: (typeof ocrBlocks)[0]; score: number } | null = null;
     for (const block of ocrBlocks) {
       const score = this.scoreTitleMatch(normalizedTitle, block.text);
-      if (score >= 40 && (!best || score > best.score)) {
+      if (score >= OCR_MATCH_MIN_SCORE && (!best || score > best.score)) {
         best = { block, score };
       }
     }
@@ -655,17 +726,185 @@ export class GamesService {
     confidence?: number;
     boundingBox: { x: number; y: number; width: number; height: number };
   }> {
-    const noiseWords = new Set(['edition', 'game', 'board', 'the']);
+    const noiseWords = new Set(['edition', 'game', 'board', 'the', 'new']);
+    const seen = new Set<string>();
     return blocks
       .map((block) => ({
         ...block,
         text: block.text.replace(/\s+/g, ' ').trim(),
       }))
-      .filter((block) => block.text.length >= 3)
+      .filter((block) => block.text.length >= 2)
       .filter((block) => {
         const normalized = block.text.toLowerCase().replace(/[^a-z0-9 ]+/g, '');
-        return !noiseWords.has(normalized);
+        if (!/[a-z]/.test(normalized)) return false;
+        if (normalized.split(' ').length === 1 && noiseWords.has(normalized)) {
+          return false;
+        }
+        const { x, y, width, height } = block.boundingBox;
+        const dedupeKey = `${normalized}:${Math.round(x * 100)}:${Math.round(
+          y * 100,
+        )}:${Math.round(width * 100)}:${Math.round(height * 100)}`;
+        if (seen.has(dedupeKey)) return false;
+        seen.add(dedupeKey);
+        return true;
       });
+  }
+
+  private shouldUseOcrBlockAsTitle(block: {
+    text: string;
+    confidence?: number;
+    boundingBox: { x: number; y: number; width: number; height: number };
+  }): boolean {
+    const normalized = this.normalizeTitle(block.text);
+    if (!normalized) return false;
+    const tokens = normalized.split(' ').filter(Boolean);
+    if (!tokens.length) return false;
+    if (tokens.length === 1) {
+      if (tokens[0].length < 4) return false;
+      if (/^\d+$/.test(tokens[0])) return false;
+    }
+    const area = block.boundingBox.width * block.boundingBox.height;
+    if (area < 0.00005) return false;
+    return (block.confidence ?? 0.7) >= 0.28;
+  }
+
+  private isLikelySameTitle(a: string, b: string): boolean {
+    const normalizedA = this.normalizeTitle(a);
+    const normalizedB = this.normalizeTitle(b);
+    if (!normalizedA || !normalizedB) return false;
+    if (normalizedA === normalizedB) return true;
+    return (
+      this.scoreTitleMatch(normalizedA, normalizedB) >=
+        TITLE_DUPLICATE_MATCH_SCORE ||
+      this.scoreTitleMatch(normalizedB, normalizedA) >=
+        TITLE_DUPLICATE_MATCH_SCORE
+    );
+  }
+
+  private clampUnitBox(box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): { x: number; y: number; width: number; height: number } {
+    const x = Math.max(0, Math.min(1, box.x));
+    const y = Math.max(0, Math.min(1, box.y));
+    const width = Math.max(0, Math.min(box.width, 1 - x));
+    const height = Math.max(0, Math.min(box.height, 1 - y));
+    return { x, y, width, height };
+  }
+
+  private boxArea(box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): number {
+    return Math.max(0, box.width) * Math.max(0, box.height);
+  }
+
+  private intersectionArea(
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number },
+  ): number {
+    const left = Math.max(a.x, b.x);
+    const top = Math.max(a.y, b.y);
+    const right = Math.min(a.x + a.width, b.x + b.width);
+    const bottom = Math.min(a.y + a.height, b.y + b.height);
+    return Math.max(0, right - left) * Math.max(0, bottom - top);
+  }
+
+  private selectBestBoundingBox(
+    claudeBox?: { x: number; y: number; width: number; height: number },
+    ocrTextBox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null = null,
+  ): { x: number; y: number; width: number; height: number } {
+    const empty = { x: 0, y: 0, width: 0, height: 0 };
+    const claude = claudeBox ? this.clampUnitBox(claudeBox) : null;
+    const ocrExpanded = ocrTextBox ? this.expandOcrToGameBox(ocrTextBox) : null;
+
+    if (!claude) return ocrExpanded ?? empty;
+    if (!this.isReasonableGameBox(claude)) {
+      return ocrExpanded ?? claude;
+    }
+    if (!ocrExpanded) return claude;
+
+    const claudeArea = this.boxArea(claude);
+    const ocrArea = this.boxArea(ocrExpanded);
+    const overlap = this.intersectionArea(claude, ocrExpanded);
+    const ocrOverlapRatio = ocrArea > 0 ? overlap / ocrArea : 0;
+
+    // Claude can occasionally capture a whole shelf region. Prefer OCR-guided box
+    // when Claude is much larger than the OCR-estimated single-box area.
+    if (claudeArea > 0.22 && ocrArea > 0.0004 && ocrArea < claudeArea * 0.58) {
+      return ocrExpanded;
+    }
+
+    // If both boxes mostly overlap, blend toward OCR to tighten outlines.
+    if (
+      ocrOverlapRatio >= 0.45 &&
+      ocrArea > 0.0003 &&
+      ocrArea < claudeArea * 1.4
+    ) {
+      return this.clampUnitBox({
+        x: claude.x * 0.3 + ocrExpanded.x * 0.7,
+        y: claude.y * 0.3 + ocrExpanded.y * 0.7,
+        width: claude.width * 0.3 + ocrExpanded.width * 0.7,
+        height: claude.height * 0.3 + ocrExpanded.height * 0.7,
+      });
+    }
+
+    return claude;
+  }
+
+  private buildSearchQueryVariants(rawText: string): string[] {
+    const normalized = this.normalizeTitle(rawText);
+    if (!normalized) return [];
+    const variants: string[] = [];
+    const push = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.length < 2) return;
+      if (variants.includes(trimmed)) return;
+      variants.push(trimmed);
+    };
+
+    push(rawText);
+    push(normalized);
+
+    const tokens = normalized.split(' ').filter(Boolean);
+    const stopWords = new Set(['the', 'edition', 'game', 'board']);
+    const filteredTokens = tokens.filter((token) => !stopWords.has(token));
+    push(filteredTokens.join(' '));
+
+    if (filteredTokens.length >= 2) {
+      push(filteredTokens.slice(0, 2).join(' '));
+    }
+    if (filteredTokens.length >= 1) {
+      const longestToken = [...filteredTokens].sort(
+        (a, b) => b.length - a.length,
+      )[0];
+      push(longestToken);
+    }
+
+    return variants.slice(0, 3);
+  }
+
+  private async searchLocalCandidates(rawText: string): Promise<Game[]> {
+    const variants = this.buildSearchQueryVariants(rawText);
+    if (!variants.length) return [];
+    const byId = new Map<string, Game>();
+    for (const variant of variants) {
+      const results = await this.searchGames(variant);
+      for (const game of results) {
+        byId.set(game.id, game);
+      }
+      if (byId.size >= 8) break;
+    }
+    return [...byId.values()];
   }
 
   private pickBestLocalMatch(query: string, games: Game[]): Game | null {
@@ -676,7 +915,9 @@ export class GamesService {
         score: this.scoreTitleMatch(normalizedQuery, game.title),
       }))
       .sort((a, b) => b.score - a.score);
-    return ranked[0] && ranked[0].score >= 40 ? ranked[0].game : null;
+    return ranked[0] && ranked[0].score >= LOCAL_MATCH_MIN_SCORE
+      ? ranked[0].game
+      : null;
   }
 
   private normalizeTitle(value: string): string {
@@ -690,18 +931,91 @@ export class GamesService {
   }
 
   private scoreTitleMatch(query: string, title: string): number {
+    const normalizedQuery = this.normalizeTitle(query);
     const normalizedTitle = this.normalizeTitle(title);
-    if (normalizedTitle === query) return 100;
-    if (normalizedTitle.startsWith(query)) return 80;
-    if (normalizedTitle.includes(query)) return 65;
-    const queryTokens = query.split(' ');
-    const titleTokens = normalizedTitle.split(' ');
-    let matches = 0;
-    for (const token of queryTokens) {
-      if (titleTokens.some((titleToken) => titleToken.startsWith(token)))
-        matches++;
+    if (!normalizedQuery || !normalizedTitle) return 0;
+    if (normalizedTitle === normalizedQuery) return 100;
+    if (
+      normalizedTitle.startsWith(normalizedQuery) ||
+      normalizedQuery.startsWith(normalizedTitle)
+    ) {
+      return 82;
     }
-    return Math.floor((matches / Math.max(queryTokens.length, 1)) * 60);
+    if (
+      normalizedTitle.includes(normalizedQuery) ||
+      normalizedQuery.includes(normalizedTitle)
+    ) {
+      return 68;
+    }
+    const queryTokens = normalizedQuery.split(' ').filter(Boolean);
+    const titleTokens = normalizedTitle.split(' ');
+    if (!queryTokens.length || !titleTokens.length) return 0;
+
+    let strongMatches = 0;
+    let fuzzyMatches = 0;
+    for (const token of queryTokens) {
+      if (
+        titleTokens.some(
+          (titleToken) =>
+            titleToken.startsWith(token) || token.startsWith(titleToken),
+        )
+      ) {
+        strongMatches++;
+        continue;
+      }
+      if (
+        token.length >= 4 &&
+        titleTokens.some(
+          (titleToken) =>
+            titleToken.length >= 4 &&
+            this.withinEditDistanceOne(token, titleToken),
+        )
+      ) {
+        fuzzyMatches++;
+      }
+    }
+    const strongCoverage = strongMatches / queryTokens.length;
+    const combinedCoverage =
+      (strongMatches + fuzzyMatches) / queryTokens.length;
+    const tokenCountPenalty =
+      Math.max(0, Math.abs(queryTokens.length - titleTokens.length) - 1) * 3;
+    const score = Math.max(
+      Math.floor(strongCoverage * 62),
+      Math.floor(combinedCoverage * 56),
+    );
+    return Math.max(0, score - tokenCountPenalty);
+  }
+
+  private withinEditDistanceOne(a: string, b: string): boolean {
+    if (a === b) return true;
+    if (Math.abs(a.length - b.length) > 1) return false;
+
+    let i = 0;
+    let j = 0;
+    let edits = 0;
+
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) {
+        i++;
+        j++;
+        continue;
+      }
+
+      edits++;
+      if (edits > 1) return false;
+
+      if (a.length > b.length) {
+        i++;
+      } else if (b.length > a.length) {
+        j++;
+      } else {
+        i++;
+        j++;
+      }
+    }
+
+    if (i < a.length || j < b.length) edits++;
+    return edits <= 1;
   }
 
   private getBggToken(): string | null {
@@ -715,11 +1029,15 @@ export class GamesService {
   ): Promise<{ bggId: number; title: string } | null> {
     const token = this.getBggToken();
     if (!token) return null;
-    // Prefer exact match (precise); fall back to non-exact when exact finds nothing
-    return (
-      (await this.doBggSearch(query, true, token)) ??
-      (await this.doBggSearch(query, false, token))
-    );
+    const variants = this.buildSearchQueryVariants(query).slice(0, 2);
+    for (const variant of variants) {
+      // Prefer exact match (precise); fall back to non-exact when exact finds nothing.
+      const exactMatch = await this.doBggSearch(variant, true, token);
+      if (exactMatch) return exactMatch;
+      const broadMatch = await this.doBggSearch(variant, false, token);
+      if (broadMatch) return broadMatch;
+    }
+    return null;
   }
 
   private async doBggSearch(
@@ -757,7 +1075,7 @@ export class GamesService {
         score: this.scoreTitleMatch(normalizedQuery, h.title),
       }))
       .sort((a, b) => b.score - a.score);
-    return ranked[0].score >= 30 ? ranked[0] : null;
+    return ranked[0].score >= BGG_MATCH_MIN_SCORE ? ranked[0] : null;
   }
 
   private async fetchBggThingById(
@@ -804,6 +1122,23 @@ export class GamesService {
         ? Number.parseInt(yearPublished, 10)
         : undefined,
     };
+  }
+
+  private async fetchBggThingByIdWithRetry(
+    bggId: number,
+  ): Promise<Partial<Game> | null> {
+    try {
+      const first = await this.fetchBggThingById(bggId);
+      if (first) return first;
+    } catch {
+      /* missing token or upstream error */
+    }
+    await new Promise((r) => setTimeout(r, 400));
+    try {
+      return await this.fetchBggThingById(bggId);
+    } catch {
+      return null;
+    }
   }
 
   private decodeXml(value: string): string {
@@ -894,6 +1229,7 @@ export class GamesService {
     missingYear: number;
     missingPoll: number;
     missingPlayingTime: number;
+    missingThumbnail: number;
   }> {
     const rows = await this.gamesRepo.query(`
       SELECT
@@ -902,7 +1238,8 @@ export class GamesService {
         COUNT(*) FILTER (WHERE weight IS NULL)::int AS "missingWeight",
         COUNT(*) FILTER (WHERE "yearPublished" IS NULL)::int AS "missingYear",
         COUNT(*) FILTER (WHERE "bggPlayerCountPoll" IS NULL OR "bggPlayerCountPoll" = '')::int AS "missingPoll",
-        COUNT(*) FILTER (WHERE "playingTime" IS NULL OR "playingTime" <= 0)::int AS "missingPlayingTime"
+        COUNT(*) FILTER (WHERE "playingTime" IS NULL OR "playingTime" <= 0)::int AS "missingPlayingTime",
+        COUNT(*) FILTER (WHERE COALESCE(NULLIF(TRIM("thumbnailUrl"), ''), NULLIF(TRIM("imageUrl"), '')) IS NULL)::int AS "missingThumbnail"
       FROM games
     `);
     return rows[0];
@@ -922,6 +1259,7 @@ export class GamesService {
             OR "bggPlayerCountPoll" = ''
             OR "playingTime" IS NULL
             OR "playingTime" <= 0
+            OR COALESCE(NULLIF(TRIM("thumbnailUrl"), ''), NULLIF(TRIM("imageUrl"), '')) IS NULL
           )
         ORDER BY "updatedAt" DESC
         LIMIT $1
@@ -950,6 +1288,7 @@ export class GamesService {
       missingPlayingTime: boolean;
       missingRating: boolean;
       missingWeight: boolean;
+      missingThumbnail: boolean;
       isIncomplete: boolean;
     }>;
     meta: { page: number; pageSize: number; total: number; hasNext: boolean };
@@ -973,6 +1312,7 @@ export class GamesService {
           ("playingTime" IS NULL OR "playingTime" <= 0) AS "missingPlayingTime",
           ("bggRating" IS NULL) AS "missingRating",
           (weight IS NULL) AS "missingWeight",
+          (COALESCE(NULLIF(TRIM("thumbnailUrl"), ''), NULLIF(TRIM("imageUrl"), '')) IS NULL) AS "missingThumbnail",
           (
             "yearPublished" IS NULL
             OR "playingTime" IS NULL
@@ -981,6 +1321,7 @@ export class GamesService {
             OR "bggPlayerCountPoll" = ''
             OR "bggRating" IS NULL
             OR weight IS NULL
+            OR COALESCE(NULLIF(TRIM("thumbnailUrl"), ''), NULLIF(TRIM("imageUrl"), '')) IS NULL
           ) AS "isIncomplete"
         FROM games
         ORDER BY "isIncomplete" DESC, title ASC

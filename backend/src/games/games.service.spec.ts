@@ -20,6 +20,8 @@ describe('GamesService', () => {
     create: jest.fn((data) => data),
     save: jest.fn((data) => data),
     createQueryBuilder: jest.fn(),
+    query: jest.fn(),
+    delete: jest.fn(),
   };
 
   const mockOwnershipRepo = {
@@ -251,5 +253,93 @@ describe('GamesService', () => {
     expect(parsed.candidates[0].title).toBe('Catan');
     expect(parsed.candidates[1].detectionNumber).toBe(2);
     expect(parsed.candidates[1].title).toBe('Wingspan');
+  });
+
+  it('adds OCR supplemental titles when Claude misses some games', async () => {
+    mockClaudeVision.detectBoardGames.mockResolvedValue([
+      {
+        title: 'Wingspan',
+        boundingBox: { x: 0.35, y: 0.18, width: 0.18, height: 0.42 },
+      },
+    ]);
+    mockClaudeVision.drawAnnotations.mockResolvedValue(Buffer.from('image'));
+    mockVision.detectTextBlocks.mockResolvedValue([
+      {
+        text: 'Wingspan',
+        confidence: 0.95,
+        boundingBox: { x: 0.36, y: 0.23, width: 0.16, height: 0.08 },
+      },
+      {
+        text: 'Catan',
+        confidence: 0.93,
+        boundingBox: { x: 0.08, y: 0.15, width: 0.12, height: 0.07 },
+      },
+    ]);
+    mockOwnershipRepo.find.mockResolvedValue([]);
+
+    jest
+      .spyOn(service, 'searchGames')
+      .mockImplementation(async (query: string) => {
+        const q = query.toLowerCase();
+        if (q.includes('wing')) {
+          return [
+            {
+              id: 'g-wing',
+              title: 'Wingspan',
+              minPlayers: 1,
+              maxPlayers: 5,
+            } as Game,
+          ];
+        }
+        if (q.includes('catan')) {
+          return [
+            {
+              id: 'g-catan',
+              title: 'Catan',
+              minPlayers: 3,
+              maxPlayers: 4,
+            } as Game,
+          ];
+        }
+        return [];
+      });
+
+    const parsed = await service.parseShelfPhoto('u1', Buffer.from('image'));
+    const parsedTitles = parsed.candidates.map((candidate) => candidate.title);
+    expect(parsedTitles).toContain('Wingspan');
+    expect(parsedTitles).toContain('Catan');
+  });
+
+  it('treats missing thumbnails as incomplete catalog data', async () => {
+    mockGamesRepo.query.mockResolvedValue([{ bggId: 123 }, { bggId: 456 }]);
+
+    const ids = await service.getIncompleteBggIds(50);
+
+    expect(ids).toEqual([123, 456]);
+    expect(mockGamesRepo.query).toHaveBeenCalledWith(
+      expect.stringContaining('"thumbnailUrl"'),
+      [50],
+    );
+  });
+
+  it('includes missingThumbnail in catalog quality stats', async () => {
+    mockGamesRepo.query.mockResolvedValue([
+      {
+        total: 100,
+        missingRating: 7,
+        missingWeight: 5,
+        missingYear: 3,
+        missingPoll: 2,
+        missingPlayingTime: 4,
+        missingThumbnail: 9,
+      },
+    ]);
+
+    const stats = await service.getCatalogQualityStats();
+
+    expect(stats.missingThumbnail).toBe(9);
+    expect(mockGamesRepo.query).toHaveBeenCalledWith(
+      expect.stringContaining('"missingThumbnail"'),
+    );
   });
 });

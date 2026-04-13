@@ -12,7 +12,7 @@ const MAX_IMAGE_WIDTH = 1536;
 // across a dense shelf.
 const LOCALIZE_BATCH_SIZE = 8;
 
-// Must match DETECTION_COLORS in ShelfParseReview.tsx
+// Must match SHELF_DETECTION_COLORS in frontend/src/lib/shelfDetectionColors.ts
 const ANNOTATION_COLORS = [
   '#ef4444', // red
   '#3b82f6', // blue
@@ -76,16 +76,17 @@ export class ClaudeVisionService {
     height: number;
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
   }> {
-    const metadata = await sharp(imageBuffer).metadata();
+    const oriented = await sharp(imageBuffer).rotate().toBuffer();
+    const metadata = await sharp(oriented).metadata();
     if (!metadata.width || metadata.width <= MAX_IMAGE_WIDTH) {
       return {
-        buffer: imageBuffer,
+        buffer: oriented,
         width: metadata.width ?? MAX_IMAGE_WIDTH,
         height: metadata.height ?? MAX_IMAGE_WIDTH,
         mediaType,
       };
     }
-    const buffer = await sharp(imageBuffer)
+    const buffer = await sharp(oriented)
       .resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true })
       .jpeg({ quality: 85 })
       .toBuffer();
@@ -107,7 +108,7 @@ export class ClaudeVisionService {
     if (!this.client) return [];
     const response = await this.client.messages.create({
       model: 'claude-opus-4-6',
-      max_tokens: 2048,
+      max_tokens: 3072,
       messages: [
         {
           role: 'user',
@@ -136,6 +137,7 @@ Pay special attention to games visible spine-out — the spine text may be rotat
 For EACH game you find, note its title EXACTLY as printed on the box or spine.
 
 Common misses to watch for: games tucked at shelf ends, small boxes in front of large ones, expansion boxes, games without spine labels (check covers).
+If a title is partially visible, include your best guess instead of skipping it.
 
 Exclude titles that are clearly NOT a board game box: price tags, shelf labels, decorations, books, or other non-game items.
 
@@ -164,13 +166,19 @@ If no games are found: []`,
         /^[\d\s\-/]+$/,
         /^(sale|price|label|tag|sticker)$/i,
       ];
-      return parsed.filter(
-        (t): t is string =>
-          typeof t === 'string' &&
-          t.length > 0 &&
-          t.length < 100 &&
-          !nonGamePatterns.some((p) => p.test(t.trim())),
-      );
+      const deduped: string[] = [];
+      const seen = new Set<string>();
+      for (const t of parsed) {
+        if (typeof t !== 'string') continue;
+        const cleaned = t.replace(/\s+/g, ' ').trim();
+        if (cleaned.length === 0 || cleaned.length >= 100) continue;
+        if (nonGamePatterns.some((p) => p.test(cleaned))) continue;
+        const normalized = normalizeTitle(cleaned).join(' ');
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        deduped.push(cleaned);
+      }
+      return deduped;
     } catch {
       return [];
     }
@@ -251,6 +259,7 @@ Return PIXEL coordinates (integer values):
 Rules:
 - Measure the full cardboard box edges — NOT just the printed title or logo area
 - For spine-out games, the box is very narrow (width may be only 20-60px)
+- Prefer a tight box for each game and avoid including neighboring boxes
 - Each game gets its own entry; do not merge neighbouring boxes
 - If a game cannot be found, set all values to 0
 - Copy the title field EXACTLY from the provided list — do not paraphrase or rewrite.
@@ -446,7 +455,8 @@ Return ONLY a JSON array in the same order as the list:
       boundingBox?: { x: number; y: number; width: number; height: number };
     }>,
   ): Promise<Buffer> {
-    const metadata = await sharp(imageBuffer).metadata();
+    const base = await sharp(imageBuffer).rotate().toBuffer();
+    const metadata = await sharp(base).metadata();
     const imgWidth = metadata.width ?? 1000;
     const imgHeight = metadata.height ?? 1000;
 
@@ -476,7 +486,7 @@ Return ONLY a JSON array in the same order as the list:
 
         return (
           `<rect x="${px}" y="${py}" width="${pw}" height="${ph}"` +
-          ` fill="${color}" fill-opacity="0.18"` +
+          ` fill="${color}" fill-opacity="0.12"` +
           ` stroke="${color}" stroke-width="${strokeWidth}" rx="3"/>` +
           `<circle cx="${badgeCx}" cy="${badgeCy}" r="${badgeR}" fill="${color}"/>` +
           `<text x="${badgeCx}" y="${badgeCy}"` +
@@ -489,7 +499,7 @@ Return ONLY a JSON array in the same order as the list:
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${imgWidth}" height="${imgHeight}">${shapes}</svg>`;
 
-    return sharp(imageBuffer)
+    return sharp(base)
       .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
       .jpeg({ quality: 90 })
       .toBuffer();

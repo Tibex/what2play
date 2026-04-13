@@ -538,6 +538,7 @@ export class BggService {
       missingYear: number;
       missingPoll: number;
       missingPlayingTime: number;
+      missingThumbnail: number;
     };
   }> {
     const state = await this.bggCatalogSyncRepo.findOne({
@@ -1236,7 +1237,19 @@ export class BggService {
 
   private extractTag(block: string, tag: string): string | undefined {
     const m = block.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
-    return m ? this.decodeHtmlEntities(m[1].trim()) : undefined;
+    if (!m) return undefined;
+    const decoded = this.decodeHtmlEntities(m[1].trim());
+    if (tag === 'image' || tag === 'thumbnail') {
+      return this.normalizeBggImageUrl(decoded);
+    }
+    return decoded;
+  }
+
+  private normalizeBggImageUrl(url: string): string {
+    const trimmed = this.decodeHtmlEntities(url).trim();
+    if (trimmed.startsWith('//')) return `https:${trimmed}`;
+    if (trimmed.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+    return trimmed;
   }
 
   private extractNumAttr(block: string, attr: string): number | undefined {

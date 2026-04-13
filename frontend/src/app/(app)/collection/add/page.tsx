@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import GameSearchAdd, {
   type GameSearchAddResult,
 } from '@/components/GameSearchAdd';
 import ShelfPhotoUpload from '@/components/ShelfPhotoUpload';
-import ShelfParseReview from '@/components/ShelfParseReview';
 import ShelfDetectionOverlay from '@/components/ShelfDetectionOverlay';
+import ShelfParseReview from '@/components/ShelfParseReview';
 import type {
   Game,
   GameOwnership,
@@ -21,6 +21,19 @@ export default function CollectionAddPage() {
   const [loading, setLoading] = useState(true);
   const [shelfCandidates, setShelfCandidates] = useState<ShelfParseCandidate[]>([]);
   const [shelfImageUrl, setShelfImageUrl] = useState('');
+  const [shelfAnnotatedSrc, setShelfAnnotatedSrc] = useState<string | null>(null);
+  const shelfImageUrlRef = useRef('');
+
+  useEffect(() => {
+    shelfImageUrlRef.current = shelfImageUrl;
+  }, [shelfImageUrl]);
+
+  useEffect(() => {
+    return () => {
+      const url = shelfImageUrlRef.current;
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+    };
+  }, []);
 
   const refreshCollection = async () => {
     const data = await api.get<GameOwnership[]>('/games/collection');
@@ -60,7 +73,7 @@ export default function CollectionAddPage() {
   const handleAdd = async (result: GameSearchAddResult) => {
     if (result.gameId) {
       await api.post(`/games/collection/${result.gameId}`);
-    } else if (result.bggId != null) {
+    } else if (typeof result.bggId === 'number') {
       await api.post<{ game: Game }>('/bgg/import-one', { bggId: result.bggId });
     } else {
       return;
@@ -69,15 +82,34 @@ export default function CollectionAddPage() {
     await refreshCollection();
   };
 
-  const handleShelfUpload = async (file: File, previewUrl: string) => {
-    const formData = new FormData();
-    formData.append('photo', file);
-    const parsed = await api.postForm<ParseShelfPhotoResponse>(
-      '/games/collection/parse-shelf',
-      formData,
-    );
-    setShelfCandidates(parsed.candidates);
-    setShelfImageUrl(previewUrl);
+  const handleShelfUpload = async (file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const parsed = await api.postForm<ParseShelfPhotoResponse>(
+        '/games/collection/parse-shelf',
+        formData,
+      );
+      setShelfCandidates(parsed.candidates);
+      setShelfAnnotatedSrc(parsed.annotatedImageBase64 ?? null);
+      if (parsed.candidates.length === 0) {
+        URL.revokeObjectURL(objectUrl);
+        setShelfImageUrl((prev) => {
+          if (prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+          return '';
+        });
+      } else {
+        setShelfImageUrl((prev) => {
+          if (prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
+      }
+    } catch (err) {
+      URL.revokeObjectURL(objectUrl);
+      setShelfAnnotatedSrc(null);
+      throw err;
+    }
   };
 
   const handleShelfConfirm = async (selected: ShelfParseCandidate[]) => {
@@ -132,7 +164,11 @@ export default function CollectionAddPage() {
       <ShelfPhotoUpload onUpload={handleShelfUpload} />
       {shelfImageUrl && shelfCandidates.length > 0 && (
         <div className="space-y-4">
-          <ShelfDetectionOverlay imageUrl={shelfImageUrl} candidates={shelfCandidates} />
+          <ShelfDetectionOverlay
+            imageUrl={shelfImageUrl}
+            annotatedSrc={shelfAnnotatedSrc}
+            candidates={shelfCandidates}
+          />
           <ShelfParseReview
             candidates={shelfCandidates}
             onConfirm={handleShelfConfirm}

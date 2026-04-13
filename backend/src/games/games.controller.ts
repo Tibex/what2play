@@ -46,17 +46,8 @@ export class GamesController {
     return this.gamesService.getUserCollection(req.user.id);
   }
 
-  @Post('collection/:gameId')
-  @ApiOperation({ summary: 'Add game to collection' })
-  addToCollection(@Request() req, @Param('gameId') gameId: string) {
-    return this.gamesService.addToCollection(req.user.id, gameId);
-  }
-
-  @Delete('collection/:gameId')
-  @ApiOperation({ summary: 'Remove game from collection' })
-  removeFromCollection(@Request() req, @Param('gameId') gameId: string) {
-    return this.gamesService.removeFromCollection(req.user.id, gameId);
-  }
+  // Static `collection/*` paths must be registered before `collection/:gameId`
+  // or Nest matches e.g. `parse-shelf` as a gameId and Postgres rejects the value as uuid.
 
   @Post('collection/parse-shelf')
   @UseInterceptors(
@@ -89,6 +80,18 @@ export class GamesController {
   @ApiOperation({ summary: 'Batch add selected games to collection' })
   batchAddCollection(@Request() req, @Body() dto: BatchAddCollectionDto) {
     return this.gamesService.batchAddToCollection(req.user.id, dto.items);
+  }
+
+  @Post('collection/:gameId')
+  @ApiOperation({ summary: 'Add game to collection' })
+  addToCollection(@Request() req, @Param('gameId') gameId: string) {
+    return this.gamesService.addToCollection(req.user.id, gameId);
+  }
+
+  @Delete('collection/:gameId')
+  @ApiOperation({ summary: 'Remove game from collection' })
+  removeFromCollection(@Request() req, @Param('gameId') gameId: string) {
+    return this.gamesService.removeFromCollection(req.user.id, gameId);
   }
 
   @Delete('admin/:gameId')
