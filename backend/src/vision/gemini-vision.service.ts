@@ -48,7 +48,7 @@ export class GeminiVisionService {
         mediaType,
       );
 
-      const result = await this.model.generateContent([
+      const parts = [
         {
           inlineData: {
             mimeType: finalMediaType,
@@ -83,9 +83,25 @@ Rules:
 - Skip only clear non-games: price tags, shelf labels, books, ornaments, barcodes
 - Return [] only if there are genuinely no game boxes in the image`,
         },
-      ]);
+      ];
 
-      const text = result.response.text().trim();
+      // Retry up to 2 times on 503 (transient overload) with exponential backoff
+      let result;
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+          result = await this.model.generateContent(parts);
+          break;
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status;
+          if (status === 503 && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      const text = result!.response.text().trim();
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
