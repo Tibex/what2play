@@ -114,33 +114,39 @@ export class ClaudeVisionService {
                 type: 'text',
                 text: `You are an expert at identifying board games on shelves.
 
-Scan this image systematically -- shelf by shelf, top to bottom, left to right within each row. Do not skip any row.
+STEP 1 -- Spine-out games (most commonly missed):
+Many games are stored spine-out, like books on a bookshelf. They appear as narrow vertical strips (roughly 1-6% of image width) with the game title running along the spine, rotated 90 or 180 degrees. Before doing a full scan, sweep each shelf specifically for narrow strips with vertical text -- every such strip is almost certainly a game spine.
 
-Board games appear in many orientations:
-- Face-out: full box cover visible (title on front face)
-- Spine-out: only narrow spine visible -- read text rotated 90 or 180 degrees
-- Stacked horizontally: cover face on top
-- Partially hidden: tucked behind another box or cut off at the frame edge
+STEP 2 -- Full shelf scan:
+Scan systematically, shelf by shelf, top to bottom, left to right within each row. Do not skip any row.
 
-For EACH game box you can identify, return an object with:
+Board games appear in several orientations:
+- Spine-out: narrow strip, title rotated 90 or 180 degrees -- PRIORITIZE finding these (Step 1)
+- Face-out: full box cover visible (title on the front face)
+- Stacked horizontally: box lying flat, cover face up
+- Partially obscured: tucked behind another box or cut off at the image edge
+
+For EACH game box you identify, return an object with:
 - "title": exact title as printed on the box or spine (best guess if partially obscured)
-- "x": left edge of the physical cardboard box as a fraction of image width (0.0-1.0)
-- "y": top edge of the physical cardboard box as a fraction of image height (0.0-1.0)
+- "x": left edge of the full physical cardboard box as a fraction of image width (0.0-1.0)
+- "y": top edge of the full physical cardboard box as a fraction of image height (0.0-1.0)
 - "width": box width as a fraction of image width (0.0-1.0)
 - "height": box height as a fraction of image height (0.0-1.0)
 
-Coordinates must describe the FULL physical cardboard box -- not just the title text, logo, or label area.
-For spine-out games width will naturally be small (0.01-0.05).
+Coordinates must describe the FULL physical cardboard box -- not just the title text, logo, or label.
+For spine-out boxes width will be small (0.01-0.06) and height will be larger.
 
 Return ONLY a JSON array -- no explanation, no markdown fences:
 [{"title":"Wingspan","x":0.12,"y":0.34,"width":0.13,"height":0.22},{"title":"Catan","x":0.27,"y":0.34,"width":0.12,"height":0.22}]
 
-Important rules:
-- Be exhaustive -- a missed game is worse than a slightly imprecise box
-- Every shelf row must be checked, including top and bottom shelves
-- Spine text is often rotated -- look carefully for narrow boxes with vertical text
-- Expansions and small boxes count
-- Skip only clear non-games: price tags, shelf labels, books, ornaments, barcodes
+Rules:
+- Include every item you are reasonably confident is a board game, card game, or tabletop expansion (including small boxes)
+- Include partially hidden boxes and boxes where only part of the title is visible
+- An imprecise bounding box is acceptable -- a missed game is not
+- Do NOT include: books (look for author names, ISBNs, novel-style covers), magazines, DVDs, decorative objects, price tags, or shelf labels
+- For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip only if clearly a novel, magazine, or DVD
+- Check every shelf row including top and bottom
+- Return the COMPLETE title as printed. A word may appear large as a design choice — read ALL text on the box/spine (e.g. if "SLAY" is prominent but the box says "Here to Slay", return "Here to Slay", not "Slay" or "Slay the Spire")
 - Return [] only if there are genuinely no game boxes in the image`,
               },
             ],

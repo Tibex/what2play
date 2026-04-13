@@ -508,14 +508,15 @@ export class GamesService {
           let thumb =
             localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
           let imageUrl = localBest.imageUrl?.trim();
-          if (localBest.bggId != null) {
-            // Always fetch fresh from BGG — local DB thumbnails can be stale
+          // If no image in local DB, fetch from BGG and persist the update.
+          if (localBest.bggId != null && !thumb) {
             await bggSemaphore.acquire();
             try {
               const d = await this.fetchBggThingByIdWithRetry(localBest.bggId);
               if (d?.thumbnailUrl || d?.imageUrl) {
                 thumb = d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
                 imageUrl = d.imageUrl?.trim() || imageUrl;
+                await this.findOrCreateByBggId(localBest.bggId, d);
               }
             } finally {
               bggSemaphore.release();
@@ -552,20 +553,28 @@ export class GamesService {
         } finally {
           bggSemaphore.release();
         }
+
+        // Persist the BGG game locally so future shelf scans find it in the DB.
+        const savedGame = details
+          ? await this.findOrCreateByBggId(bgg.bggId, details)
+          : null;
+
         const bggThumb = details?.thumbnailUrl ?? details?.imageUrl;
         return {
           detectionNumber: i + 1,
           rawText,
           confidence,
           boundingBox,
-          title: bgg.title,
-          gameId: undefined,
+          title: savedGame?.title ?? bgg.title,
+          gameId: savedGame?.id,
           bggId: bgg.bggId,
           thumbnailUrl: bggThumb ?? undefined,
           imageUrl: details?.imageUrl ?? undefined,
           bggUrl: `https://boardgamegeek.com/boardgame/${bgg.bggId}`,
-          source: 'bgg' as const,
-          isOwned: ownedBggIds.has(bgg.bggId),
+          source: 'local' as const,
+          isOwned:
+            (savedGame != null && ownedGameIds.has(savedGame.id)) ||
+            ownedBggIds.has(bgg.bggId),
         };
       }),
     );
