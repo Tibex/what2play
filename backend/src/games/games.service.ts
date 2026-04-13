@@ -403,19 +403,13 @@ export class GamesService {
       owned.map((o) => o.game.bggId).filter((id): id is number => id != null),
     );
 
-    // Three-tier detection: Gemini (primary) → Claude Sonnet (fallback) → OCR (supplemental)
-    // Gemini and OCR run in parallel; Claude only fires if Gemini returns nothing.
-    const [geminiResults, ocrBlocks] = await Promise.all([
+    // Run all three detection sources in parallel for maximum coverage.
+    // Gemini boxes are most accurate; Claude covers Gemini misses; OCR fills the rest.
+    const [geminiResults, claudeResults, ocrBlocks] = await Promise.all([
       this.geminiVision.detectBoardGames(imageBuffer, mediaType).catch(() => []),
+      this.claudeVision.detectBoardGames(imageBuffer, mediaType).catch(() => []),
       this.vision.detectTextBlocks(imageBuffer).catch(() => []),
     ]);
-
-    const aiResults =
-      geminiResults.length > 0
-        ? geminiResults
-        : await this.claudeVision
-            .detectBoardGames(imageBuffer, mediaType)
-            .catch(() => []);
 
     const cleanedOcr = this.cleanOcrBlocks(ocrBlocks).sort((a, b) =>
       a.boundingBox.y === b.boundingBox.y
@@ -423,6 +417,8 @@ export class GamesService {
         : a.boundingBox.y - b.boundingBox.y,
     );
 
+    // Build merged title list: Gemini first (best boxes), then Claude for
+    // anything Gemini missed, then OCR for anything neither AI caught.
     const titlesToSearch: Array<{
       title: string;
       claudeBox?: { x: number; y: number; width: number; height: number };
@@ -431,41 +427,47 @@ export class GamesService {
         confidence?: number;
         boundingBox: { x: number; y: number; width: number; height: number };
       };
-    }> = aiResults.map((r) => ({
+    }> = geminiResults.map((r) => ({
       title: r.title,
       claudeBox: r.boundingBox,
     }));
 
+    for (const r of claudeResults) {
+      const existing = titlesToSearch.find((t) =>
+        this.isLikelySameTitle(r.title, t.title),
+      );
+      if (!existing) {
+        titlesToSearch.push({ title: r.title, claudeBox: r.boundingBox });
+      } else if (!existing.claudeBox && r.boundingBox) {
+        // Gemini detected this game but had no box — use Claude's box instead
+        existing.claudeBox = r.boundingBox;
+      }
+    }
+
     const supplementalOcrBlocks = cleanedOcr
       .filter((block) => this.shouldUseOcrBlockAsTitle(block))
-      .filter((block) => {
-        return !titlesToSearch.some((titleCandidate) =>
-          this.isLikelySameTitle(block.text, titleCandidate.title),
-        );
-      })
+      .filter(
+        (block) =>
+          !titlesToSearch.some((t) => this.isLikelySameTitle(block.text, t.title)),
+      )
       .sort((a, b) => {
         const confidenceDiff = (b.confidence ?? 0.7) - (a.confidence ?? 0.7);
         if (confidenceDiff !== 0) return confidenceDiff;
-        const areaA = a.boundingBox.width * a.boundingBox.height;
-        const areaB = b.boundingBox.width * b.boundingBox.height;
-        return areaB - areaA;
+        return (
+          b.boundingBox.width * b.boundingBox.height -
+          a.boundingBox.width * a.boundingBox.height
+        );
       })
       .slice(0, MAX_OCR_SUPPLEMENTAL_TITLES);
 
     for (const block of supplementalOcrBlocks) {
-      titlesToSearch.push({
-        title: block.text,
-        ocrHint: block,
-      });
+      titlesToSearch.push({ title: block.text, ocrHint: block });
     }
 
-    // If Claude yields nothing useful, fall back to OCR-only mode.
+    // Last resort: if all AI sources returned nothing, use raw OCR
     if (titlesToSearch.length === 0) {
       for (const block of cleanedOcr.slice(0, MAX_OCR_SUPPLEMENTAL_TITLES)) {
-        titlesToSearch.push({
-          title: block.text,
-          ocrHint: block,
-        });
+        titlesToSearch.push({ title: block.text, ocrHint: block });
       }
     }
 
