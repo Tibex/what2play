@@ -19,7 +19,7 @@ export class GeminiVisionService {
     const apiKey = this.config.get<string>('GEMINI_API_KEY');
     if (apiKey) {
       this.model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
       });
     } else {
       this.logger.warn(
@@ -110,7 +110,7 @@ Rules:
           box.length === 4 &&
           box.every((v) => typeof v === 'number')
         ) {
-          const [ymin, xmin, ymax, xmax] = box as number[];
+          const [ymin, xmin, ymax, xmax] = box;
           const x = xmin / GEMINI_BOX_SCALE;
           const y = ymin / GEMINI_BOX_SCALE;
           const width = (xmax - xmin) / GEMINI_BOX_SCALE;
@@ -143,7 +143,10 @@ Rules:
   private async resizeImage(
     imageBuffer: Buffer,
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
-  ): Promise<{ buffer: Buffer; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' }> {
+  ): Promise<{
+    buffer: Buffer;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+  }> {
     const oriented = await sharp(imageBuffer).rotate().toBuffer();
     const metadata = await sharp(oriented).metadata();
     if (!metadata.width || metadata.width <= MAX_IMAGE_WIDTH) {
