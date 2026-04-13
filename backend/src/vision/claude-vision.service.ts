@@ -96,7 +96,7 @@ export class ClaudeVisionService {
       const imageData = resizedBuffer.toString('base64');
 
       const response = await this.client.messages.create({
-        model: 'claude-opus-4-6',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         messages: [
           {
@@ -166,9 +166,10 @@ Important rules:
       for (const item of parsed) {
         if (item === null || typeof item !== 'object') continue;
         const r = item as Record<string, unknown>;
-        if (typeof r.title !== 'string' || r.title.trim().length === 0) continue;
+        if (typeof r.title !== 'string' || r.title.trim().length === 0)
+          continue;
 
-        const title = (r.title as string).replace(/\s+/g, ' ').trim();
+        const title = r.title.replace(/\s+/g, ' ').trim();
         if (title.length >= 100) continue;
 
         const hasCoords =

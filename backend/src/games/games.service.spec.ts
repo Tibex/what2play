@@ -11,6 +11,7 @@ import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { ConfigService } from '@nestjs/config';
 import { GoogleVisionService } from '../vision/google-vision.service';
 import { ClaudeVisionService } from '../vision/claude-vision.service';
+import { GeminiVisionService } from '../vision/gemini-vision.service';
 
 describe('GamesService', () => {
   let service: GamesService;
@@ -60,6 +61,7 @@ describe('GamesService', () => {
     detectBoardGames: jest.fn(),
     drawAnnotations: jest.fn(),
   };
+  const mockGeminiVision = { detectBoardGames: jest.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -87,6 +89,7 @@ describe('GamesService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: GoogleVisionService, useValue: mockVision },
         { provide: ClaudeVisionService, useValue: mockClaudeVision },
+        { provide: GeminiVisionService, useValue: mockGeminiVision },
       ],
     }).compile();
 
@@ -207,6 +210,7 @@ describe('GamesService', () => {
   });
 
   it('assigns stable detection numbers when parsing shelf photo', async () => {
+    mockGeminiVision.detectBoardGames.mockResolvedValue([]);
     mockClaudeVision.detectBoardGames.mockResolvedValue([]);
     mockClaudeVision.drawAnnotations.mockResolvedValue(Buffer.from('image'));
     mockVision.detectTextBlocks.mockResolvedValue([
@@ -256,6 +260,7 @@ describe('GamesService', () => {
   });
 
   it('adds OCR supplemental titles when Claude misses some games', async () => {
+    mockGeminiVision.detectBoardGames.mockResolvedValue([]);
     mockClaudeVision.detectBoardGames.mockResolvedValue([
       {
         title: 'Wingspan',

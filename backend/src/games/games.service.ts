@@ -17,6 +17,7 @@ import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { GoogleVisionService } from '../vision/google-vision.service';
 import { ClaudeVisionService } from '../vision/claude-vision.service';
+import { GeminiVisionService } from '../vision/gemini-vision.service';
 
 type GameCollectionPerformance = {
   pickedCount: number;
@@ -90,6 +91,7 @@ export class GamesService {
     private config: ConfigService,
     private vision: GoogleVisionService,
     private claudeVision: ClaudeVisionService,
+    private geminiVision: GeminiVisionService,
   ) {}
 
   async searchGames(query: string): Promise<Game[]> {
@@ -401,11 +403,19 @@ export class GamesService {
       owned.map((o) => o.game.bggId).filter((id): id is number => id != null),
     );
 
-    // Run Claude vision and OCR in parallel; Claude is primary when available
-    const [claudeResults, ocrBlocks] = await Promise.all([
-      this.claudeVision.detectBoardGames(imageBuffer, mediaType),
+    // Three-tier detection: Gemini (primary) → Claude Sonnet (fallback) → OCR (supplemental)
+    // Gemini and OCR run in parallel; Claude only fires if Gemini returns nothing.
+    const [geminiResults, ocrBlocks] = await Promise.all([
+      this.geminiVision.detectBoardGames(imageBuffer, mediaType).catch(() => []),
       this.vision.detectTextBlocks(imageBuffer).catch(() => []),
     ]);
+
+    const aiResults =
+      geminiResults.length > 0
+        ? geminiResults
+        : await this.claudeVision
+            .detectBoardGames(imageBuffer, mediaType)
+            .catch(() => []);
 
     const cleanedOcr = this.cleanOcrBlocks(ocrBlocks).sort((a, b) =>
       a.boundingBox.y === b.boundingBox.y
@@ -421,7 +431,7 @@ export class GamesService {
         confidence?: number;
         boundingBox: { x: number; y: number; width: number; height: number };
       };
-    }> = claudeResults.map((r) => ({
+    }> = aiResults.map((r) => ({
       title: r.title,
       claudeBox: r.boundingBox,
     }));
