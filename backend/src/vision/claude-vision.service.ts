@@ -8,10 +8,6 @@ import sharp from 'sharp';
 // vs ~25px) with only a modest token increase.
 const MAX_IMAGE_WIDTH = 1536;
 
-// Sonnet localizes in batches of this size — smaller batches = less attention dilution
-// across a dense shelf.
-const LOCALIZE_BATCH_SIZE = 8;
-
 // Must match SHELF_DETECTION_COLORS in frontend/src/lib/shelfDetectionColors.ts
 const ANNOTATION_COLORS = [
   '#ef4444', // red
@@ -23,29 +19,6 @@ const ANNOTATION_COLORS = [
   '#06b6d4', // cyan
   '#ec4899', // pink
 ];
-
-/**
- * Lowercase and strip punctuation, returning an array of tokens.
- * Used for fuzzy title matching between Sonnet output and canonical batch titles.
- */
-function normalizeTitle(s: string): string[] {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-/**
- * Token overlap ratio: intersection size / max(a.length, b.length).
- * Returns a value in [0, 1]. Returns 0 if either token list is empty.
- */
-function tokenOverlap(a: string[], b: string[]): number {
-  if (a.length === 0 || b.length === 0) return 0;
-  const setA = new Set(a);
-  const intersection = b.filter((t) => setA.has(t)).length;
-  return intersection / Math.max(a.length, b.length);
-}
 
 @Injectable()
 export class ClaudeVisionService {
@@ -63,7 +36,7 @@ export class ClaudeVisionService {
     }
   }
 
-  get isAvailable(): boolean {
+  isAvailable(): boolean {
     return this.client !== null;
   }
 
@@ -99,295 +72,14 @@ export class ClaudeVisionService {
     };
   }
 
-  // Pass 1: Opus detects all game titles from the image (no coordinates).
-  // Separating detection from localization improves recall significantly.
-  private async detectTitles(
-    imageData: string,
-    mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
-  ): Promise<string[]> {
-    if (!this.client) return [];
-    const response = await this.client.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 3072,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: imageData,
-              },
-            },
-            {
-              type: 'text',
-              text: `You are an expert at identifying board games on shelves.
-
-Scan this image shelf by shelf — top to bottom, left to right within each row.
-Board games appear in many orientations:
-- Cover facing forward (title clearly visible)
-- Spine out (only the narrow spine shows the title — read it rotated)
-- Stacked horizontally with cover on top
-- Tilted or partially behind another box
-
-Pay special attention to games visible spine-out — the spine text may be rotated 90° or 180°.
-
-For EACH game you find, note its title EXACTLY as printed on the box or spine.
-
-Common misses to watch for: games tucked at shelf ends, small boxes in front of large ones, expansion boxes, games without spine labels (check covers).
-If a title is partially visible, include your best guess instead of skipping it.
-
-Exclude titles that are clearly NOT a board game box: price tags, shelf labels, decorations, books, or other non-game items.
-
-Return ONLY a JSON array of titles — no commentary, no numbering:
-["Title 1", "Title 2", "Title 3"]
-
-Be exhaustive. A false positive is better than a missed game. However, skip obvious non-box items (barcodes, store labels, stickers).
-If no games are found: []`,
-            },
-          ],
-        },
-      ],
-    });
-
-    const text =
-      response.content[0].type === 'text'
-        ? response.content[0].text.trim()
-        : '';
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) return [];
-    try {
-      const parsed = JSON.parse(match[0]) as unknown;
-      if (!Array.isArray(parsed)) return [];
-      const nonGamePatterns = [
-        /^\d+[.,]\d+$/,
-        /^[\d\s\-/]+$/,
-        /^(sale|price|label|tag|sticker)$/i,
-      ];
-      const deduped: string[] = [];
-      const seen = new Set<string>();
-      for (const t of parsed) {
-        if (typeof t !== 'string') continue;
-        const cleaned = t.replace(/\s+/g, ' ').trim();
-        if (cleaned.length === 0 || cleaned.length >= 100) continue;
-        if (nonGamePatterns.some((p) => p.test(cleaned))) continue;
-        const normalized = normalizeTitle(cleaned).join(' ');
-        if (!normalized || seen.has(normalized)) continue;
-        seen.add(normalized);
-        deduped.push(cleaned);
-      }
-      return deduped;
-    } catch {
-      return [];
-    }
-  }
-
-  // Pass 2: Sonnet locates each title's bounding box in pixel coords, batched to
-  // avoid attention dilution across a dense shelf.
-  private async localizeTitles(
-    imageData: string,
-    mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
-    titles: string[],
-    imgWidth: number,
-    imgHeight: number,
-  ): Promise<
-    Array<{
-      title: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }>
-  > {
-    if (!this.client || titles.length === 0) return [];
-
-    // Build batches upfront, then fire all Sonnet calls in parallel
-    const batches: Array<{ offset: number; titles: string[] }> = [];
-    for (let i = 0; i < titles.length; i += LOCALIZE_BATCH_SIZE) {
-      batches.push({
-        offset: i,
-        titles: titles.slice(i, i + LOCALIZE_BATCH_SIZE),
-      });
-    }
-
-    const TOKEN_OVERLAP_THRESHOLD = 0.3;
-
-    const parseBatch = async (
-      offset: number,
-      batch: string[],
-    ): Promise<
-      Array<{
-        title: string;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      }>
-    > => {
-      const list = batch.map((t, j) => `${offset + j + 1}. ${t}`).join('\n');
-      let response;
-      try {
-        response = await this.client!.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 2048,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: mediaType,
-                    data: imageData,
-                  },
-                },
-                {
-                  type: 'text',
-                  text: `This image is ${imgWidth}×${imgHeight} pixels and shows a shelf of board games.
-Locate the bounding box of each game box listed below.
-
-Games to locate:
-${list}
-
-Return PIXEL coordinates (integer values):
-- x, y: top-left corner of the physical cardboard box
-- width, height: size of the physical box in pixels
-
-Rules:
-- Measure the full cardboard box edges — NOT just the printed title or logo area
-- For spine-out games, the box is very narrow (width may be only 20-60px)
-- Prefer a tight box for each game and avoid including neighboring boxes
-- Each game gets its own entry; do not merge neighbouring boxes
-- If a game cannot be found, set all values to 0
-- Copy the title field EXACTLY from the provided list — do not paraphrase or rewrite.
-
-Return ONLY a JSON array in the same order as the list:
-[{"title":"Game Name","x":120,"y":45,"width":80,"height":220}]`,
-                },
-              ],
-            },
-          ],
-        });
-      } catch (err) {
-        this.logger.warn(
-          `Localization batch ${offset}–${offset + batch.length} failed`,
-          err,
-        );
-        return [];
-      }
-
-      const text =
-        response.content[0].type === 'text'
-          ? response.content[0].text.trim()
-          : '';
-      const match = text.match(/\[[\s\S]*\]/);
-      if (!match) return [];
-
-      try {
-        const parsed = JSON.parse(match[0]) as unknown;
-        if (!Array.isArray(parsed)) return [];
-
-        const results: Array<{
-          title: string;
-          x: number;
-          y: number;
-          width: number;
-          height: number;
-        }> = [];
-
-        // Pre-compute normalized tokens for every batch title (for fuzzy fallback)
-        const batchTokens = batch.map(normalizeTitle);
-
-        for (let j = 0; j < parsed.length; j++) {
-          const item = parsed[j];
-          if (
-            item === null ||
-            typeof item !== 'object' ||
-            typeof (item as Record<string, unknown>).x !== 'number' ||
-            typeof (item as Record<string, unknown>).y !== 'number' ||
-            typeof (item as Record<string, unknown>).width !== 'number' ||
-            typeof (item as Record<string, unknown>).height !== 'number'
-          ) {
-            continue;
-          }
-
-          const r = item as Record<string, unknown>;
-          const parsedTitle = typeof r.title === 'string' ? r.title : '';
-
-          // --- Index-aligned matching with fuzzy fallback ---
-          let canonicalTitle: string | null = null;
-
-          if (j < batch.length) {
-            // Primary: use the batch slot at the same index
-            const parsedTokens = normalizeTitle(parsedTitle);
-            const slotTokens = batchTokens[j];
-            if (
-              tokenOverlap(parsedTokens, slotTokens) >= TOKEN_OVERLAP_THRESHOLD
-            ) {
-              // Sanity check passed — use the canonical batch title
-              canonicalTitle = batch[j];
-            } else {
-              // Sanity check failed — try fuzzy match across all batch titles
-              let bestScore = 0;
-              let bestIdx = -1;
-              for (let k = 0; k < batch.length; k++) {
-                const score = tokenOverlap(parsedTokens, batchTokens[k]);
-                if (score > bestScore) {
-                  bestScore = score;
-                  bestIdx = k;
-                }
-              }
-              if (bestScore >= TOKEN_OVERLAP_THRESHOLD && bestIdx !== -1) {
-                canonicalTitle = batch[bestIdx];
-              }
-              // else: no match found — skip this item
-            }
-          } else {
-            // Index out of range — try fuzzy match across all batch titles
-            const parsedTokens = normalizeTitle(parsedTitle);
-            let bestScore = 0;
-            let bestIdx = -1;
-            for (let k = 0; k < batch.length; k++) {
-              const score = tokenOverlap(parsedTokens, batchTokens[k]);
-              if (score > bestScore) {
-                bestScore = score;
-                bestIdx = k;
-              }
-            }
-            if (bestScore >= TOKEN_OVERLAP_THRESHOLD && bestIdx !== -1) {
-              canonicalTitle = batch[bestIdx];
-            }
-            // else: no match found — skip this item
-          }
-
-          if (canonicalTitle === null) continue;
-
-          results.push({
-            title: canonicalTitle,
-            x: (r.x as number) / imgWidth,
-            y: (r.y as number) / imgHeight,
-            width: (r.width as number) / imgWidth,
-            height: (r.height as number) / imgHeight,
-          });
-        }
-
-        return results;
-      } catch {
-        return [];
-      }
-    };
-
-    // All batches run in parallel — reduces wall time from N×5s to ~5s
-    const batchResults = await Promise.all(
-      batches.map(({ offset, titles: batch }) => parseBatch(offset, batch)),
-    );
-
-    return batchResults.flat();
-  }
-
+  /**
+   * Single-pass detection: Opus identifies every game box AND its bounding box
+   * in one prompt, returning normalized (0-1) coordinates directly.
+   *
+   * Previously this was two passes (Opus detects titles then Sonnet localizes each).
+   * That caused systematic misalignment because Sonnet was re-finding boxes that
+   * Opus already located, often getting wrong coordinates.
+   */
   async detectBoardGames(
     imageBuffer: Buffer,
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
@@ -399,44 +91,114 @@ Return ONLY a JSON array in the same order as the list:
   > {
     if (!this.client) return [];
     try {
-      const {
-        buffer: resizedBuffer,
-        width: resizedWidth,
-        height: resizedHeight,
-        mediaType: resizedMediaType,
-      } = await this.resizeImage(imageBuffer, mediaType);
+      const { buffer: resizedBuffer, mediaType: resizedMediaType } =
+        await this.resizeImage(imageBuffer, mediaType);
       const imageData = resizedBuffer.toString('base64');
 
-      // Two-pass: detect titles first (Opus), then localize each one (Sonnet, batched)
-      const titles = await this.detectTitles(imageData, resizedMediaType);
-      if (titles.length === 0) return [];
+      const response = await this.client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 4096,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: resizedMediaType,
+                  data: imageData,
+                },
+              },
+              {
+                type: 'text',
+                text: `You are an expert at identifying board games on shelves.
 
-      const locations = await this.localizeTitles(
-        imageData,
-        resizedMediaType,
-        titles,
-        resizedWidth,
-        resizedHeight,
-      );
+Scan this image systematically -- shelf by shelf, top to bottom, left to right within each row. Do not skip any row.
 
-      // Build a title→box lookup from the localization pass.
-      // Since localizeTitles now returns canonical batch titles, lookups will always hit
-      // when a box was successfully matched.
-      const boxByTitle = new Map<
-        string,
-        { x: number; y: number; width: number; height: number }
-      >();
-      for (const loc of locations) {
-        const box = this.clampBoundingBox(loc);
-        if (box.width > 0.005 && box.height > 0.005) {
-          boxByTitle.set(loc.title.toLowerCase(), box);
+Board games appear in many orientations:
+- Face-out: full box cover visible (title on front face)
+- Spine-out: only narrow spine visible -- read text rotated 90 or 180 degrees
+- Stacked horizontally: cover face on top
+- Partially hidden: tucked behind another box or cut off at the frame edge
+
+For EACH game box you can identify, return an object with:
+- "title": exact title as printed on the box or spine (best guess if partially obscured)
+- "x": left edge of the physical cardboard box as a fraction of image width (0.0-1.0)
+- "y": top edge of the physical cardboard box as a fraction of image height (0.0-1.0)
+- "width": box width as a fraction of image width (0.0-1.0)
+- "height": box height as a fraction of image height (0.0-1.0)
+
+Coordinates must describe the FULL physical cardboard box -- not just the title text, logo, or label area.
+For spine-out games width will naturally be small (0.01-0.05).
+
+Return ONLY a JSON array -- no explanation, no markdown fences:
+[{"title":"Wingspan","x":0.12,"y":0.34,"width":0.13,"height":0.22},{"title":"Catan","x":0.27,"y":0.34,"width":0.12,"height":0.22}]
+
+Important rules:
+- Be exhaustive -- a missed game is worse than a slightly imprecise box
+- Every shelf row must be checked, including top and bottom shelves
+- Spine text is often rotated -- look carefully for narrow boxes with vertical text
+- Expansions and small boxes count
+- Skip only clear non-games: price tags, shelf labels, books, ornaments, barcodes
+- Return [] only if there are genuinely no game boxes in the image`,
+              },
+            ],
+          },
+        ],
+      });
+
+      const text =
+        response.content[0].type === 'text'
+          ? response.content[0].text.trim()
+          : '';
+      const match = text.match(/\[[\s\S]*\]/);
+      if (!match) return [];
+
+      const parsed = JSON.parse(match[0]) as unknown;
+      if (!Array.isArray(parsed)) return [];
+
+      const results: Array<{
+        title: string;
+        boundingBox?: { x: number; y: number; width: number; height: number };
+      }> = [];
+
+      for (const item of parsed) {
+        if (item === null || typeof item !== 'object') continue;
+        const r = item as Record<string, unknown>;
+        if (typeof r.title !== 'string' || r.title.trim().length === 0) continue;
+
+        const title = (r.title as string).replace(/\s+/g, ' ').trim();
+        if (title.length >= 100) continue;
+
+        const hasCoords =
+          typeof r.x === 'number' &&
+          typeof r.y === 'number' &&
+          typeof r.width === 'number' &&
+          typeof r.height === 'number';
+
+        const boundingBox = hasCoords
+          ? this.clampBoundingBox({
+              x: r.x as number,
+              y: r.y as number,
+              width: r.width as number,
+              height: r.height as number,
+            })
+          : undefined;
+
+        // Skip degenerate boxes (near-zero area) but keep entries with no box at all
+        if (
+          boundingBox &&
+          (boundingBox.width < 0.005 || boundingBox.height < 0.005)
+        ) {
+          results.push({ title });
+          continue;
         }
+
+        results.push({ title, boundingBox });
       }
 
-      return titles.map((title) => ({
-        title,
-        boundingBox: boxByTitle.get(title.toLowerCase()),
-      }));
+      return results;
     } catch (error) {
       this.logger.error('Claude vision detection failed', error);
       return [];
@@ -507,7 +269,7 @@ Return ONLY a JSON array in the same order as the list:
 
   /**
    * Clamps normalized bounding box coordinates into the valid 0-1 range.
-   * Claude occasionally returns values slightly over 1 or negative — clipping
+   * Claude occasionally returns values slightly over 1 or negative -- clipping
    * prevents misaligned overlays on the frontend.
    */
   private clampBoundingBox(box: {
