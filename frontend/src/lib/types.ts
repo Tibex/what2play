@@ -441,6 +441,7 @@ export interface ShelfParseCandidate {
   bggId?: number;
   thumbnailUrl?: string;
   imageUrl?: string;
+  bggUrl?: string;
   source: "local" | "bgg";
   isOwned: boolean;
 }

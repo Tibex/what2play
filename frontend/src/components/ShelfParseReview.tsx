@@ -108,7 +108,18 @@ export default function ShelfParseReview({
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium leading-tight truncate">
-                  {candidate.title ?? candidate.rawText}
+                  {candidate.bggUrl ? (
+                    <a
+                      href={candidate.bggUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline hover:text-[var(--primary)]"
+                    >
+                      {candidate.title ?? candidate.rawText}
+                    </a>
+                  ) : (
+                    candidate.title ?? candidate.rawText
+                  )}
                 </p>
                 {candidate.title && candidate.title !== candidate.rawText && (
                   <p className="text-xs text-[var(--muted)] truncate">OCR: {candidate.rawText}</p>

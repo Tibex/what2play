@@ -96,7 +96,7 @@ export class ClaudeVisionService {
       const imageData = resizedBuffer.toString('base64');
 
       const response = await this.client.messages.create({
-        model: 'claude-opus-4-6',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         messages: [
           {

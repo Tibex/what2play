@@ -66,7 +66,7 @@ const bggSemaphore = new Semaphore(5);
 const OCR_MATCH_MIN_SCORE = 32;
 const LOCAL_MATCH_MIN_SCORE = 34;
 const BGG_MATCH_MIN_SCORE = 26;
-const TITLE_DUPLICATE_MATCH_SCORE = 58;
+const TITLE_DUPLICATE_MATCH_SCORE = 90;
 const MAX_OCR_SUPPLEMENTAL_TITLES = 20;
 
 @Injectable()
@@ -392,6 +392,7 @@ export class GamesService {
       bggId?: number;
       thumbnailUrl?: string;
       imageUrl?: string;
+      bggUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
     }>;
@@ -406,8 +407,12 @@ export class GamesService {
     // Run all three detection sources in parallel for maximum coverage.
     // Gemini boxes are most accurate; Claude covers Gemini misses; OCR fills the rest.
     const [geminiResults, claudeResults, ocrBlocks] = await Promise.all([
-      this.geminiVision.detectBoardGames(imageBuffer, mediaType).catch(() => []),
-      this.claudeVision.detectBoardGames(imageBuffer, mediaType).catch(() => []),
+      this.geminiVision
+        .detectBoardGames(imageBuffer, mediaType)
+        .catch(() => []),
+      this.claudeVision
+        .detectBoardGames(imageBuffer, mediaType)
+        .catch(() => []),
       this.vision.detectTextBlocks(imageBuffer).catch(() => []),
     ]);
 
@@ -448,7 +453,9 @@ export class GamesService {
       .filter((block) => this.shouldUseOcrBlockAsTitle(block))
       .filter(
         (block) =>
-          !titlesToSearch.some((t) => this.isLikelySameTitle(block.text, t.title)),
+          !titlesToSearch.some((t) =>
+            this.isLikelySameTitle(block.text, t.title),
+          ),
       )
       .sort((a, b) => {
         const confidenceDiff = (b.confidence ?? 0.7) - (a.confidence ?? 0.7);
@@ -481,6 +488,7 @@ export class GamesService {
       bggId?: number;
       thumbnailUrl?: string;
       imageUrl?: string;
+      bggUrl?: string;
       source: 'local' | 'bgg';
       isOwned: boolean;
     }> = [];
@@ -522,6 +530,7 @@ export class GamesService {
             bggId: localBest.bggId ?? undefined,
             thumbnailUrl: thumb || undefined,
             imageUrl: imageUrl || undefined,
+            bggUrl: localBest.bggId != null ? `https://boardgamegeek.com/boardgame/${localBest.bggId}` : undefined,
             source: 'local' as const,
             isOwned:
               ownedGameIds.has(localBest.id) ||
@@ -550,6 +559,7 @@ export class GamesService {
           bggId: bgg.bggId,
           thumbnailUrl: bggThumb ?? undefined,
           imageUrl: details?.imageUrl ?? undefined,
+          bggUrl: `https://boardgamegeek.com/boardgame/${bgg.bggId}`,
           source: 'bgg' as const,
           isOwned: ownedBggIds.has(bgg.bggId),
         };
