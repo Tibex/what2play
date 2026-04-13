@@ -74,6 +74,11 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.get('APP_PORT') || 3001;
+  // Long-running AI + BGG requests can exceed 30s — extend server timeouts.
+  const httpServer = app.getHttpServer();
+  httpServer.keepAliveTimeout = 120_000;
+  httpServer.headersTimeout = 125_000;
+
   await app.listen(port);
 }
 bootstrap();
