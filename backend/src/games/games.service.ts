@@ -484,7 +484,8 @@ export class GamesService {
         });
       } else {
         // Gemini detected this game — backfill any missing data from Claude
-        if (!existing.claudeBox && r.boundingBox) existing.claudeBox = r.boundingBox;
+        if (!existing.claudeBox && r.boundingBox)
+          existing.claudeBox = r.boundingBox;
         if (!existing.polygon && r.polygon) existing.polygon = r.polygon;
         if (!existing.editionOrVersion && r.editionOrVersion)
           existing.editionOrVersion = r.editionOrVersion;

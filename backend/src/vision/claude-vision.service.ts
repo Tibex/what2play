@@ -210,7 +210,9 @@ Rules:
             : undefined;
 
         const ocrText =
-          typeof r.ocr_text === 'string' ? r.ocr_text.trim() || undefined : undefined;
+          typeof r.ocr_text === 'string'
+            ? r.ocr_text.trim() || undefined
+            : undefined;
 
         const clampConf = (v: unknown): number | undefined =>
           typeof v === 'number' ? Math.max(0, Math.min(1, v)) : undefined;
@@ -244,7 +246,7 @@ Rules:
                   Array.isArray(pt) && pt.length >= 2
                     ? ([Number(pt[0]), Number(pt[1])] as [number, number])
                     : ([0, 0] as [number, number]),
-                ) as Array<[number, number]>,
+                ),
               )
             : undefined;
 
@@ -268,11 +270,30 @@ Rules:
           boundingBox &&
           (boundingBox.width < 0.005 || boundingBox.height < 0.005)
         ) {
-          results.push({ title, editionOrVersion, ocrText, detectionConfidence, gameConfidence, candidates, occlusionLevel, polygon });
+          results.push({
+            title,
+            editionOrVersion,
+            ocrText,
+            detectionConfidence,
+            gameConfidence,
+            candidates,
+            occlusionLevel,
+            polygon,
+          });
           continue;
         }
 
-        results.push({ title, editionOrVersion, ocrText, detectionConfidence, gameConfidence, candidates, occlusionLevel, boundingBox, polygon });
+        results.push({
+          title,
+          editionOrVersion,
+          ocrText,
+          detectionConfidence,
+          gameConfidence,
+          candidates,
+          occlusionLevel,
+          boundingBox,
+          polygon,
+        });
       }
 
       return results;
@@ -328,7 +349,7 @@ Rules:
         const outline =
           c.polygon && c.polygon.length === 4
             ? (() => {
-                const pts = c.polygon!
+                const pts = c.polygon
                   .map(
                     ([nx, ny]: [number, number]) =>
                       `${Math.round(nx * imgWidth)},${Math.round(ny * imgHeight)}`,
