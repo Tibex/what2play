@@ -435,6 +435,7 @@ export interface ShelfParseCandidate {
   detectionNumber: number;
   rawText: string;
   confidence?: number;
+  gameConfidence?: number;
   boundingBox: ShelfBoundingBox;
   title?: string;
   gameId?: string;
