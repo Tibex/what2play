@@ -450,3 +450,34 @@ export interface ParseShelfPhotoResponse {
   candidates: ShelfParseCandidate[];
   annotatedImageBase64?: string;
 }
+
+export type ShelfParseProgressStage =
+  | "prepare"
+  | "detect"
+  | "merge"
+  | "match"
+  | "annotate"
+  | "finalize";
+
+export interface ShelfParseProgressDetail {
+  done?: number;
+  total?: number;
+  sourcesDone?: number;
+  sourcesTotal?: number;
+  geminiUpright?: number;
+  geminiSpine?: number;
+  claude?: number;
+  ocrBlocks?: number;
+  mergedTitles?: number;
+}
+
+export interface ShelfParseProgressPayload {
+  stage: ShelfParseProgressStage;
+  message: string;
+  percent: number;
+  detail?: ShelfParseProgressDetail;
+}
+
+export interface ParseShelfPhotoJobResponse {
+  jobId: string;
+}

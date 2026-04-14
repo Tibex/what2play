@@ -19,6 +19,11 @@ import { GoogleVisionService } from '../vision/google-vision.service';
 import { ClaudeVisionService } from '../vision/claude-vision.service';
 import { GeminiVisionService } from '../vision/gemini-vision.service';
 
+import type {
+  ShelfParseProgressDetail,
+  ShelfParseProgressPayload,
+} from './shelf-parse.types';
+
 type GameCollectionPerformance = {
   pickedCount: number;
   avgVotingRank: number | null;
@@ -63,9 +68,9 @@ class Semaphore {
 }
 
 const bggSemaphore = new Semaphore(5);
-const OCR_MATCH_MIN_SCORE = 32;
-const LOCAL_MATCH_MIN_SCORE = 34;
-const BGG_MATCH_MIN_SCORE = 26;
+const OCR_MATCH_MIN_SCORE = 36;
+const LOCAL_MATCH_MIN_SCORE = 38;
+const BGG_MATCH_MIN_SCORE = 30;
 const TITLE_DUPLICATE_MATCH_SCORE = 90;
 const MAX_OCR_SUPPLEMENTAL_TITLES = 20;
 
@@ -381,6 +386,7 @@ export class GamesService {
     userId: string,
     imageBuffer: Buffer,
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
+    onProgress?: (payload: ShelfParseProgressPayload) => void,
   ): Promise<{
     candidates: Array<{
       detectionNumber: number;
@@ -416,23 +422,121 @@ export class GamesService {
       .map((o) => o.game.title)
       .filter((t): t is string => Boolean(t));
 
+    onProgress?.({
+      stage: 'prepare',
+      message: 'Loading your collection for recognition hints...',
+      percent: 5,
+    });
+
     // Run all four detection sources in parallel for maximum coverage.
     // Gemini boxes are most accurate; Claude covers Gemini misses; OCR fills the rest.
     // spineOut sends a 90°-rotated image to Gemini so spine-out games appear as normal
     // horizontal boxes — dramatically improving detection of games stored like books.
+    let detectDetail: ShelfParseProgressDetail = {};
+    let sourcesDone = 0;
+    const sourcesTotal = 4;
+
+    const bumpDetect = (label: string, partial: ShelfParseProgressDetail) => {
+      sourcesDone += 1;
+      detectDetail = { ...detectDetail, ...partial, sourcesDone, sourcesTotal };
+      const pct = 12 + Math.round((sourcesDone / sourcesTotal) * 18);
+      onProgress?.({
+        stage: 'detect',
+        message: label,
+        percent: Math.min(32, pct),
+        detail: detectDetail,
+      });
+    };
+
+    onProgress?.({
+      stage: 'detect',
+      message: 'Scanning your photo for game boxes...',
+      percent: 12,
+      detail: { sourcesDone: 0, sourcesTotal },
+    });
+
+    const runGeminiMain = async () => {
+      try {
+        const r = await this.geminiVision.detectBoardGames(
+          imageBuffer,
+          mediaType,
+          knownGames,
+        );
+        bumpDetect(`Pass complete: found ${r.length} possible boxes`, {
+          geminiUpright: r.length,
+        });
+        return r;
+      } catch (err) {
+        this.logger.warn('Gemini upright shelf detection failed', err);
+        bumpDetect('Pass complete: no boxes found', { geminiUpright: 0 });
+        return [];
+      }
+    };
+
+    const runClaude = async () => {
+      try {
+        const r = await this.claudeVision.detectBoardGames(
+          imageBuffer,
+          mediaType,
+          knownGames,
+        );
+        bumpDetect(`Pass complete: found ${r.length} possible boxes`, {
+          claude: r.length,
+        });
+        return r;
+      } catch (err) {
+        this.logger.warn('Claude shelf detection failed', err);
+        bumpDetect('Pass complete: no boxes found', { claude: 0 });
+        return [];
+      }
+    };
+
+    const runOcr = async () => {
+      try {
+        const r = await this.vision.detectTextBlocks(imageBuffer);
+        bumpDetect(`Text scan complete: ${r.length} text areas read`, {
+          ocrBlocks: r.length,
+        });
+        return r;
+      } catch (err) {
+        this.logger.warn('Google OCR shelf detection failed', err);
+        bumpDetect('Text scan complete: no text found', { ocrBlocks: 0 });
+        return [];
+      }
+    };
+
+    const runGeminiSpine = async () => {
+      try {
+        const r = await this.geminiVision.detectSpineOutGames(
+          imageBuffer,
+          mediaType,
+          knownGames,
+        );
+        bumpDetect(`Pass complete: found ${r.length} possible boxes`, {
+          geminiSpine: r.length,
+        });
+        return r;
+      } catch (err) {
+        this.logger.warn('Gemini spine-out shelf detection failed', err);
+        bumpDetect('Pass complete: no boxes found', { geminiSpine: 0 });
+        return [];
+      }
+    };
+
     const [geminiResults, claudeResults, ocrBlocks, spineOutResults] =
       await Promise.all([
-        this.geminiVision
-          .detectBoardGames(imageBuffer, mediaType, knownGames)
-          .catch(() => []),
-        this.claudeVision
-          .detectBoardGames(imageBuffer, mediaType, knownGames)
-          .catch(() => []),
-        this.vision.detectTextBlocks(imageBuffer).catch(() => []),
-        this.geminiVision
-          .detectSpineOutGames(imageBuffer, mediaType, knownGames)
-          .catch(() => []),
+        runGeminiMain(),
+        runClaude(),
+        runOcr(),
+        runGeminiSpine(),
       ]);
+
+    onProgress?.({
+      stage: 'merge',
+      message: 'Combining scan results...',
+      percent: 33,
+      detail: detectDetail,
+    });
 
     const cleanedOcr = this.cleanOcrBlocks(ocrBlocks).sort((a, b) =>
       a.boundingBox.y === b.boundingBox.y
@@ -553,6 +657,21 @@ export class GamesService {
       }
     }
 
+    const prunedTitles = this.suppressOverlappingShelfTitles(
+      titlesToSearch.filter((t) => !this.isJunkShelfTitle(t.title)),
+      0.2,
+      0.28,
+    );
+    titlesToSearch.length = 0;
+    titlesToSearch.push(...prunedTitles);
+
+    onProgress?.({
+      stage: 'merge',
+      message: `Found ${titlesToSearch.length} likely game title(s)`,
+      percent: 38,
+      detail: { ...detectDetail, mergedTitles: titlesToSearch.length },
+    });
+
     const candidates: Array<{
       detectionNumber: number;
       rawText: string;
@@ -576,6 +695,36 @@ export class GamesService {
 
     // Process all detected titles in parallel — sequential BGG calls per game
     // were causing 90 s+ timeouts when Claude detects 20+ games.
+    const matchTotal = titlesToSearch.length;
+    let matchDone = 0;
+    const bumpMatchProgress = () => {
+      matchDone += 1;
+      const done = matchDone;
+      const pct =
+        matchTotal === 0
+          ? 78
+          : 40 + Math.min(38, Math.round((done / matchTotal) * 38));
+      onProgress?.({
+        stage: 'match',
+        message:
+          matchTotal === 0
+            ? 'No game titles found yet.'
+            : `Matching games to our catalog (${done}/${matchTotal})...`,
+        percent: pct,
+        detail: { done, total: matchTotal },
+      });
+    };
+
+    onProgress?.({
+      stage: 'match',
+      message:
+        matchTotal === 0
+          ? 'No game titles found. Skipping catalog match.'
+          : `Matching ${matchTotal} game title(s) to our catalog...`,
+      percent: 40,
+      detail: { done: 0, total: matchTotal },
+    });
+
     const settled = await Promise.allSettled(
       titlesToSearch.map(
         async (
@@ -592,115 +741,123 @@ export class GamesService {
           },
           i,
         ) => {
-          const ocrMatch =
-            ocrHint ?? this.findBestOcrMatch(rawText, cleanedOcr);
-          const rawOcrBox = ocrMatch?.boundingBox ?? null;
-          const boundingBox = this.selectBestBoundingBox(claudeBox, rawOcrBox);
-          const confidence = ocrMatch?.confidence ?? undefined;
+          try {
+            const ocrMatch =
+              ocrHint ?? this.findBestOcrMatch(rawText, cleanedOcr);
+            const rawOcrBox = ocrMatch?.boundingBox ?? null;
+            const boundingBox = this.selectBestBoundingBox(
+              claudeBox,
+              rawOcrBox,
+            );
+            const confidence = ocrMatch?.confidence ?? undefined;
 
-          // Include edition in BGG search when Gemini identified one
-          const bggQuery = editionOrVersion
-            ? `${rawText} ${editionOrVersion}`
-            : rawText;
+            // Include edition in BGG search when Gemini identified one
+            const bggQuery = editionOrVersion
+              ? `${rawText} ${editionOrVersion}`
+              : rawText;
 
-          const local = await this.searchLocalCandidates(rawText);
-          const localBest = this.pickBestLocalMatch(rawText, local);
-          if (localBest) {
-            let thumb =
-              localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
-            let imageUrl = localBest.imageUrl?.trim();
-            // If no image in local DB, fetch from BGG and persist the update.
-            if (localBest.bggId != null && !thumb) {
-              await bggSemaphore.acquire();
-              try {
-                const d = await this.fetchBggThingByIdWithRetry(
-                  localBest.bggId,
-                );
-                if (d?.thumbnailUrl || d?.imageUrl) {
-                  thumb = d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
-                  imageUrl = d.imageUrl?.trim() || imageUrl;
-                  await this.findOrCreateByBggId(localBest.bggId, d);
+            const local = await this.searchLocalCandidates(rawText);
+            const localBest = this.pickBestLocalMatch(rawText, local);
+            if (localBest) {
+              let thumb =
+                localBest.thumbnailUrl?.trim() || localBest.imageUrl?.trim();
+              let imageUrl = localBest.imageUrl?.trim();
+              // If no image in local DB, fetch from BGG and persist the update.
+              if (localBest.bggId != null && !thumb) {
+                await bggSemaphore.acquire();
+                try {
+                  const d = await this.fetchBggThingByIdWithRetry(
+                    localBest.bggId,
+                  );
+                  if (d?.thumbnailUrl || d?.imageUrl) {
+                    thumb =
+                      d.thumbnailUrl?.trim() || d.imageUrl?.trim() || thumb;
+                    imageUrl = d.imageUrl?.trim() || imageUrl;
+                    await this.findOrCreateByBggId(localBest.bggId, d);
+                  }
+                } finally {
+                  bggSemaphore.release();
                 }
-              } finally {
-                bggSemaphore.release();
               }
+              return {
+                detectionNumber: i + 1,
+                rawText,
+                confidence,
+                boundingBox,
+                polygon,
+                title: localBest.title,
+                editionOrVersion,
+                gameId: localBest.id,
+                bggId: localBest.bggId ?? undefined,
+                thumbnailUrl: thumb || undefined,
+                imageUrl: imageUrl || undefined,
+                bggUrl:
+                  localBest.bggId != null
+                    ? `https://boardgamegeek.com/boardgame/${localBest.bggId}`
+                    : undefined,
+                source: 'local' as const,
+                isOwned:
+                  ownedGameIds.has(localBest.id) ||
+                  (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
+                detectionConfidence,
+                gameConfidence,
+                occlusionLevel,
+                titleCandidates,
+              };
             }
+
+            const bgg = await this.fetchBestBggMatch(bggQuery);
+            if (!bgg) return null;
+
+            await bggSemaphore.acquire();
+            let details: Partial<Game> | null = null;
+            try {
+              details = await this.fetchBggThingByIdWithRetry(bgg.bggId);
+            } finally {
+              bggSemaphore.release();
+            }
+
+            // Persist the BGG game locally so future shelf scans find it in the DB.
+            const savedGame = details
+              ? await this.findOrCreateByBggId(bgg.bggId, details)
+              : null;
+
+            const bggThumb = details?.thumbnailUrl ?? details?.imageUrl;
+            // Prefer whichever title best matches the OCR text. The BGG /thing API
+            // can return a localized/alternate primary title that differs
+            // significantly from the search-result title that actually matched.
+            const thingTitle = savedGame?.title ?? details?.title;
+            const displayTitle =
+              thingTitle &&
+              this.scoreTitleMatch(rawText, thingTitle) >=
+                this.scoreTitleMatch(rawText, bgg.title)
+                ? thingTitle
+                : bgg.title;
             return {
               detectionNumber: i + 1,
               rawText,
               confidence,
               boundingBox,
               polygon,
-              title: localBest.title,
+              title: displayTitle,
               editionOrVersion,
-              gameId: localBest.id,
-              bggId: localBest.bggId ?? undefined,
-              thumbnailUrl: thumb || undefined,
-              imageUrl: imageUrl || undefined,
-              bggUrl:
-                localBest.bggId != null
-                  ? `https://boardgamegeek.com/boardgame/${localBest.bggId}`
-                  : undefined,
-              source: 'local' as const,
+              gameId: savedGame?.id,
+              bggId: bgg.bggId,
+              thumbnailUrl: bggThumb ?? undefined,
+              imageUrl: details?.imageUrl ?? undefined,
+              bggUrl: `https://boardgamegeek.com/boardgame/${bgg.bggId}`,
+              source: 'bgg' as const,
               isOwned:
-                ownedGameIds.has(localBest.id) ||
-                (localBest.bggId != null && ownedBggIds.has(localBest.bggId)),
+                (savedGame != null && ownedGameIds.has(savedGame.id)) ||
+                ownedBggIds.has(bgg.bggId),
               detectionConfidence,
               gameConfidence,
               occlusionLevel,
               titleCandidates,
             };
-          }
-
-          const bgg = await this.fetchBestBggMatch(bggQuery);
-          if (!bgg) return null;
-
-          await bggSemaphore.acquire();
-          let details: Partial<Game> | null = null;
-          try {
-            details = await this.fetchBggThingByIdWithRetry(bgg.bggId);
           } finally {
-            bggSemaphore.release();
+            bumpMatchProgress();
           }
-
-          // Persist the BGG game locally so future shelf scans find it in the DB.
-          const savedGame = details
-            ? await this.findOrCreateByBggId(bgg.bggId, details)
-            : null;
-
-          const bggThumb = details?.thumbnailUrl ?? details?.imageUrl;
-          // Prefer whichever title best matches the OCR text. The BGG /thing API
-          // can return a localized/alternate primary title that differs
-          // significantly from the search-result title that actually matched.
-          const thingTitle = savedGame?.title ?? details?.title;
-          const displayTitle =
-            thingTitle &&
-            this.scoreTitleMatch(rawText, thingTitle) >=
-              this.scoreTitleMatch(rawText, bgg.title)
-              ? thingTitle
-              : bgg.title;
-          return {
-            detectionNumber: i + 1,
-            rawText,
-            confidence,
-            boundingBox,
-            polygon,
-            title: displayTitle,
-            editionOrVersion,
-            gameId: savedGame?.id,
-            bggId: bgg.bggId,
-            thumbnailUrl: bggThumb ?? undefined,
-            imageUrl: details?.imageUrl ?? undefined,
-            bggUrl: `https://boardgamegeek.com/boardgame/${bgg.bggId}`,
-            source: 'local' as const,
-            isOwned:
-              (savedGame != null && ownedGameIds.has(savedGame.id)) ||
-              ownedBggIds.has(bgg.bggId),
-            detectionConfidence,
-            gameConfidence,
-            occlusionLevel,
-            titleCandidates,
-          };
         },
       ),
     );
@@ -731,10 +888,28 @@ export class GamesService {
       detectionNumber: index + 1,
     }));
 
+    // Final pass on *matched* boxes: OCR blending can reintroduce overlaps that
+    // title-merge NMS never saw. Drop lower-confidence overlaps so outlines
+    // cannot intersect in the annotated image / overlay.
+    const overlapPruned = this.suppressOverlappingShelfCandidates(renumbered, {
+      iouThreshold: 0.14,
+      overlapSmallerMin: 0.26,
+    });
+    const finalCandidates = overlapPruned.map((candidate, index) => ({
+      ...candidate,
+      detectionNumber: index + 1,
+    }));
+
     // Draw bounding boxes directly on the image so the frontend can display
     // an annotated photo without fragile CSS overlay positioning.
+    onProgress?.({
+      stage: 'annotate',
+      message: 'Drawing clean box outlines on your photo...',
+      percent: 84,
+    });
+
     const annotatedBuffer = await this.claudeVision
-      .drawAnnotations(imageBuffer, renumbered)
+      .drawAnnotations(imageBuffer, finalCandidates)
       .catch((err) => {
         this.logger.warn('Failed to draw shelf annotations', err);
         return null;
@@ -743,7 +918,252 @@ export class GamesService {
       ? `data:image/jpeg;base64,${annotatedBuffer.toString('base64')}`
       : undefined;
 
-    return { candidates: renumbered, annotatedImageBase64 };
+    onProgress?.({
+      stage: 'finalize',
+      message: 'Preparing your results...',
+      percent: 97,
+    });
+
+    return { candidates: finalCandidates, annotatedImageBase64 };
+  }
+
+  private isJunkShelfTitle(title: string): boolean {
+    const t = title.replace(/\s+/g, ' ').trim();
+    if (t.length < 2) return true;
+    const u = t.toUpperCase();
+    const garbage = new Set([
+      'UNKNOWN',
+      'N/A',
+      'NA',
+      'NONE',
+      'NULL',
+      '???',
+      '?',
+      'UNREADABLE',
+      'NOT FOUND',
+      'NO TITLE',
+      'NOT A GAME',
+      'NOT IDENTIFIED',
+      '(UNKNOWN)',
+      '[UNKNOWN]',
+    ]);
+    if (garbage.has(u)) return true;
+    if (/^unknown$/i.test(t)) return true;
+    if (/^n\/?a$/i.test(t)) return true;
+    if (/^not\s+found$/i.test(t)) return true;
+    if (/^unable\s+to\s+read$/i.test(t)) return true;
+    return false;
+  }
+
+  private shelfBoxIoU(
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number },
+  ): number {
+    const x1 = Math.max(a.x, b.x);
+    const y1 = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.width, b.x + b.width);
+    const y2 = Math.min(a.y + a.height, b.y + b.height);
+    const iw = Math.max(0, x2 - x1);
+    const ih = Math.max(0, y2 - y1);
+    const inter = iw * ih;
+    const union = a.width * a.height + b.width * b.height - inter;
+    return union <= 0 ? 0 : inter / union;
+  }
+
+  /**
+   * Intersection area divided by the smaller box's area — catches strong partial
+   * overlaps where IoU stays low because the boxes differ in size.
+   */
+  private shelfBoxOverlapSmaller(
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number },
+  ): number {
+    const inter = this.intersectionArea(a, b);
+    const aArea = this.boxArea(a);
+    const bArea = this.boxArea(b);
+    const smaller = Math.min(aArea, bArea);
+    return smaller <= 0 ? 0 : inter / smaller;
+  }
+
+  /**
+   * True when one box largely covers another (nested duplicate), even if IoU is moderate
+   * because the inner box is much smaller.
+   */
+  private shelfBoxNestedDuplicate(
+    inner: { x: number; y: number; width: number; height: number },
+    outer: { x: number; y: number; width: number; height: number },
+  ): boolean {
+    const x1 = Math.max(inner.x, outer.x);
+    const y1 = Math.max(inner.y, outer.y);
+    const x2 = Math.min(inner.x + inner.width, outer.x + outer.width);
+    const y2 = Math.min(inner.y + inner.height, outer.y + outer.height);
+    const iw = Math.max(0, x2 - x1);
+    const ih = Math.max(0, y2 - y1);
+    const inter = iw * ih;
+    const innerArea = inner.width * inner.height;
+    const outerArea = outer.width * outer.height;
+    if (innerArea <= 0 || outerArea <= 0) return false;
+    const coverInner = inter / innerArea;
+    const coverOuter = inter / outerArea;
+    return (
+      (coverInner >= 0.52 && innerArea <= outerArea * 0.95) ||
+      (coverOuter >= 0.52 && outerArea <= innerArea * 0.95)
+    );
+  }
+
+  private shelfTitleDetectionScore(title: {
+    detectionConfidence?: number;
+    gameConfidence?: number;
+  }): number {
+    const d = title.detectionConfidence ?? 0.55;
+    const g = title.gameConfidence ?? 0.55;
+    return d * 0.55 + g * 0.45;
+  }
+
+  private shelfBoundingBoxFromPolygon(
+    polygon?: Array<[number, number]>,
+  ): { x: number; y: number; width: number; height: number } | undefined {
+    if (!polygon || polygon.length !== 4) return undefined;
+    const xs = polygon.map((p) => p[0]);
+    const ys = polygon.map((p) => p[1]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (!(width > 0.001 && height > 0.001)) return undefined;
+    return this.clampUnitBox({ x: minX, y: minY, width, height });
+  }
+
+  private shelfBoundingBoxForTitle(title: {
+    claudeBox?: { x: number; y: number; width: number; height: number };
+    ocrHint?: {
+      text: string;
+      confidence?: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+    };
+    polygon?: Array<[number, number]>;
+  }): { x: number; y: number; width: number; height: number } | undefined {
+    return (
+      title.claudeBox ??
+      title.ocrHint?.boundingBox ??
+      this.shelfBoundingBoxFromPolygon(title.polygon)
+    );
+  }
+
+  private suppressOverlappingShelfTitles<
+    T extends {
+      title: string;
+      claudeBox?: { x: number; y: number; width: number; height: number };
+      ocrHint?: {
+        text: string;
+        confidence?: number;
+        boundingBox: { x: number; y: number; width: number; height: number };
+      };
+      polygon?: Array<[number, number]>;
+      detectionConfidence?: number;
+      gameConfidence?: number;
+    },
+  >(items: T[], iouThreshold: number, overlapSmallerMin: number): T[] {
+    const ordered = [...items].sort(
+      (a, b) =>
+        this.shelfTitleDetectionScore(b) - this.shelfTitleDetectionScore(a),
+    );
+    const kept: T[] = [];
+    for (const cur of ordered) {
+      const box = this.shelfBoundingBoxForTitle(cur);
+      if (
+        !box ||
+        box.width <= 0.001 ||
+        box.height <= 0.001 ||
+        box.width > 0.99 ||
+        box.height > 0.99
+      ) {
+        kept.push(cur);
+        continue;
+      }
+      let overlaps = false;
+      for (const existing of kept) {
+        const ob = this.shelfBoundingBoxForTitle(existing);
+        if (!ob) continue;
+        if (
+          this.shelfBoxIoU(box, ob) >= iouThreshold ||
+          this.shelfBoxOverlapSmaller(box, ob) >= overlapSmallerMin ||
+          this.shelfBoxNestedDuplicate(box, ob) ||
+          this.shelfBoxNestedDuplicate(ob, box)
+        ) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) kept.push(cur);
+    }
+    return kept;
+  }
+
+  private shelfCandidateVisualScore(candidate: {
+    confidence?: number;
+    detectionConfidence?: number;
+    gameConfidence?: number;
+  }): number {
+    const base = this.shelfTitleDetectionScore(candidate);
+    const ocr = candidate.confidence;
+    if (ocr == null) return base;
+    return base * 0.62 + ocr * 0.38;
+  }
+
+  private suppressOverlappingShelfCandidates<
+    T extends {
+      boundingBox: { x: number; y: number; width: number; height: number };
+      confidence?: number;
+      detectionConfidence?: number;
+      gameConfidence?: number;
+    },
+  >(
+    items: T[],
+    opts: { iouThreshold: number; overlapSmallerMin: number },
+  ): T[] {
+    const ordered = [...items].sort(
+      (a, b) =>
+        this.shelfCandidateVisualScore(b) - this.shelfCandidateVisualScore(a),
+    );
+    const kept: T[] = [];
+    for (const cur of ordered) {
+      const box = this.clampUnitBox(cur.boundingBox);
+      if (
+        box.width <= 0.001 ||
+        box.height <= 0.001 ||
+        box.width > 0.99 ||
+        box.height > 0.99
+      ) {
+        kept.push(cur);
+        continue;
+      }
+      let overlaps = false;
+      for (const existing of kept) {
+        const ob = this.clampUnitBox(existing.boundingBox);
+        if (
+          ob.width <= 0.001 ||
+          ob.height <= 0.001 ||
+          ob.width > 0.99 ||
+          ob.height > 0.99
+        ) {
+          continue;
+        }
+        if (
+          this.shelfBoxIoU(box, ob) >= opts.iouThreshold ||
+          this.shelfBoxOverlapSmaller(box, ob) >= opts.overlapSmallerMin ||
+          this.shelfBoxNestedDuplicate(box, ob) ||
+          this.shelfBoxNestedDuplicate(ob, box)
+        ) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) kept.push(cur);
+    }
+    return kept;
   }
 
   /**

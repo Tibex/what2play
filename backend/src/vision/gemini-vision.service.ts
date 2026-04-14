@@ -10,6 +10,14 @@ const MAX_IMAGE_WIDTH = 1536;
 // Gemini returns box_2d as [ymin, xmin, ymax, xmax] normalized to 0-1000
 const GEMINI_BOX_SCALE = 1000;
 
+/** Primary shelf-vision model */
+const GEMINI_PRIMARY_MODEL = 'gemini-2.5-flash';
+/**
+ * Fallback when primary fails after retries (503/overload, etc.).
+ * Use another 2.5-family id: unversioned `gemini-2.0-flash` returns 404 for new API projects.
+ */
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash-lite';
+
 const VALID_OCCLUSION = ['none', 'low', 'medium', 'high'] as const;
 
 export type GeminiDetection = {
@@ -26,13 +34,18 @@ export type GeminiDetection = {
 @Injectable()
 export class GeminiVisionService {
   private readonly logger = new Logger(GeminiVisionService.name);
-  private model: GenerativeModel | null = null;
+  private primaryModel: GenerativeModel | null = null;
+  private fallbackModel: GenerativeModel | null = null;
 
   constructor(private config: ConfigService) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY');
     if (apiKey) {
-      this.model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-        model: 'gemini-2.5-flash',
+      const genai = new GoogleGenerativeAI(apiKey);
+      this.primaryModel = genai.getGenerativeModel({
+        model: GEMINI_PRIMARY_MODEL,
+      });
+      this.fallbackModel = genai.getGenerativeModel({
+        model: GEMINI_FALLBACK_MODEL,
       });
     } else {
       this.logger.warn(
@@ -42,7 +55,70 @@ export class GeminiVisionService {
   }
 
   isAvailable(): boolean {
-    return this.model !== null;
+    return this.primaryModel !== null;
+  }
+
+  private getGeminiHttpStatus(err: unknown): number | undefined {
+    if (typeof err === 'object' && err !== null && 'status' in err) {
+      const s = (err as { status?: unknown }).status;
+      return typeof s === 'number' ? s : undefined;
+    }
+    return undefined;
+  }
+
+  private async generateContentWithBackoff(
+    model: GenerativeModel,
+    parts: Parameters<GenerativeModel['generateContent']>[0],
+  ): Promise<Awaited<ReturnType<GenerativeModel['generateContent']>>> {
+    const maxAttempts = 6;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await model.generateContent(parts);
+      } catch (err: unknown) {
+        lastErr = err;
+        const status = this.getGeminiHttpStatus(err);
+        const retryable =
+          status === 503 ||
+          status === 429 ||
+          status === 500 ||
+          status === 502 ||
+          status === 504;
+        if (!retryable || attempt >= maxAttempts - 1) {
+          throw err;
+        }
+        const baseMs = 1200 * 2 ** attempt;
+        const jitterMs = Math.floor(Math.random() * 900);
+        this.logger.warn(
+          `Gemini generateContent transient HTTP ${String(status)} — retry ${attempt + 2}/${maxAttempts} in ${baseMs + jitterMs}ms`,
+        );
+        await new Promise((r) => setTimeout(r, baseMs + jitterMs));
+      }
+    }
+    throw lastErr;
+  }
+
+  /**
+   * Retries on the primary model, then the hardcoded fallback if primary still fails.
+   */
+  private async generateContentPrimaryThenFallback(
+    parts: Parameters<GenerativeModel['generateContent']>[0],
+  ): Promise<Awaited<ReturnType<GenerativeModel['generateContent']>>> {
+    if (!this.primaryModel) {
+      throw new Error('Gemini model not configured');
+    }
+    try {
+      return await this.generateContentWithBackoff(this.primaryModel, parts);
+    } catch (primaryErr: unknown) {
+      if (!this.fallbackModel) {
+        throw primaryErr;
+      }
+      this.logger.warn(
+        `Gemini primary (${GEMINI_PRIMARY_MODEL}) failed after retries — trying fallback (${GEMINI_FALLBACK_MODEL})`,
+        primaryErr,
+      );
+      return await this.generateContentWithBackoff(this.fallbackModel, parts);
+    }
   }
 
   async detectBoardGames(
@@ -50,7 +126,7 @@ export class GeminiVisionService {
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
     knownGames: string[] = [],
   ): Promise<GeminiDetection[]> {
-    if (!this.model) return [];
+    if (!this.primaryModel) return [];
     try {
       const { buffer, mediaType: finalMediaType } = await this.resizeImage(
         imageBuffer,
@@ -87,6 +163,9 @@ Board games appear in several orientations:
 BOUNDING BOX AND POLYGON PRECISION -- use color transitions:
 Every game box has a distinct dominant background color. The physical edge of a box is precisely where that background color ends and the adjacent box's color (or the shelf surface) begins. Use this color-boundary approach for both box_2d and polygon corners.
 
+NON-OVERLAPPING PHYSICAL BOXES:
+Each entry must represent ONE physical cardboard box. Boxes cannot intersect or share interior area with another game's box in your output. If two games touch, their rectangles must meet at an edge only (zero overlap). Merge split detections for the same physical box into a single box. Prefer slightly inset/tight boxes over oversized boxes that swallow neighbors.
+
 For EACH game box you identify, return an object with:
 - "label": exact title as printed on the box or spine (best guess if partially obscured)
 - "edition": edition, variant, or expansion name if visible (e.g. "5th Edition", "Legacy", "European Expansion"), or null
@@ -101,9 +180,9 @@ Return ONLY a JSON array -- no explanation, no markdown:
 [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.98,"game_conf":0.95,"occlusion":"none","candidates":[]}]
 
 Rules:
-- Include every item you are reasonably confident is a board game, card game, or tabletop expansion (including small boxes)
-- Include partially hidden boxes and boxes where only part of the title is visible
-- An imprecise bounding box is acceptable -- a missed game is not
+- Include items you are reasonably confident are a board game, card game, or tabletop expansion (including small boxes). Skip ambiguous blobs, shelf decor, and unclear packaging.
+- Include partially hidden boxes only when you can read enough title art to name the game; otherwise omit.
+- Prefer precision and non-overlapping boxes over maximizing recall — do not invent games.
 - Do NOT include: books (look for author names, ISBNs, novel-style covers), magazines, DVDs, decorative objects, price tags, or shelf labels
 - For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip only if clearly a novel, magazine, or DVD
 - Check every shelf row including top and bottom
@@ -112,23 +191,9 @@ Rules:
         },
       ];
 
-      // Retry up to 2 times on 503 (transient overload) with exponential backoff
-      let result;
-      for (let attempt = 0; attempt <= 2; attempt++) {
-        try {
-          result = await this.model.generateContent(parts);
-          break;
-        } catch (err: unknown) {
-          const status = (err as { status?: number }).status;
-          if (status === 503 && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-            continue;
-          }
-          throw err;
-        }
-      }
+      const result = await this.generateContentPrimaryThenFallback(parts);
 
-      const text = result!.response.text().trim();
+      const text = result.response.text().trim();
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
@@ -137,7 +202,7 @@ Rules:
 
       return this.parseDetectionItems(parsed);
     } catch (error) {
-      this.logger.error('Gemini vision detection failed', error);
+      this.logger.warn('Gemini vision detection failed', error);
       return [];
     }
   }
@@ -171,7 +236,7 @@ Rules:
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
     knownGames: string[] = [],
   ): Promise<GeminiDetection[]> {
-    if (!this.model) return [];
+    if (!this.primaryModel) return [];
     try {
       const { buffer: prepared } = await this.resizeImage(
         imageBuffer,
@@ -200,6 +265,8 @@ Rules:
 
 Identify every visible game box in this rotated image.
 
+NON-OVERLAPPING PHYSICAL BOXES: each JSON entry is one physical box; rectangles must not overlap other entries (edge contact only). Do not output placeholder labels like "UNKNOWN" — omit unreadable items.
+
 For each box, return:
 - "label": the full game title as printed
 - "edition": edition, variant, or expansion name if visible, or null
@@ -221,22 +288,9 @@ Rules:
         },
       ];
 
-      let result;
-      for (let attempt = 0; attempt <= 2; attempt++) {
-        try {
-          result = await this.model.generateContent(parts);
-          break;
-        } catch (err: unknown) {
-          const status = (err as { status?: number }).status;
-          if (status === 503 && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-            continue;
-          }
-          throw err;
-        }
-      }
+      const result = await this.generateContentPrimaryThenFallback(parts);
 
-      const text = result!.response.text().trim();
+      const text = result.response.text().trim();
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
@@ -276,9 +330,36 @@ Rules:
         };
       });
     } catch (error) {
-      this.logger.error('Gemini spine-out detection failed', error);
+      this.logger.warn('Gemini spine-out detection failed', error);
       return [];
     }
+  }
+
+  private isJunkGeminiShelfLabel(label: string): boolean {
+    const t = label.replace(/\s+/g, ' ').trim();
+    if (t.length < 2) return true;
+    const u = t.toUpperCase();
+    const garbage = new Set([
+      'UNKNOWN',
+      'N/A',
+      'NA',
+      'NONE',
+      'NULL',
+      '???',
+      '?',
+      'UNREADABLE',
+      'NOT FOUND',
+      'NO TITLE',
+      'NOT A GAME',
+      'NOT IDENTIFIED',
+      '(UNKNOWN)',
+      '[UNKNOWN]',
+    ]);
+    if (garbage.has(u)) return true;
+    if (/^unknown$/i.test(t)) return true;
+    if (/^n\/?a$/i.test(t)) return true;
+    if (/^not\s+found$/i.test(t)) return true;
+    return false;
   }
 
   /**
@@ -294,11 +375,12 @@ Rules:
 
       const label = typeof r.label === 'string' ? r.label.trim() : '';
       if (!label || label.length >= 100) continue;
+      if (this.isJunkGeminiShelfLabel(label)) continue;
 
       // Skip very low detection confidence — likely a false positive
       const detectionConfidence =
         typeof r.detect_conf === 'number' ? r.detect_conf : undefined;
-      if (detectionConfidence !== undefined && detectionConfidence < 0.25)
+      if (detectionConfidence !== undefined && detectionConfidence < 0.38)
         continue;
 
       const editionOrVersion =
@@ -308,6 +390,7 @@ Rules:
 
       const gameConfidence =
         typeof r.game_conf === 'number' ? r.game_conf : undefined;
+      if (gameConfidence !== undefined && gameConfidence < 0.32) continue;
 
       const occlusionLevel =
         typeof r.occlusion === 'string' &&

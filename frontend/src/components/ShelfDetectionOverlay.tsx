@@ -36,18 +36,18 @@ export default function ShelfDetectionOverlay({
         return (
           <div
             key={`${candidate.detectionNumber}-${candidate.rawText}`}
-            className="absolute border-2"
+            className="absolute rounded-sm border-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
             style={{
               left: `${candidate.boundingBox.x * 100}%`,
               top: `${candidate.boundingBox.y * 100}%`,
               width: `${candidate.boundingBox.width * 100}%`,
               height: `${candidate.boundingBox.height * 100}%`,
               borderColor: color,
-              backgroundColor: 'rgba(255,255,255,0.12)',
+              backgroundColor: 'rgba(255,255,255,0.06)',
             }}
           >
             <span
-              className="absolute -top-6 left-0 rounded-full px-2 py-0.5 text-xs font-semibold text-white shadow-sm"
+              className="absolute -top-6 left-0 rounded-full px-2 py-0.5 text-xs font-semibold text-white shadow-md ring-1 ring-black/20"
               style={{ backgroundColor: color }}
             >
               {candidate.detectionNumber}

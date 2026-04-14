@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { io, Socket } from "socket.io-client";
 import ConfirmModal from "@/components/ConfirmModal";
 import { api } from "@/lib/api";
+import { getRealtimeBaseUrl } from "@/lib/socketBaseUrl";
 import { useAuthStore } from "@/lib/store";
 import GameCard from "@/components/GameCard";
 import GameSearchAdd, {
@@ -268,10 +269,7 @@ export default function EventDetailPage() {
     if (!event || !user?.id) return;
     if (event.status !== "voting" && event.status !== "confirmed") return;
 
-    const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
-    const baseUrl = rawApiUrl.endsWith("/api")
-      ? rawApiUrl.slice(0, -4)
-      : rawApiUrl.replace(/\/+$/, "");
+    const baseUrl = getRealtimeBaseUrl();
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 

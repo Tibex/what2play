@@ -125,19 +125,29 @@ export default function ShelfParseReview({
                   <p className="text-xs text-[var(--muted)] truncate">OCR: {candidate.rawText}</p>
                 )}
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {candidate.isOwned && (
+                  {candidate.isOwned ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#2d6a4f]/10 px-2 py-0.5 text-[10px] font-semibold text-[#2d6a4f]">
-                      Owned
+                      Already in your collection
+                    </span>
+                  ) : (
+                    <span
+                      className={[
+                        'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                        candidate.source === 'local'
+                          ? 'bg-[var(--primary)]/10 text-[var(--primary)]'
+                          : 'bg-amber-100 text-amber-700',
+                      ].join(' ')}
+                      title={
+                        candidate.source === 'local'
+                          ? 'Resolved from games already in this app’s catalog'
+                          : 'Resolved via BoardGameGeek search'
+                      }
+                    >
+                      {candidate.source === 'local'
+                        ? 'Matched from app catalog'
+                        : 'Matched from BoardGameGeek'}
                     </span>
                   )}
-                  <span className={[
-                    'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                    candidate.source === 'local'
-                      ? 'bg-[var(--primary)]/10 text-[var(--primary)]'
-                      : 'bg-amber-100 text-amber-700',
-                  ].join(' ')}>
-                    {candidate.source === 'local' ? 'In library' : 'BGG'}
-                  </span>
                   {candidate.confidence != null && (
                     <span className="text-[10px] text-[var(--muted)]">
                       {Math.round(candidate.confidence * 100)}% conf

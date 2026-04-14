@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
+import type { Tool } from '@anthropic-ai/sdk/resources/messages/messages';
 import sharp from 'sharp';
 
 // Downscale images to this width before sending to Claude.
@@ -19,6 +20,67 @@ const ANNOTATION_COLORS = [
   '#06b6d4', // cyan
   '#ec4899', // pink
 ];
+
+/** Forced tool name — avoids fragile JSON.parse on free-form model text. */
+const SHELF_GAMES_TOOL_NAME = 'report_shelf_games';
+
+const SHELF_GAMES_TOOL: Tool = {
+  name: SHELF_GAMES_TOOL_NAME,
+  description:
+    'Report every board game box detected on the shelf photo. Call once when the scan is complete.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      games: {
+        type: 'array',
+        description:
+          'All detected boxes, shelf by shelf (include spine-out and partially hidden).',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            edition_or_version: { type: 'string' },
+            ocr_text: { type: 'string' },
+            detection_confidence: { type: 'number' },
+            game_confidence: { type: 'number' },
+            candidates: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  confidence: { type: 'number' },
+                },
+                required: ['title', 'confidence'],
+              },
+            },
+            occlusion_level: {
+              type: 'string',
+              enum: ['none', 'low', 'medium', 'high'],
+            },
+            polygon: {
+              type: 'array',
+              minItems: 4,
+              maxItems: 4,
+              items: {
+                type: 'array',
+                minItems: 2,
+                maxItems: 2,
+                items: { type: 'number' },
+              },
+            },
+            x: { type: 'number' },
+            y: { type: 'number' },
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+          required: ['title'],
+        },
+      },
+    },
+    required: ['games'],
+  },
+};
 
 @Injectable()
 export class ClaudeVisionService {
@@ -72,6 +134,33 @@ export class ClaudeVisionService {
     };
   }
 
+  private isJunkClaudeShelfTitle(title: string): boolean {
+    const t = title.replace(/\s+/g, ' ').trim();
+    if (t.length < 2) return true;
+    const u = t.toUpperCase();
+    const garbage = new Set([
+      'UNKNOWN',
+      'N/A',
+      'NA',
+      'NONE',
+      'NULL',
+      '???',
+      '?',
+      'UNREADABLE',
+      'NOT FOUND',
+      'NO TITLE',
+      'NOT A GAME',
+      'NOT IDENTIFIED',
+      '(UNKNOWN)',
+      '[UNKNOWN]',
+    ]);
+    if (garbage.has(u)) return true;
+    if (/^unknown$/i.test(t)) return true;
+    if (/^n\/?a$/i.test(t)) return true;
+    if (/^not\s+found$/i.test(t)) return true;
+    return false;
+  }
+
   /**
    * Single-pass detection: Opus identifies every game box AND its bounding box
    * in one prompt, returning normalized (0-1) coordinates directly.
@@ -105,7 +194,13 @@ export class ClaudeVisionService {
 
       const response = await this.client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
+        tools: [SHELF_GAMES_TOOL],
+        tool_choice: {
+          type: 'tool',
+          name: SHELF_GAMES_TOOL_NAME,
+          disable_parallel_tool_use: true,
+        },
         messages: [
           {
             role: 'user',
@@ -135,7 +230,7 @@ Board games appear in several orientations:
 - Partially obscured: tucked behind another box or cut off at the image edge
 
 For EACH game box you identify, return an object with:
-- "title": best-guess title as printed on the box or spine; set to "UNKNOWN" when completely unreadable
+- "title": best-guess title as printed on the box or spine. If the title is completely unreadable, omit that game entirely from the tool output (no placeholder titles).
 - "edition_or_version": edition, version, or variant name if identifiable (e.g. "Legacy Season 1", "Big Box", "2nd Edition"); null otherwise
 - "ocr_text": ALL text you can read verbatim from the box or spine, space-separated
 - "detection_confidence": 0.0-1.0 — how certain you are this object IS a board game box
@@ -150,38 +245,47 @@ For EACH game box you identify, return an object with:
 
 Coordinates must describe the FULL physical cardboard box -- not just the title text, logo, or label.
 For spine-out boxes width will be small (0.01-0.06), height will be larger, and the polygon will reflect the narrow vertical shape.
+
+NON-OVERLAPPING PHYSICAL BOXES: each tool entry is ONE physical cardboard box. Rectangles/polygons for different games must not overlap in the image (edge contact is OK; shared interior area is NOT). If unsure whether two regions are one box or two, prefer a single tighter box. Never draw one giant rectangle around an entire shelf cubby that contains multiple distinct games.
 ${knownGames.length > 0 ? `\nKnown games in this collection (soft hints for title matching — not an exclusive list):\n${JSON.stringify(knownGames.slice(0, 150))}\n` : ''}
-Return ONLY a JSON array -- no explanation, no markdown fences:
-[{"title":"Wingspan","edition_or_version":null,"ocr_text":"WINGSPAN A Game of Birds","detection_confidence":0.99,"game_confidence":0.97,"candidates":[],"occlusion_level":"none","polygon":[[0.12,0.34],[0.25,0.34],[0.25,0.56],[0.12,0.56]],"x":0.12,"y":0.34,"width":0.13,"height":0.22}]
+When your scan is complete, call the tool "${SHELF_GAMES_TOOL_NAME}" exactly once with { "games": [ ... ] }. Do not put a raw JSON array in plain assistant text and do not use markdown fences.
 
 Rules:
-- Include every item you are reasonably confident is a board game, card game, or tabletop expansion (including small boxes)
-- Include partially hidden boxes and boxes where only part of the title is visible
-- An imprecise bounding box is acceptable -- a missed game is not
+- Include items you are reasonably confident are a board game, card game, or tabletop expansion (including small boxes). Skip ambiguous blobs, decor, and unclear packaging.
+- Include partially hidden boxes only when you can read enough of the title/art to name the game; otherwise omit.
+- Prefer precise, non-overlapping boxes over maximizing recall — do not invent games.
 - Do NOT include: books (look for author names, ISBNs, novel-style covers), magazines, DVDs, decorative objects, price tags, or shelf labels
 - For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip only if clearly a novel, magazine, or DVD
 - Check every shelf row including top and bottom
 - Return the COMPLETE title as printed. A word may appear large as a design choice — read ALL text on the box/spine (e.g. if "SLAY" is prominent but the box says "Here to Slay", return "Here to Slay", not "Slay" or "Slay the Spire")
-- Return [] only if there are genuinely no game boxes in the image`,
+- If there are no game boxes, call the tool with { "games": [] }`,
               },
             ],
           },
         ],
       });
 
-      const text =
-        response.content[0].type === 'text'
-          ? response.content[0].text.trim()
-          : '';
-      const match = text.match(/\[[\s\S]*\]/);
-      if (!match) return [];
-
-      // Normalize bare decimals like .41 → 0.41 (valid JS but not JSON)
-      const normalized = match[0]
-        .replace(/([^\d])\.([0-9])/g, '$10.$2')
-        .replace(/^\./gm, '0.');
-      const parsed = JSON.parse(normalized) as unknown;
-      if (!Array.isArray(parsed)) return [];
+      let parsed: unknown[] | null = null;
+      for (const block of response.content) {
+        if (block.type === 'tool_use' && block.name === SHELF_GAMES_TOOL_NAME) {
+          const input = block.input;
+          if (input && typeof input === 'object') {
+            const games = (input as Record<string, unknown>).games;
+            if (Array.isArray(games)) {
+              parsed = games;
+              break;
+            }
+          }
+        }
+      }
+      if (!parsed) {
+        let joined = '';
+        for (const block of response.content) {
+          if (block.type === 'text') joined += `${block.text}\n`;
+        }
+        parsed = this.parseShelfGamesJsonFromText(joined.trim());
+      }
+      if (!parsed) return [];
 
       const results: Array<{
         title: string;
@@ -203,6 +307,7 @@ Rules:
 
         const title = r.title.replace(/\s+/g, ' ').trim();
         if (title.length >= 100) continue;
+        if (this.isJunkClaudeShelfTitle(title)) continue;
 
         const editionOrVersion =
           typeof r.edition_or_version === 'string'
@@ -218,6 +323,9 @@ Rules:
           typeof v === 'number' ? Math.max(0, Math.min(1, v)) : undefined;
         const detectionConfidence = clampConf(r.detection_confidence);
         const gameConfidence = clampConf(r.game_confidence);
+        if (detectionConfidence !== undefined && detectionConfidence < 0.38)
+          continue;
+        if (gameConfidence !== undefined && gameConfidence < 0.32) continue;
 
         const OCCLUSION_LEVELS = ['none', 'low', 'medium', 'high'] as const;
         const occlusionLevel = OCCLUSION_LEVELS.includes(
@@ -304,6 +412,23 @@ Rules:
   }
 
   /**
+   * Fallback when the model returns plain JSON in text instead of a tool call.
+   */
+  private parseShelfGamesJsonFromText(text: string): unknown[] | null {
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return null;
+    const normalized = match[0]
+      .replace(/([^\d])\.([0-9])/g, '$10.$2')
+      .replace(/^\./gm, '0.');
+    try {
+      const parsed = JSON.parse(normalized) as unknown;
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Draws numbered bounding-box annotations onto the image using sharp SVG compositing.
    * Returns a JPEG buffer with boxes and badges rendered directly on the photo,
    * eliminating the need for CSS overlay positioning on the frontend.
@@ -324,7 +449,8 @@ Rules:
     // Badge size scales with image so it's readable on both low and high-res photos
     const badgeR = Math.max(12, Math.round(imgWidth * 0.012));
     const fontSize = Math.max(11, Math.round(badgeR * 0.9));
-    const strokeWidth = Math.max(2, Math.round(imgWidth * 0.002));
+    const strokeWidth = Math.max(3, Math.round(imgWidth * 0.0035));
+    const haloStrokeWidth = Math.max(1, Math.round(strokeWidth * 0.45));
 
     const shapes = candidates
       .filter(
@@ -335,35 +461,40 @@ Rules:
       )
       .map((c) => {
         const { x, y, width, height } = c.boundingBox!;
-        const px = Math.round(x * imgWidth);
-        const py = Math.round(y * imgHeight);
-        const pw = Math.round(width * imgWidth);
-        const ph = Math.round(height * imgHeight);
+        const px = Math.max(
+          0,
+          Math.min(imgWidth - 2, Math.round(x * imgWidth)),
+        );
+        const py = Math.max(
+          0,
+          Math.min(imgHeight - 2, Math.round(y * imgHeight)),
+        );
+        const pw = Math.max(
+          2,
+          Math.min(imgWidth - px, Math.round(width * imgWidth)),
+        );
+        const ph = Math.max(
+          2,
+          Math.min(imgHeight - py, Math.round(height * imgHeight)),
+        );
         const color =
           ANNOTATION_COLORS[(c.detectionNumber - 1) % ANNOTATION_COLORS.length];
         const n = c.detectionNumber;
         const badgeCx = px + badgeR + 4;
         const badgeCy = py + badgeR + 4;
+        const corner = Math.max(4, Math.round(Math.min(pw, ph) * 0.06));
+        const inset = Math.max(1, Math.round(strokeWidth * 0.5));
+        const innerW = Math.max(1, pw - inset * 2);
+        const innerH = Math.max(1, ph - inset * 2);
 
-        // Use polygon outline when available for a tighter fit; fall back to rect
+        // Render clean axis-aligned rectangles so outlines match physical game boxes.
         const outline =
-          c.polygon && c.polygon.length === 4
-            ? (() => {
-                const pts = c.polygon
-                  .map(
-                    ([nx, ny]: [number, number]) =>
-                      `${Math.round(nx * imgWidth)},${Math.round(ny * imgHeight)}`,
-                  )
-                  .join(' ');
-                return (
-                  `<polygon points="${pts}"` +
-                  ` fill="${color}" fill-opacity="0.12"` +
-                  ` stroke="${color}" stroke-width="${strokeWidth}"/>`
-                );
-              })()
-            : `<rect x="${px}" y="${py}" width="${pw}" height="${ph}"` +
-              ` fill="${color}" fill-opacity="0.12"` +
-              ` stroke="${color}" stroke-width="${strokeWidth}" rx="3"/>`;
+          `<rect x="${px}" y="${py}" width="${pw}" height="${ph}"` +
+          ` fill="${color}" fill-opacity="0.08"` +
+          ` stroke="${color}" stroke-width="${strokeWidth}" rx="${corner}"/>` +
+          `<rect x="${px + inset}" y="${py + inset}" width="${innerW}" height="${innerH}"` +
+          ` fill="none" stroke="rgba(255,255,255,0.75)"` +
+          ` stroke-width="${haloStrokeWidth}" rx="${Math.max(2, corner - inset)}"/>`;
 
         return (
           outline +

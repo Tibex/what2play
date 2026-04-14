@@ -9,6 +9,8 @@ import { EventVote } from '../entities/event-vote.entity';
 import { EventGameCandidate } from '../entities/event-game-candidate.entity';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
+import { ShelfParseGateway } from './shelf-parse.gateway';
+import { ShelfParseJobService } from './shelf-parse-job.service';
 import { VisionModule } from '../vision/vision.module';
 
 @Module({
@@ -24,7 +26,7 @@ import { VisionModule } from '../vision/vision.module';
       EventGameCandidate,
     ]),
   ],
-  providers: [GamesService],
+  providers: [GamesService, ShelfParseJobService, ShelfParseGateway],
   controllers: [GamesController],
   exports: [GamesService],
 })

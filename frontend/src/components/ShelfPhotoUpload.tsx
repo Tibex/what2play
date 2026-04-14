@@ -69,8 +69,15 @@ export default function ShelfPhotoUpload({ onUpload }: Readonly<Props>) {
   const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
+    setHint(null);
     try {
       await onUpload(file);
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not parse this shelf photo. Please try again.';
+      setHint(message);
     } finally {
       setUploading(false);
     }

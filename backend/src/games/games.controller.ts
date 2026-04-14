@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { GamesService } from './games.service';
+import { ShelfParseJobService } from './shelf-parse-job.service';
 import { RateGameDto } from './dto/rate-game.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BatchAddCollectionDto } from './dto/batch-add-collection.dto';
@@ -31,7 +32,10 @@ import { BatchAddCollectionDto } from './dto/batch-add-collection.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('api/games')
 export class GamesController {
-  constructor(private readonly gamesService: GamesService) {}
+  constructor(
+    private readonly gamesService: GamesService,
+    private readonly shelfParseJobs: ShelfParseJobService,
+  ) {}
 
   @Get('search')
   @ApiOperation({ summary: 'Search games by title' })
@@ -73,7 +77,45 @@ export class GamesController {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
       throw new BadRequestException('Unsupported image type');
     }
-    return this.gamesService.parseShelfPhoto(req.user.id, file.buffer);
+    return this.gamesService.parseShelfPhoto(
+      req.user.id,
+      file.buffer,
+      file.mimetype as 'image/jpeg' | 'image/png' | 'image/webp',
+    );
+  }
+
+  @Post('collection/parse-shelf-async')
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      limits: { fileSize: 8 * 1024 * 1024 },
+      fileFilter: (_, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        cb(
+          allowed.includes(file.mimetype)
+            ? null
+            : new BadRequestException('Unsupported image type'),
+          allowed.includes(file.mimetype),
+        );
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Queue shelf photo parsing (progress via /shelf-parse socket)',
+  })
+  parseShelfPhotoAsync(
+    @Request() req,
+    @UploadedFile() file?: { mimetype: string; buffer: Buffer },
+  ): { jobId: string } {
+    if (!file) throw new BadRequestException('Missing photo upload');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      throw new BadRequestException('Unsupported image type');
+    }
+    const jobId = this.shelfParseJobs.createJob(
+      req.user.id,
+      file.buffer,
+      file.mimetype as 'image/jpeg' | 'image/png' | 'image/webp',
+    );
+    return { jobId };
   }
 
   @Post('collection/batch-add')
