@@ -1017,10 +1017,10 @@ export class GamesService {
       const box = item.claudeBox;
       if (!box) return true; // No box → keep (OCR-only or no coords)
 
-      // Reject if the box covers more than 20% of the image area.
+      // Reject if the box covers more than 28% of the image area.
       // A single game box cannot realistically occupy that much of a shelf photo.
       const area = box.width * box.height;
-      if (area > 0.2) return false;
+      if (area > 0.28) return false;
 
       // Reject extreme horizontal strips (aspect ratio > 5).
       // These are shelf edges, floor/wall bands, or long decorative objects.

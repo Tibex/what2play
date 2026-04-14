@@ -264,7 +264,7 @@ Rules:
 - For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip if clearly a novel, magazine, DVD, or non-game item
 - Look for games stacked horizontally where only the narrow side/spine is visible — these appear as thin vertical rectangles (roughly 1–5% of image width) with the title along the edge; include them
 - Scan the full image including corners and edges — games near image periphery are as valid as those in the center
-- Only include a detection if you can clearly read specific text naming the game (title, expansion name, or publisher). If you see a region that might be a game but cannot read any identifying text on it, omit it — do not guess from shape or color alone
+- Only include a detection if you can read enough text to identify the game — a partial title, expansion name, or publisher logo is sufficient; skip only if no identifying text is visible at all
 - Check every shelf row including top and bottom
 - Return the COMPLETE title as printed. A word may appear large as a design choice — read ALL text on the box/spine (e.g. if "SLAY" is prominent but the box says "Here to Slay", return "Here to Slay", not "Slay" or "Slay the Spire")
 - If there are no game boxes, call the tool with { "games": [] }`,
@@ -334,7 +334,7 @@ Rules:
           typeof v === 'number' ? Math.max(0, Math.min(1, v)) : undefined;
         const detectionConfidence = clampConf(r.detection_confidence);
         const gameConfidence = clampConf(r.game_confidence);
-        if (detectionConfidence !== undefined && detectionConfidence < 0.5)
+        if (detectionConfidence !== undefined && detectionConfidence < 0.42)
           continue;
         if (gameConfidence !== undefined && gameConfidence < 0.32) continue;
 
