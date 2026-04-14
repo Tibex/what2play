@@ -126,3 +126,76 @@ Frontend (`.env.local` in `frontend/`):
 - **Validation**: `ValidationPipe` with `whitelist: true, transform: true` is global — use class-validator DTOs.
 - **Shelf OCR**: `games.service.ts` orchestrates three vision providers with a semaphore-limited concurrency pool; BGG thumbnail fetching includes 429 retry logic.
 - **Multi-table optimizer**: lives in `events/` service; generates seating plans maximizing seat coverage then vote-preference fit; runs are persisted as `EventMultiTableRun` entities.
+
+---
+
+## Shelf Photo OCR Pipeline
+
+Endpoint: `POST /games/collection/parse-shelf-async` — accepts a multipart photo, enqueues a background job, and returns `{ jobId }`. Progress is streamed to the client via Socket.io (`/shelf-parse` namespace, event `shelfParseProgress`); completion fires `shelfParseComplete`.
+
+### Detection pipeline (all steps in `games.service.ts → parseShelfPhoto`)
+
+| Stage | What happens |
+|-------|-------------|
+| `prepare` | Resize/compress image; build known-collection hint list |
+| `detect` | Run 3–4 vision sources in parallel (semaphore-capped): Gemini upright, Gemini 90°-rotated spine pass, Claude, Google Cloud Vision OCR |
+| `merge` | Deduplicate results across sources by fuzzy title match (`isLikelySameTitle`); apply junk filter (`isJunkShelfTitle`), overlap suppression (NMS via `suppressOverlappingShelfTitles`), and geometric outlier filter (`filterGeometricOutliers`) |
+| `match` | Look up each merged title against local DB then BGG; emit per-item progress |
+| `annotate` | Draw bounding boxes on the original image and return as base64 |
+| `finalize` | Emit `shelfParseComplete` with candidates + annotated image |
+
+### Vision providers (`backend/src/vision/`)
+
+| Service | Model | Role |
+|---------|-------|------|
+| `GeminiVisionService` | `gemini-2.5-flash` | Two passes: upright (front-facing boxes) and 90°-rotated (spine-out stacked games). Primary source — best bounding boxes. |
+| `ClaudeVisionService` | `claude-sonnet-4-6` | Single pass; fills in games Gemini missed. Uses tool-use API to return structured JSON. |
+| `GoogleVisionService` | Cloud Vision OCR | Text-only fallback; no bounding-box confidence. Used when AI sources return nothing. |
+
+### Key thresholds & filters
+
+- `detectionConfidence < 0.50` — detections below this are discarded at parse time (both Gemini and Claude)
+- `filterGeometricOutliers`: rejects boxes covering >20% of image area or with aspect ratio >5 (wall strips, floor bands)
+- `suppressOverlappingShelfTitles`: NMS with IoU thresholds 0.20 / 0.28 — keeps highest-scoring box when two overlap
+- `isJunkShelfTitle`: regex-based filter for generic non-game strings ("shelf", "wall", "box", etc.)
+
+### Progress payload (`ShelfParseProgressDetail`)
+
+Fields emitted during `detect` stage: `geminiUpright`, `geminiSpine`, `claude`, `ocrBlocks` — these are **raw per-source counts before deduplication** (same game counted multiple times). `mergedTitles` (emitted at `merge`) is the accurate unique count. Do not treat the raw sum as the final game count.
+
+### Frontend components
+
+| Component | File | Role |
+|-----------|------|------|
+| `ShelfPhotoUpload` | `components/ShelfPhotoUpload.tsx` | Drag-and-drop / file picker |
+| `ShelfDetectionOverlay` | `components/ShelfDetectionOverlay.tsx` | Annotated image with bounding boxes |
+| `ShelfParseReview` | `components/ShelfParseReview.tsx` | Candidate list with ownership badge + adaptive confidence pill; confirm/export |
+| Page | `app/(app)/collection/add/page.tsx` | WebSocket orchestration, progress overlay |
+
+---
+
+## Recommendation Engine
+
+Entry point: `recommendations/recommendations.service.ts → getCandidates(eventId)`.
+
+### Scoring pipeline
+
+1. **Pool**: union of all confirmed attendees' owned games
+2. **Base score** (per game, per attendee): weighted sum of —
+   - BGG rating (normalized)
+   - Personal rating (if the attendee has rated the game)
+   - Recency penalty (games played recently score lower for freshness)
+   - Time fit (game's `playingTime` vs event's `durationMinutes`)
+   - Player count fit (game's min/max vs confirmed attendee count)
+3. **Group score**: average of per-attendee scores, weighted by attendance confidence
+4. **History weight**: games that were previously picked at events with similar attendees score higher; games that consistently lost votes score lower
+5. **AI re-ranking** (optional): if `ANTHROPIC_API_KEY` is set, a Claude Haiku call re-ranks the top candidates using natural-language reasoning about group fit; result is blended back with the numeric score
+6. **Output**: top N `EventGameCandidate` rows written to DB, each with a `score` and `explanation` map (key = scoring factor, value = human-readable reason string)
+
+### Re-ranking (`recommendations/ai-reranking.service.ts`)
+
+- Model: `claude-haiku-4-5-20251001`
+- Enabled automatically when `ANTHROPIC_API_KEY` is present
+- Input: top 20 candidates with their numeric scores + group context (player count, duration, attendee rating history)
+- Output: re-ordered list; scores are rescaled so the AI order is preserved while staying in the original numeric range
+- Disable: unset `ANTHROPIC_API_KEY` (falls back to pure numeric ranking)

@@ -710,8 +710,9 @@ export class GamesService {
       0.2,
       0.28,
     );
+    const geometricFiltered = this.filterGeometricOutliers(prunedTitles);
     titlesToSearch.length = 0;
-    titlesToSearch.push(...prunedTitles);
+    titlesToSearch.push(...geometricFiltered);
 
     const mergeMs = elapsedMs(mergeStartedAt);
 
@@ -1000,6 +1001,36 @@ export class GamesService {
     });
 
     return { candidates: finalCandidates, annotatedImageBase64 };
+  }
+
+  /**
+   * Removes geometrically implausible detections — large area blobs (carpets,
+   * walls, tables) and extreme aspect-ratio strips that cannot be game boxes.
+   * Works on normalized 0-1 bounding boxes so no image dimensions are needed.
+   */
+  private filterGeometricOutliers<
+    T extends {
+      claudeBox?: { x: number; y: number; width: number; height: number };
+    },
+  >(items: T[]): T[] {
+    return items.filter((item) => {
+      const box = item.claudeBox;
+      if (!box) return true; // No box → keep (OCR-only or no coords)
+
+      // Reject if the box covers more than 20% of the image area.
+      // A single game box cannot realistically occupy that much of a shelf photo.
+      const area = box.width * box.height;
+      if (area > 0.2) return false;
+
+      // Reject extreme horizontal strips (aspect ratio > 5).
+      // These are shelf edges, floor/wall bands, or long decorative objects.
+      if (box.height > 0) {
+        const aspectRatio = box.width / box.height;
+        if (aspectRatio > 5) return false;
+      }
+
+      return true;
+    });
   }
 
   private isJunkShelfTitle(title: string): boolean {

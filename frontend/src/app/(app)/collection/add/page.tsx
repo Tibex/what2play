@@ -285,6 +285,10 @@ export default function CollectionAddPage() {
   const sourcePassesTotal = shelfParseDetail?.sourcesTotal ?? 0;
   const matchDone = shelfParseDetail?.done ?? 0;
   const matchTotal = shelfParseDetail?.total ?? 0;
+  const rawDetectionsSoFar =
+    (shelfParseDetail?.geminiUpright ?? 0) +
+    (shelfParseDetail?.geminiSpine ?? 0) +
+    (shelfParseDetail?.claude ?? 0);
 
   const overlayPrimaryMessage = (() => {
     if (shelfParseStage === 'detect' && sourcePassesTotal > 0) {
@@ -298,7 +302,7 @@ export default function CollectionAddPage() {
       return `Matching titles to games (${matchDone}/${matchTotal})`;
     }
     if (shelfParseStage === 'annotate') return 'Drawing clean outlines';
-    if (shelfParseStage === 'finalize') return 'Preparing your results';
+    if (shelfParseStage === 'finalize') return shelfCandidates.length > 0 ? `Scan complete — found ${shelfCandidates.length} game${shelfCandidates.length === 1 ? '' : 's'}` : 'Preparing your results';
     return shelfParseMessage || 'Scanning your shelf...';
   })();
 
@@ -325,6 +329,11 @@ export default function CollectionAddPage() {
                 {sourcePassesTotal > 0 && (
                   <p>
                     Scan passes: <span className="font-semibold text-white">{sourcePassesDone}/{sourcePassesTotal}</span>
+                  </p>
+                )}
+                {shelfParseStage === 'detect' && rawDetectionsSoFar > 0 && (
+                  <p className="text-sm text-white/80">
+                    Raw detections: <span className="font-semibold text-white">{rawDetectionsSoFar}</span> (duplicates merged later)
                   </p>
                 )}
                 {matchTotal > 0 && (

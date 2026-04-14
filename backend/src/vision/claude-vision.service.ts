@@ -258,8 +258,13 @@ Rules:
 - Include items you are reasonably confident are a board game, card game, or tabletop expansion (including small boxes). Skip ambiguous blobs, decor, and unclear packaging.
 - Include partially hidden boxes only when you can read enough of the title/art to name the game; otherwise omit.
 - Prefer precise, non-overlapping boxes over maximizing recall — do not invent games.
-- Do NOT include: books (look for author names, ISBNs, novel-style covers), magazines, DVDs, decorative objects, price tags, or shelf labels
-- For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip only if clearly a novel, magazine, or DVD
+- Do NOT include: books (look for author names, ISBNs, novel-style covers), magazines, DVDs, decorative objects, price tags, shelf labels, or shelf hardware (brackets, dividers, supports)
+- Do NOT include: floors, carpets, rugs, walls, baseboards, wall art, paintings, tables, furniture surfaces, figurines, plants, candles, or any non-game decorative objects
+- A valid game detection must show a publisher logo, game art, or a recognizable game/expansion title — plain surfaces, fabric, or wood textures are never games
+- For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip if clearly a novel, magazine, DVD, or non-game item
+- Look for games stacked horizontally where only the narrow side/spine is visible — these appear as thin vertical rectangles (roughly 1–5% of image width) with the title along the edge; include them
+- Scan the full image including corners and edges — games near image periphery are as valid as those in the center
+- Only include a detection if you can clearly read specific text naming the game (title, expansion name, or publisher). If you see a region that might be a game but cannot read any identifying text on it, omit it — do not guess from shape or color alone
 - Check every shelf row including top and bottom
 - Return the COMPLETE title as printed. A word may appear large as a design choice — read ALL text on the box/spine (e.g. if "SLAY" is prominent but the box says "Here to Slay", return "Here to Slay", not "Slay" or "Slay the Spire")
 - If there are no game boxes, call the tool with { "games": [] }`,
@@ -329,7 +334,7 @@ Rules:
           typeof v === 'number' ? Math.max(0, Math.min(1, v)) : undefined;
         const detectionConfidence = clampConf(r.detection_confidence);
         const gameConfidence = clampConf(r.game_confidence);
-        if (detectionConfidence !== undefined && detectionConfidence < 0.38)
+        if (detectionConfidence !== undefined && detectionConfidence < 0.5)
           continue;
         if (gameConfidence !== undefined && gameConfidence < 0.32) continue;
 

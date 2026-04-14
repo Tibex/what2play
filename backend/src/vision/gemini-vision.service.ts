@@ -177,7 +177,7 @@ Return a JSON array only. For each physical box:
 - "detect_conf": 0.0-1.0 this is a game
 - "game_conf": 0.0-1.0 title is correct
 
-Rules: each entry = one physical box, rectangles non-overlapping (edge contact only). Skip books/magazines/DVDs and anything you can't read well enough to name. Do not invent titles. Return [] if none.
+Rules: each entry = one physical box, rectangles non-overlapping (edge contact only). Skip books/magazines/DVDs, floors, carpets, walls, tables, furniture, decorative objects, shelf hardware, figurines, and anything without a publisher logo or game title. Do NOT include wall art, rugs, plants, or plain surfaces — a valid detection must show game art or a readable game title. Look for games stacked side-on where only the narrow spine is visible (thin vertical strips, 1–5% of image width). Include games near image corners and edges. Only include a detection if you can clearly read specific text naming the game — title, expansion name, or publisher. If you cannot read identifying text, omit it. Do not invent titles. Return [] if none.
 
 Example: [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.98,"game_conf":0.95}]`,
         },
@@ -285,7 +285,7 @@ Return a JSON array only. For each physical box:
 - "detect_conf": 0.0-1.0 this is a game
 - "game_conf": 0.0-1.0 title is correct
 
-Rules: each entry = one physical box, non-overlapping (edge contact only). Omit unreadable items rather than labeling "UNKNOWN". Return [] if none.
+Rules: each entry = one physical box, non-overlapping (edge contact only). Skip books, magazines, DVDs, furniture surfaces, decorative objects, and anything without a game title or publisher logo. Only include entries where you can clearly read a game title or publisher. Omit unreadable items rather than labeling "UNKNOWN". Return [] if none.
 
 Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.95,"game_conf":0.9}]`,
         },
@@ -531,7 +531,7 @@ Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"p
       // Skip very low detection confidence — likely a false positive
       const detectionConfidence =
         typeof r.detect_conf === 'number' ? r.detect_conf : undefined;
-      if (detectionConfidence !== undefined && detectionConfidence < 0.38)
+      if (detectionConfidence !== undefined && detectionConfidence < 0.5)
         continue;
 
       const editionOrVersion =
