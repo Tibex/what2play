@@ -96,7 +96,11 @@ describe('RecommendationsService', () => {
         { provide: EventsService, useValue: mockEventsService },
         {
           provide: AiRecommendationService,
-          useValue: { rerankCandidates: jest.fn((candidates) => Promise.resolve(candidates)) },
+          useValue: {
+            rerankCandidates: jest.fn((candidates) =>
+              Promise.resolve(candidates),
+            ),
+          },
         },
       ],
     }).compile();
