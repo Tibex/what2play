@@ -8,6 +8,7 @@ import { EventFeedback } from '../entities/event-feedback.entity';
 import { RecommendationTelemetry } from '../entities/recommendation-telemetry.entity';
 import { GamesService } from '../games/games.service';
 import { EventsService } from '../events/events.service';
+import { AiRecommendationService } from './ai-recommendation.service';
 
 describe('RecommendationsService', () => {
   let service: RecommendationsService;
@@ -93,6 +94,10 @@ describe('RecommendationsService', () => {
         },
         { provide: GamesService, useValue: mockGamesService },
         { provide: EventsService, useValue: mockEventsService },
+        {
+          provide: AiRecommendationService,
+          useValue: { rerankCandidates: jest.fn((candidates) => Promise.resolve(candidates)) },
+        },
       ],
     }).compile();
 

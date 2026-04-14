@@ -14,6 +14,7 @@ import { Game } from '../entities/game.entity';
 import { RecommendationTelemetry } from '../entities/recommendation-telemetry.entity';
 import { GamesService } from '../games/games.service';
 import { EventsService } from '../events/events.service';
+import { AiRecommendationService } from './ai-recommendation.service';
 
 interface BggPlayerCountPollEntry {
   best: number;
@@ -152,6 +153,7 @@ export class RecommendationsService {
     private gamesService: GamesService,
     private eventsService: EventsService,
     private configService: ConfigService,
+    private aiRecommendationService: AiRecommendationService,
   ) {
     this.tuning = this.buildTuningProfile();
   }
@@ -564,10 +566,20 @@ export class RecommendationsService {
     const afterExclusions = rankedWithDiscovery.filter(
       (c) => !excludedIds.has(c.game.id),
     );
-    const topCandidates = this.rerankForDiversity(
+    const diversityCandidates = this.rerankForDiversity(
       afterExclusions,
       DEFAULT_DIVERSITY_LIMIT,
       EXPLORATION_SLOTS,
+    );
+
+    const topCandidates = await this.aiRecommendationService.rerankCandidates(
+      diversityCandidates,
+      {
+        playerCount,
+        durationMinutes: event.durationMinutes ?? null,
+        preferredComplexity: averagePreferredWeight ?? null,
+        preferredDuration: averagePreferredDuration ?? null,
+      },
     );
 
     const manualCandidates = await this.candidatesRepo.find({
@@ -852,7 +864,16 @@ export class RecommendationsService {
         explanation: entry.explanation,
       })),
     );
-    const reranked = this.rerankForDiversity(deduped, 3, 1);
+    const diversityReranked = this.rerankForDiversity(deduped, 3, 1);
+    const reranked = await this.aiRecommendationService.rerankCandidates(
+      diversityReranked,
+      {
+        playerCount: normalizedPlayerCount,
+        durationMinutes: budgetMinutes,
+        preferredComplexity: preferredWeight,
+        preferredDuration: budgetMinutes,
+      },
+    );
     const bestScore = reranked[0]?.score ?? 0;
     const worstScore = reranked[reranked.length - 1]?.score ?? bestScore;
     const scoreSpan = Math.max(0.01, bestScore - worstScore);

@@ -7,6 +7,7 @@ import { RecommendationTelemetry } from '../entities/recommendation-telemetry.en
 import { GamesModule } from '../games/games.module';
 import { EventsModule } from '../events/events.module';
 import { RecommendationsService } from './recommendations.service';
+import { AiRecommendationService } from './ai-recommendation.service';
 import { RecommendationsController } from './recommendations.controller';
 import { RecommendationsPublicController } from './recommendations-public.controller';
 
@@ -21,7 +22,7 @@ import { RecommendationsPublicController } from './recommendations-public.contro
     GamesModule,
     forwardRef(() => EventsModule),
   ],
-  providers: [RecommendationsService],
+  providers: [RecommendationsService, AiRecommendationService],
   controllers: [RecommendationsController, RecommendationsPublicController],
   exports: [RecommendationsService],
 })
