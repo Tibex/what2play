@@ -49,12 +49,13 @@ Prioritise in this order:
 6. Approachability for mixed skill levels
 
 Output ONLY a JSON array — no markdown fences, no prose.
-Format: [{"id":"<id>","rank":1,"reason":"<≤12 words>"},...]
+Format: [{"id":"<id>","rank":1,"reason":"<≤10 words>"},...]
 
 Rules:
 - Include EVERY game from the input, ranked 1 to N (1 = best)
 - Do NOT invent ids; use the exact id strings provided
-- Keep reasons concise and specific`;
+- reason MUST be a qualitative insight — theme, standout mechanic, or why it fits THIS group
+- NEVER restate stats already shown (BGG rating, duration, player count, complexity weight)`;
 
 @Injectable()
 export class AiRecommendationService {
@@ -133,10 +134,12 @@ export class AiRecommendationService {
         }),
       ]);
 
-      const text =
+      const raw =
         response.content[0]?.type === 'text'
           ? response.content[0].text.trim()
           : '';
+      // Strip optional markdown code fences the model may wrap around JSON
+      const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 
       const rankings: AiRankEntry[] = JSON.parse(text);
 

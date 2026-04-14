@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { CalendarAdapter } from '../calendar.types';
 
 @Injectable()
@@ -50,6 +55,9 @@ export class GoogleCalendarAdapter implements CalendarAdapter {
       this.logger.warn(
         `Google upsert failed for event ${params.event.id}: ${response.status} ${errorBody.slice(0, 200)}`,
       );
+      if (response.status === 401) {
+        throw new UnauthorizedException('Google calendar upsert unauthorized');
+      }
       throw new BadRequestException(
         `Google calendar upsert failed (${response.status})`,
       );
@@ -84,6 +92,9 @@ export class GoogleCalendarAdapter implements CalendarAdapter {
       this.logger.warn(
         `Google delete failed for remote event ${params.remoteEventId}: ${response.status} ${errorBody.slice(0, 200)}`,
       );
+      if (response.status === 401) {
+        throw new UnauthorizedException('Google calendar delete unauthorized');
+      }
       throw new BadRequestException(
         `Google calendar delete failed (${response.status})`,
       );

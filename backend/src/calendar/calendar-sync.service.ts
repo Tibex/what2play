@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   ForbiddenException,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
@@ -20,6 +21,8 @@ import { AppleCalendarAdapter } from './adapters/apple-calendar.adapter';
 
 @Injectable()
 export class CalendarSyncService {
+  private static readonly GOOGLE_TOKEN_REFRESH_BUFFER_MS = 60_000;
+  private static readonly GOOGLE_TOKEN_REFRESH_TIMEOUT_MS = 10_000;
   private readonly googleOAuthState = new Map<
     string,
     { userId: string; expiresAt: number }
@@ -437,15 +440,16 @@ export class CalendarSyncService {
     }
     const adapter = this.getAdapter(account.provider as CalendarProvider);
     try {
-      const accessToken = this.tokenCryptoService.decrypt(
-        account.encryptedAccessToken,
-      );
+      const accessToken = await this.getAccessTokenForSync(account);
       if (trigger === 'event_cancelled' && row.remoteEventId) {
-        await adapter.deleteEvent({
-          accessToken,
-          calendarId: row.calendarId,
-          remoteEventId: row.remoteEventId,
-        });
+        const remoteEventId = row.remoteEventId;
+        await this.executeWithAuthRetry(account, accessToken, (token) =>
+          adapter.deleteEvent({
+            accessToken: token,
+            calendarId: row.calendarId,
+            remoteEventId,
+          }),
+        );
         row.syncState = 'cancelled';
         row.lastSyncedAt = new Date();
         row.lastError = null;
@@ -453,19 +457,25 @@ export class CalendarSyncService {
         return;
       }
       if (!event.dateTime) return;
-      const payload = await adapter.upsertEvent({
+      const eventDateTime = event.dateTime;
+      const payload = await this.executeWithAuthRetry(
+        account,
         accessToken,
-        calendarId: row.calendarId,
-        remoteEventId: row.remoteEventId,
-        event: {
-          id: event.id,
-          title: event.title,
-          description: event.description || undefined,
-          location: event.location || undefined,
-          dateTime: new Date(event.dateTime).toISOString(),
-          durationMinutes: event.durationMinutes || undefined,
-        },
-      });
+        (token) =>
+          adapter.upsertEvent({
+            accessToken: token,
+            calendarId: row.calendarId,
+            remoteEventId: row.remoteEventId,
+            event: {
+              id: event.id,
+              title: event.title,
+              description: event.description || undefined,
+              location: event.location || undefined,
+              dateTime: new Date(eventDateTime).toISOString(),
+              durationMinutes: event.durationMinutes || undefined,
+            },
+          }),
+      );
       row.remoteEventId = payload.remoteEventId;
       row.remoteEtag = payload.etag || null;
       row.syncState = 'synced';
@@ -480,6 +490,141 @@ export class CalendarSyncService {
           : 'Calendar sync execution failed';
       await this.eventCalendarSyncRepo.save(row);
     }
+  }
+
+  private async getAccessTokenForSync(account: SyncAccount): Promise<string> {
+    const accessToken = this.tokenCryptoService.decrypt(
+      account.encryptedAccessToken!,
+    );
+    if (account.provider !== 'google') {
+      return accessToken;
+    }
+    return this.maybeRefreshGoogleAccessToken(account, accessToken, false);
+  }
+
+  private async executeWithAuthRetry<T>(
+    account: SyncAccount,
+    accessToken: string,
+    operation: (token: string) => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await operation(accessToken);
+    } catch (error) {
+      if (
+        account.provider !== 'google' ||
+        !this.isUnauthorizedCalendarError(error)
+      ) {
+        throw error;
+      }
+      const refreshedToken = await this.maybeRefreshGoogleAccessToken(
+        account,
+        accessToken,
+        true,
+      );
+      if (refreshedToken === accessToken) {
+        throw error;
+      }
+      return operation(refreshedToken);
+    }
+  }
+
+  private isUnauthorizedCalendarError(error: unknown): boolean {
+    return error instanceof HttpException && error.getStatus() === 401;
+  }
+
+  private async maybeRefreshGoogleAccessToken(
+    account: SyncAccount,
+    fallbackAccessToken: string,
+    forceRefresh: boolean,
+  ): Promise<string> {
+    const expiresAtMs = account.tokenExpiresAt?.getTime();
+    const shouldRefreshByExpiry =
+      typeof expiresAtMs === 'number' &&
+      expiresAtMs <=
+        Date.now() + CalendarSyncService.GOOGLE_TOKEN_REFRESH_BUFFER_MS;
+    if (!forceRefresh && !shouldRefreshByExpiry) {
+      return fallbackAccessToken;
+    }
+    if (!account.encryptedRefreshToken) {
+      return fallbackAccessToken;
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('Google OAuth configuration is missing');
+    }
+
+    const refreshToken = this.tokenCryptoService.decrypt(
+      account.encryptedRefreshToken,
+    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, CalendarSyncService.GOOGLE_TOKEN_REFRESH_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? `Google token refresh request failed: ${error.message}`
+          : 'Google token refresh request failed',
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throw new BadRequestException(
+        `Google token refresh failed (${response.status})`,
+      );
+    }
+
+    const tokenData = (await response.json()) as {
+      access_token?: string;
+      expires_in?: number;
+      scope?: string;
+      refresh_token?: string;
+    };
+    if (!tokenData.access_token) {
+      throw new BadRequestException(
+        'Google token refresh missing access token',
+      );
+    }
+
+    account.encryptedAccessToken = this.tokenCryptoService.encrypt(
+      tokenData.access_token,
+    );
+    if (tokenData.refresh_token) {
+      account.encryptedRefreshToken = this.tokenCryptoService.encrypt(
+        tokenData.refresh_token,
+      );
+    }
+    if (typeof tokenData.expires_in === 'number') {
+      account.tokenExpiresAt = new Date(
+        Date.now() + tokenData.expires_in * 1000,
+      );
+    }
+    if (tokenData.scope) {
+      account.scopes = tokenData.scope.split(' ');
+    }
+    account.lastError = null;
+    await this.syncAccountRepo.save(account);
+    return tokenData.access_token;
   }
 
   private assertProvider(

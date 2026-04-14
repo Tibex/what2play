@@ -1786,7 +1786,7 @@ export class RecommendationsService {
     ];
     const present = optionalSignals.filter((key) => explanation[key]).length;
     const coverage = present / optionalSignals.length;
-    if (coverage >= 0.7 && (sampleStrength ?? 0) >= 0.6) return 'high';
+    if (coverage >= 0.7) return 'high';
     if (coverage >= 0.4 || (sampleStrength ?? 0) >= 0.35) return 'medium';
     return 'low';
   }

@@ -404,7 +404,8 @@ function preferredWeight(complexity: DemoComplexity): number {
 }
 
 function demoConfidence(explanation: Record<string, string>): 'high' | 'medium' | 'low' {
-  const optionalSignals = ['rating', 'bgg', 'time', 'history', 'attendee_history', 'complexity', 'best_players'];
+  // Only signals populated in the demo context (no history, no rating alias)
+  const optionalSignals = ['bgg', 'time', 'complexity', 'best_players'];
   const present = optionalSignals.filter((key) => explanation[key]).length;
   const coverage = present / optionalSignals.length;
   if (coverage >= 0.7) return 'high';
