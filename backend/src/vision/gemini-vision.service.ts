@@ -7,18 +7,32 @@ import {
 import sharp from 'sharp';
 
 const MAX_IMAGE_WIDTH = 1536;
+// Spine pass only reads title text on narrow strips — 1280 is enough and
+// cuts input tokens ~30% versus 1536.
+const SPINE_MAX_IMAGE_WIDTH = 1280;
 // Gemini returns box_2d as [ymin, xmin, ymax, xmax] normalized to 0-1000
 const GEMINI_BOX_SCALE = 1000;
 
-/** Primary shelf-vision model */
-const GEMINI_PRIMARY_MODEL = 'gemini-2.5-flash';
-/**
- * Fallback when primary fails after retries (503/overload, etc.).
- * Use another 2.5-family id: unversioned `gemini-2.0-flash` returns 404 for new API projects.
- */
-const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash-lite';
+/** Upright shelf-vision model (flash keeps precision on small spines). */
+const GEMINI_UPRIGHT_MODEL = 'gemini-2.5-flash';
+/** Spine pass and upright fallback — ~2× faster than flash. */
+const GEMINI_SPINE_MODEL = 'gemini-2.5-flash-lite';
 
-const VALID_OCCLUSION = ['none', 'low', 'medium', 'high'] as const;
+/**
+ * Generation config shared across both models:
+ * - thinkingConfig.thinkingBudget=0 disables 2.5-flash "thinking" mode, which
+ *   is pure latency burn for perception tasks. Biggest latency win.
+ * - responseMimeType pins JSON so we don't pay for markdown framing.
+ * - maxOutputTokens caps worst-case output (a 60-box response is ~3k tokens).
+ * The `thinkingConfig` field is accepted by the REST API but isn't in the
+ * SDK's TypeScript types for v0.24 yet — hence the cast.
+ */
+const GEMINI_GENERATION_CONFIG = {
+  responseMimeType: 'application/json',
+  maxOutputTokens: 4096,
+  temperature: 0,
+  thinkingConfig: { thinkingBudget: 0 },
+} as unknown as Record<string, unknown>;
 
 export type GeminiDetection = {
   title: string;
@@ -27,25 +41,25 @@ export type GeminiDetection = {
   polygon?: Array<[number, number]>;
   detectionConfidence?: number;
   gameConfidence?: number;
-  occlusionLevel?: 'none' | 'low' | 'medium' | 'high';
-  candidates?: string[];
 };
 
 @Injectable()
 export class GeminiVisionService {
   private readonly logger = new Logger(GeminiVisionService.name);
-  private primaryModel: GenerativeModel | null = null;
-  private fallbackModel: GenerativeModel | null = null;
+  private uprightModel: GenerativeModel | null = null;
+  private spineModel: GenerativeModel | null = null;
 
   constructor(private config: ConfigService) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY');
     if (apiKey) {
       const genai = new GoogleGenerativeAI(apiKey);
-      this.primaryModel = genai.getGenerativeModel({
-        model: GEMINI_PRIMARY_MODEL,
+      this.uprightModel = genai.getGenerativeModel({
+        model: GEMINI_UPRIGHT_MODEL,
+        generationConfig: GEMINI_GENERATION_CONFIG as never,
       });
-      this.fallbackModel = genai.getGenerativeModel({
-        model: GEMINI_FALLBACK_MODEL,
+      this.spineModel = genai.getGenerativeModel({
+        model: GEMINI_SPINE_MODEL,
+        generationConfig: GEMINI_GENERATION_CONFIG as never,
       });
     } else {
       this.logger.warn(
@@ -55,7 +69,7 @@ export class GeminiVisionService {
   }
 
   isAvailable(): boolean {
-    return this.primaryModel !== null;
+    return this.uprightModel !== null;
   }
 
   private getGeminiHttpStatus(err: unknown): number | undefined {
@@ -87,8 +101,8 @@ export class GeminiVisionService {
         if (!retryable || attempt >= maxAttempts - 1) {
           throw err;
         }
-        const baseMs = 1200 * 2 ** attempt;
-        const jitterMs = Math.floor(Math.random() * 900);
+        const baseMs = 500 * 2 ** attempt;
+        const jitterMs = Math.floor(Math.random() * 400);
         this.logger.warn(
           `Gemini generateContent transient HTTP ${String(status)} — retry ${attempt + 2}/${maxAttempts} in ${baseMs + jitterMs}ms`,
         );
@@ -99,25 +113,29 @@ export class GeminiVisionService {
   }
 
   /**
-   * Retries on the primary model, then the hardcoded fallback if primary still fails.
+   * Runs `primary` with backoff, then `fallback` if primary still fails.
    */
   private async generateContentPrimaryThenFallback(
     parts: Parameters<GenerativeModel['generateContent']>[0],
+    primary: GenerativeModel | null,
+    primaryLabel: string,
+    fallback: GenerativeModel | null,
+    fallbackLabel: string,
   ): Promise<Awaited<ReturnType<GenerativeModel['generateContent']>>> {
-    if (!this.primaryModel) {
+    if (!primary) {
       throw new Error('Gemini model not configured');
     }
     try {
-      return await this.generateContentWithBackoff(this.primaryModel, parts);
+      return await this.generateContentWithBackoff(primary, parts);
     } catch (primaryErr: unknown) {
-      if (!this.fallbackModel) {
+      if (!fallback) {
         throw primaryErr;
       }
       this.logger.warn(
-        `Gemini primary (${GEMINI_PRIMARY_MODEL}) failed after retries — trying fallback (${GEMINI_FALLBACK_MODEL})`,
+        `Gemini primary (${primaryLabel}) failed after retries — trying fallback (${fallbackLabel})`,
         primaryErr,
       );
-      return await this.generateContentWithBackoff(this.fallbackModel, parts);
+      return await this.generateContentWithBackoff(fallback, parts);
     }
   }
 
@@ -126,16 +144,19 @@ export class GeminiVisionService {
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
     knownGames: string[] = [],
   ): Promise<GeminiDetection[]> {
-    if (!this.primaryModel) return [];
+    if (!this.uprightModel) return [];
+    const startedAt = Date.now();
     try {
+      const resizeStartedAt = Date.now();
       const { buffer, mediaType: finalMediaType } = await this.resizeImage(
         imageBuffer,
         mediaType,
+        MAX_IMAGE_WIDTH,
       );
 
       const knownGamesHint =
         knownGames.length > 0
-          ? `\nKnown games hint (soft constraint — use as a guide, not a rule):\n${JSON.stringify(knownGames.slice(0, 100))}\n`
+          ? `\nKnown games hint (guide, not a rule): ${JSON.stringify(knownGames.slice(0, 100))}\n`
           : '';
 
       const parts = [
@@ -146,63 +167,52 @@ export class GeminiVisionService {
           },
         },
         {
-          text: `You are an expert at identifying board games on shelves.${knownGamesHint}
+          text: `Identify every board game box on this shelf. Many games sit spine-out (narrow vertical strip, title rotated 90/180°) — scan shelves row by row and include them.${knownGamesHint}
 
-STEP 1 -- Spine-out games (most commonly missed):
-Many games are stored spine-out, like books on a bookshelf. They appear as narrow vertical strips (roughly 1-6% of image width) with the game title running along the spine, rotated 90 or 180 degrees. Before doing a full scan, sweep each shelf specifically for narrow strips with vertical text -- every such strip is almost certainly a game spine.
+Return a JSON array only. For each physical box:
+- "label": full title as printed (read every word, not just the largest; e.g. "Here to Slay", not "Slay")
+- "edition": edition/expansion if visible, else null
+- "box_2d": [ymin, xmin, ymax, xmax] integers 0-1000 tracing the full cardboard box
+- "polygon": [[x1,y1]..[x4,y4]] clockwise corners, integers 0-1000 (x = col/width×1000)
+- "detect_conf": 0.0-1.0 this is a game
+- "game_conf": 0.0-1.0 title is correct
 
-STEP 2 -- Full shelf scan:
-Scan systematically, shelf by shelf, top to bottom, left to right within each row. Do not skip any row.
+Rules: each entry = one physical box, rectangles non-overlapping (edge contact only). Skip books/magazines/DVDs and anything you can't read well enough to name. Do not invent titles. Return [] if none.
 
-Board games appear in several orientations:
-- Spine-out: narrow strip, title rotated 90 or 180 degrees -- PRIORITIZE finding these (Step 1)
-- Face-out: full box cover visible (title on the front face)
-- Stacked horizontally: box lying flat, cover face up
-- Partially obscured: tucked behind another box or at image edge
-
-BOUNDING BOX AND POLYGON PRECISION -- use color transitions:
-Every game box has a distinct dominant background color. The physical edge of a box is precisely where that background color ends and the adjacent box's color (or the shelf surface) begins. Use this color-boundary approach for both box_2d and polygon corners.
-
-NON-OVERLAPPING PHYSICAL BOXES:
-Each entry must represent ONE physical cardboard box. Boxes cannot intersect or share interior area with another game's box in your output. If two games touch, their rectangles must meet at an edge only (zero overlap). Merge split detections for the same physical box into a single box. Prefer slightly inset/tight boxes over oversized boxes that swallow neighbors.
-
-For EACH game box you identify, return an object with:
-- "label": exact title as printed on the box or spine (best guess if partially obscured)
-- "edition": edition, variant, or expansion name if visible (e.g. "5th Edition", "Legacy", "European Expansion"), or null
-- "box_2d": [ymin, xmin, ymax, xmax] where each value is an integer 0-1000 (fraction of image height/width × 1000). Use color transitions to measure the FULL physical cardboard box precisely.
-- "polygon": [[x1,y1],[x2,y2],[x3,y3],[x4,y4]] four corner points clockwise, tightly tracing the visible face/spine boundary; integers 0-1000 (x = col/width×1000, y = row/height×1000)
-- "detect_conf": 0.0-1.0 confidence this is actually a game box
-- "game_conf": 0.0-1.0 confidence in the title identification
-- "occlusion": "none"|"low"|"medium"|"high"
-- "candidates": array of alternative title strings when game_conf < 0.7, else []
-
-Return ONLY a JSON array -- no explanation, no markdown:
-[{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.98,"game_conf":0.95,"occlusion":"none","candidates":[]}]
-
-Rules:
-- Include items you are reasonably confident are a board game, card game, or tabletop expansion (including small boxes). Skip ambiguous blobs, shelf decor, and unclear packaging.
-- Include partially hidden boxes only when you can read enough title art to name the game; otherwise omit.
-- Prefer precision and non-overlapping boxes over maximizing recall — do not invent games.
-- Do NOT include: books (look for author names, ISBNs, novel-style covers), magazines, DVDs, decorative objects, price tags, or shelf labels
-- For spine-only items: include if it has game-style art or a recognizable game/expansion title; skip only if clearly a novel, magazine, or DVD
-- Check every shelf row including top and bottom
-- Return the COMPLETE title as printed. A word may appear large as a design choice -- read ALL text on the box/spine (e.g. if "SLAY" is prominent but the box says "Here to Slay", return "Here to Slay", not "Slay the Spire")
-- Return [] only if there are genuinely no game boxes in the image`,
+Example: [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.98,"game_conf":0.95}]`,
         },
       ];
 
-      const result = await this.generateContentPrimaryThenFallback(parts);
+      const resizeMs = Date.now() - resizeStartedAt;
 
+      const modelStartedAt = Date.now();
+      const result = await this.generateContentPrimaryThenFallback(
+        parts,
+        this.uprightModel,
+        GEMINI_UPRIGHT_MODEL,
+        this.spineModel,
+        GEMINI_SPINE_MODEL,
+      );
+      const modelMs = Date.now() - modelStartedAt;
+
+      const parseStartedAt = Date.now();
       const text = result.response.text().trim();
-      const match = text.match(/\[[\s\S]*\]/);
-      if (!match) return [];
+      const parsed = this.parseGeminiJsonArrayFromText(text, 'upright');
+      if (parsed.length === 0) return [];
 
-      const parsed = JSON.parse(match[0]) as unknown;
-      if (!Array.isArray(parsed)) return [];
+      const items = this.parseDetectionItems(parsed);
+      const parseMs = Date.now() - parseStartedAt;
+      const totalMs = Date.now() - startedAt;
+      this.logger.log(
+        `Gemini upright timings (ms): resize=${resizeMs}, model=${modelMs}, parse=${parseMs}, total=${totalMs}, detections=${items.length}`,
+      );
 
-      return this.parseDetectionItems(parsed);
+      return items;
     } catch (error) {
       this.logger.warn('Gemini vision detection failed', error);
+      this.logger.warn(
+        `Gemini upright failed after ${Date.now() - startedAt}ms`,
+      );
       return [];
     }
   }
@@ -210,17 +220,18 @@ Rules:
   private async resizeImage(
     imageBuffer: Buffer,
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
+    maxWidth: number = MAX_IMAGE_WIDTH,
   ): Promise<{
     buffer: Buffer;
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
   }> {
     const oriented = await sharp(imageBuffer).rotate().toBuffer();
     const metadata = await sharp(oriented).metadata();
-    if (!metadata.width || metadata.width <= MAX_IMAGE_WIDTH) {
+    if (!metadata.width || metadata.width <= maxWidth) {
       return { buffer: oriented, mediaType };
     }
     const buffer = await sharp(oriented)
-      .resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true })
+      .resize({ width: maxWidth, withoutEnlargement: true })
       .jpeg({ quality: 85 })
       .toBuffer();
     return { buffer, mediaType: 'image/jpeg' };
@@ -236,11 +247,14 @@ Rules:
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
     knownGames: string[] = [],
   ): Promise<GeminiDetection[]> {
-    if (!this.primaryModel) return [];
+    if (!this.spineModel) return [];
+    const startedAt = Date.now();
     try {
+      const resizeStartedAt = Date.now();
       const { buffer: prepared } = await this.resizeImage(
         imageBuffer,
         mediaType,
+        SPINE_MAX_IMAGE_WIDTH,
       );
       // Rotate 90° CW: spine-out games become wide horizontal boxes
       const rotated = await sharp(prepared)
@@ -250,7 +264,7 @@ Rules:
 
       const knownGamesHint =
         knownGames.length > 0
-          ? `\nKnown games hint (soft constraint — use as a guide, not a rule):\n${JSON.stringify(knownGames.slice(0, 100))}\n`
+          ? `\nKnown games hint (guide, not a rule): ${JSON.stringify(knownGames.slice(0, 100))}\n`
           : '';
 
       const parts = [
@@ -261,47 +275,45 @@ Rules:
           },
         },
         {
-          text: `You are identifying board games on a shelf. This image has been rotated 90° clockwise so that games stored spine-out (standing like books, showing only their narrow edge) now appear as wider horizontal boxes with their title text reading left-to-right.${knownGamesHint}
+          text: `This shelf image was rotated 90° clockwise — spine-out games now appear as wide horizontal boxes with title text reading left-to-right. Identify every game box.${knownGamesHint}
 
-Identify every visible game box in this rotated image.
+Return a JSON array only. For each physical box:
+- "label": full title as printed (read every word, e.g. "Here to Slay", not "Slay")
+- "edition": edition/expansion if visible, else null
+- "box_2d": [ymin, xmin, ymax, xmax] integers 0-1000
+- "polygon": [[x1,y1]..[x4,y4]] clockwise corners, integers 0-1000
+- "detect_conf": 0.0-1.0 this is a game
+- "game_conf": 0.0-1.0 title is correct
 
-NON-OVERLAPPING PHYSICAL BOXES: each JSON entry is one physical box; rectangles must not overlap other entries (edge contact only). Do not output placeholder labels like "UNKNOWN" — omit unreadable items.
+Rules: each entry = one physical box, non-overlapping (edge contact only). Omit unreadable items rather than labeling "UNKNOWN". Return [] if none.
 
-For each box, return:
-- "label": the full game title as printed
-- "edition": edition, variant, or expansion name if visible, or null
-- "box_2d": [ymin, xmin, ymax, xmax] as integers 0-1000. Use color transitions between boxes to set precise boundaries.
-- "polygon": [[x1,y1],[x2,y2],[x3,y3],[x4,y4]] four corner points clockwise in the rotated image; integers 0-1000 (x = col/width×1000, y = row/height×1000)
-- "detect_conf": 0.0-1.0 confidence this is a game box
-- "game_conf": 0.0-1.0 confidence in the title
-- "occlusion": "none"|"low"|"medium"|"high"
-- "candidates": alternative titles when game_conf < 0.7, else []
-
-Return ONLY a JSON array, no explanation, no markdown:
-[{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.95,"game_conf":0.9,"occlusion":"none","candidates":[]}]
-
-Rules:
-- Return the COMPLETE title. A word may appear large as a design choice -- read ALL text on the box (e.g. if "SLAY" is large but it says "Here to Slay", return "Here to Slay")
-- Include expansions and small boxes
-- Do NOT include books, magazines, DVDs, price tags, or shelf labels
-- Return [] if nothing is identifiable`,
+Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.95,"game_conf":0.9}]`,
         },
       ];
 
-      const result = await this.generateContentPrimaryThenFallback(parts);
+      const resizeMs = Date.now() - resizeStartedAt;
 
+      const modelStartedAt = Date.now();
+      // Spine pass runs on flash-lite first (~2× faster) with flash as fallback.
+      const result = await this.generateContentPrimaryThenFallback(
+        parts,
+        this.spineModel,
+        GEMINI_SPINE_MODEL,
+        this.uprightModel,
+        GEMINI_UPRIGHT_MODEL,
+      );
+      const modelMs = Date.now() - modelStartedAt;
+
+      const parseStartedAt = Date.now();
       const text = result.response.text().trim();
-      const match = text.match(/\[[\s\S]*\]/);
-      if (!match) return [];
-
-      const parsed = JSON.parse(match[0]) as unknown;
-      if (!Array.isArray(parsed)) return [];
+      const parsed = this.parseGeminiJsonArrayFromText(text, 'spine');
+      if (parsed.length === 0) return [];
 
       const items = this.parseDetectionItems(parsed);
 
       // Invert 90° CW rotation back to original image orientation.
       // For a point (xr, yr) in rotated normalized [0,1]: original = (yr, 1-xr)
-      return items.map((item) => {
+      const normalizedItems = items.map((item) => {
         const bb = item.boundingBox;
         const invertedBoundingBox = bb
           ? (() => {
@@ -329,9 +341,148 @@ Rules:
           polygon: invertedPolygon,
         };
       });
+
+      const parseMs = Date.now() - parseStartedAt;
+      const totalMs = Date.now() - startedAt;
+      this.logger.log(
+        `Gemini spine timings (ms): resize+rotate=${resizeMs}, model=${modelMs}, parse+invert=${parseMs}, total=${totalMs}, detections=${normalizedItems.length}`,
+      );
+
+      return normalizedItems;
     } catch (error) {
       this.logger.warn('Gemini spine-out detection failed', error);
+      this.logger.warn(
+        `Gemini spine-out failed after ${Date.now() - startedAt}ms`,
+      );
       return [];
+    }
+  }
+
+  /**
+   * Gemini can occasionally emit slightly malformed JSON in long arrays even
+   * when responseMimeType is pinned. Recover what we can instead of failing the
+   * whole detection pass.
+   */
+  private parseGeminiJsonArrayFromText(
+    text: string,
+    pass: 'upright' | 'spine',
+  ): unknown[] {
+    const trimmed = text.trim();
+    const strictParsed = this.tryParseJsonArray(trimmed);
+    if (strictParsed) return strictParsed;
+
+    // Fallback model sometimes wraps JSON in markdown.
+    const match = trimmed.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const bracketed = match[0];
+
+    const bracketedStrict = this.tryParseJsonArray(bracketed);
+    if (bracketedStrict) return bracketedStrict;
+
+    const normalized = this.normalizeJsonText(bracketed);
+    const normalizedParsed = this.tryParseJsonArray(normalized);
+    if (normalizedParsed) {
+      this.logger.warn(
+        `Gemini ${pass} returned malformed JSON array; recovered via normalization`,
+      );
+      return normalizedParsed;
+    }
+
+    const salvaged = this.salvageJsonObjectsFromArray(bracketed);
+    if (salvaged.length > 0) {
+      this.logger.warn(
+        `Gemini ${pass} returned malformed JSON array; salvaged ${salvaged.length} object(s)`,
+      );
+      return salvaged;
+    }
+
+    return [];
+  }
+
+  private tryParseJsonArray(text: string): unknown[] | null {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizeJsonText(text: string): string {
+    return text
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .replace(/,\s*([}\]])/g, '$1')
+      .replace(/([^\d])\.([0-9])/g, '$10.$2')
+      .replace(/^\./gm, '0.');
+  }
+
+  private salvageJsonObjectsFromArray(arrayText: string): unknown[] {
+    const recovered: unknown[] = [];
+    let depth = 0;
+    let start = -1;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < arrayText.length; i++) {
+      const char = arrayText[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === '{') {
+        if (depth === 0) start = i;
+        depth += 1;
+        continue;
+      }
+
+      if (char === '}') {
+        if (depth === 0) continue;
+        depth -= 1;
+        if (depth === 0 && start >= 0) {
+          const rawObject = arrayText.slice(start, i + 1);
+          const parsed = this.tryParseJsonObject(rawObject);
+          if (parsed) recovered.push(parsed);
+          start = -1;
+        }
+      }
+    }
+
+    return recovered;
+  }
+
+  private tryParseJsonObject(text: string): Record<string, unknown> | null {
+    const strict = this.parseObject(text);
+    if (strict) return strict;
+    return this.parseObject(this.normalizeJsonText(text));
+  }
+
+  private parseObject(text: string): Record<string, unknown> | null {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 
@@ -392,20 +543,6 @@ Rules:
         typeof r.game_conf === 'number' ? r.game_conf : undefined;
       if (gameConfidence !== undefined && gameConfidence < 0.32) continue;
 
-      const occlusionLevel =
-        typeof r.occlusion === 'string' &&
-        (VALID_OCCLUSION as readonly string[]).includes(r.occlusion)
-          ? (r.occlusion as 'none' | 'low' | 'medium' | 'high')
-          : undefined;
-
-      const rawCandidates = r.candidates;
-      const candidates = Array.isArray(rawCandidates)
-        ? rawCandidates.filter(
-            (c): c is string =>
-              typeof c === 'string' && c.length > 0 && c.length < 100,
-          )
-        : undefined;
-
       // Parse polygon: [[x,y],...] in 0-1000 scale → normalize to [0,1]
       const rawPoly = r.polygon;
       let polygon: Array<[number, number]> | undefined;
@@ -459,8 +596,6 @@ Rules:
             polygon,
             detectionConfidence,
             gameConfidence,
-            occlusionLevel,
-            candidates,
           });
           continue;
         }
@@ -472,8 +607,6 @@ Rules:
         polygon,
         detectionConfidence,
         gameConfidence,
-        occlusionLevel,
-        candidates,
       });
     }
 

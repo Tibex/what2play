@@ -19,6 +19,17 @@ export type ShelfParseProgressDetail = {
   ocrBlocks?: number;
   /** Unique title rows after merge + junk filter + overlap suppression. */
   mergedTitles?: number;
+  /** Stage timings in milliseconds (optional debug telemetry). */
+  prepareMs?: number;
+  detectMs?: number;
+  geminiUprightMs?: number;
+  geminiSpineMs?: number;
+  claudeMs?: number;
+  ocrMs?: number;
+  mergeMs?: number;
+  matchMs?: number;
+  annotateMs?: number;
+  totalMs?: number;
 };
 
 export type ShelfParseProgressPayload = {

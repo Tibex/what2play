@@ -187,11 +187,15 @@ export class ClaudeVisionService {
     }>
   > {
     if (!this.client) return [];
+    const startedAt = Date.now();
     try {
+      const resizeStartedAt = Date.now();
       const { buffer: resizedBuffer, mediaType: resizedMediaType } =
         await this.resizeImage(imageBuffer, mediaType);
+      const resizeMs = Date.now() - resizeStartedAt;
       const imageData = resizedBuffer.toString('base64');
 
+      const modelStartedAt = Date.now();
       const response = await this.client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
@@ -264,7 +268,9 @@ Rules:
           },
         ],
       });
+      const modelMs = Date.now() - modelStartedAt;
 
+      const parseStartedAt = Date.now();
       let parsed: unknown[] | null = null;
       for (const block of response.content) {
         if (block.type === 'tool_use' && block.name === SHELF_GAMES_TOOL_NAME) {
@@ -404,9 +410,18 @@ Rules:
         });
       }
 
+      const parseMs = Date.now() - parseStartedAt;
+      const totalMs = Date.now() - startedAt;
+      this.logger.log(
+        `Claude vision timings (ms): resize=${resizeMs}, model=${modelMs}, parse=${parseMs}, total=${totalMs}, detections=${results.length}`,
+      );
+
       return results;
     } catch (error) {
       this.logger.error('Claude vision detection failed', error);
+      this.logger.warn(
+        `Claude vision failed after ${Date.now() - startedAt}ms`,
+      );
       return [];
     }
   }

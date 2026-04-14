@@ -410,6 +410,10 @@ export class GamesService {
     }>;
     annotatedImageBase64?: string;
   }> {
+    const parseStartedAt = Date.now();
+    const elapsedMs = (startedAt: number): number => Date.now() - startedAt;
+
+    const prepareStartedAt = Date.now();
     const owned = await this.getUserCollection(userId);
     const ownedGameIds = new Set(owned.map((o) => o.gameId));
     const ownedBggIds = new Set(
@@ -422,10 +426,13 @@ export class GamesService {
       .map((o) => o.game.title)
       .filter((t): t is string => Boolean(t));
 
+    const prepareMs = elapsedMs(prepareStartedAt);
+
     onProgress?.({
       stage: 'prepare',
-      message: 'Loading your collection for recognition hints...',
+      message: `Loading your collection for recognition hints... (${prepareMs}ms)`,
       percent: 5,
+      detail: { prepareMs },
     });
 
     // Run all four detection sources in parallel for maximum coverage.
@@ -452,73 +459,115 @@ export class GamesService {
       stage: 'detect',
       message: 'Scanning your photo for game boxes...',
       percent: 12,
-      detail: { sourcesDone: 0, sourcesTotal },
+      detail: { sourcesDone: 0, sourcesTotal, prepareMs },
     });
 
+    const detectStartedAt = Date.now();
+
     const runGeminiMain = async () => {
+      const startedAt = Date.now();
       try {
         const r = await this.geminiVision.detectBoardGames(
           imageBuffer,
           mediaType,
           knownGames,
         );
-        bumpDetect(`Pass complete: found ${r.length} possible boxes`, {
-          geminiUpright: r.length,
-        });
+        const geminiUprightMs = elapsedMs(startedAt);
+        bumpDetect(
+          `Pass complete: found ${r.length} possible boxes (${geminiUprightMs}ms)`,
+          {
+            geminiUpright: r.length,
+            geminiUprightMs,
+          },
+        );
         return r;
       } catch (err) {
         this.logger.warn('Gemini upright shelf detection failed', err);
-        bumpDetect('Pass complete: no boxes found', { geminiUpright: 0 });
+        const geminiUprightMs = elapsedMs(startedAt);
+        bumpDetect(`Pass complete: no boxes found (${geminiUprightMs}ms)`, {
+          geminiUpright: 0,
+          geminiUprightMs,
+        });
         return [];
       }
     };
 
     const runClaude = async () => {
+      const startedAt = Date.now();
       try {
         const r = await this.claudeVision.detectBoardGames(
           imageBuffer,
           mediaType,
           knownGames,
         );
-        bumpDetect(`Pass complete: found ${r.length} possible boxes`, {
-          claude: r.length,
-        });
+        const claudeMs = elapsedMs(startedAt);
+        bumpDetect(
+          `Pass complete: found ${r.length} possible boxes (${claudeMs}ms)`,
+          {
+            claude: r.length,
+            claudeMs,
+          },
+        );
         return r;
       } catch (err) {
         this.logger.warn('Claude shelf detection failed', err);
-        bumpDetect('Pass complete: no boxes found', { claude: 0 });
+        const claudeMs = elapsedMs(startedAt);
+        bumpDetect(`Pass complete: no boxes found (${claudeMs}ms)`, {
+          claude: 0,
+          claudeMs,
+        });
         return [];
       }
     };
 
     const runOcr = async () => {
+      const startedAt = Date.now();
       try {
         const r = await this.vision.detectTextBlocks(imageBuffer);
-        bumpDetect(`Text scan complete: ${r.length} text areas read`, {
-          ocrBlocks: r.length,
-        });
+        const ocrMs = elapsedMs(startedAt);
+        bumpDetect(
+          `Text scan complete: ${r.length} text areas read (${ocrMs}ms)`,
+          {
+            ocrBlocks: r.length,
+            ocrMs,
+          },
+        );
         return r;
       } catch (err) {
         this.logger.warn('Google OCR shelf detection failed', err);
-        bumpDetect('Text scan complete: no text found', { ocrBlocks: 0 });
+        const ocrMs = elapsedMs(startedAt);
+        bumpDetect(`Text scan complete: no text found (${ocrMs}ms)`, {
+          ocrBlocks: 0,
+          ocrMs,
+        });
         return [];
       }
     };
 
     const runGeminiSpine = async () => {
+      const startedAt = Date.now();
       try {
         const r = await this.geminiVision.detectSpineOutGames(
           imageBuffer,
           mediaType,
           knownGames,
         );
-        bumpDetect(`Pass complete: found ${r.length} possible boxes`, {
-          geminiSpine: r.length,
-        });
+        const geminiSpineMs = elapsedMs(startedAt);
+        bumpDetect(
+          `Pass complete: found ${r.length} possible boxes (${geminiSpineMs}ms)`,
+          {
+            geminiSpine: r.length,
+            geminiSpineMs,
+          },
+        );
         return r;
       } catch (err) {
         this.logger.warn('Gemini spine-out shelf detection failed', err);
-        bumpDetect('Pass complete: no boxes found', { geminiSpine: 0 });
+        const geminiSpineMs = elapsedMs(startedAt);
+        bumpDetect(`Pass complete: no boxes found (${geminiSpineMs}ms)`, {
+          geminiSpine: 0,
+          geminiSpineMs,
+        });
         return [];
       }
     };
@@ -531,11 +580,14 @@ export class GamesService {
         runGeminiSpine(),
       ]);
 
+    const detectMs = elapsedMs(detectStartedAt);
+    const mergeStartedAt = Date.now();
+
     onProgress?.({
       stage: 'merge',
-      message: 'Combining scan results...',
+      message: `Combining scan results... (${detectMs}ms detection)`,
       percent: 33,
-      detail: detectDetail,
+      detail: { ...detectDetail, prepareMs, detectMs },
     });
 
     const cleanedOcr = this.cleanOcrBlocks(ocrBlocks).sort((a, b) =>
@@ -567,8 +619,6 @@ export class GamesService {
       polygon: r.polygon,
       detectionConfidence: r.detectionConfidence,
       gameConfidence: r.gameConfidence,
-      occlusionLevel: r.occlusionLevel,
-      titleCandidates: r.candidates,
     }));
 
     for (const r of claudeResults) {
@@ -619,8 +669,6 @@ export class GamesService {
           polygon: r.polygon,
           detectionConfidence: r.detectionConfidence,
           gameConfidence: r.gameConfidence,
-          occlusionLevel: r.occlusionLevel,
-          titleCandidates: r.candidates,
         });
       } else if (!existing.claudeBox && r.boundingBox) {
         existing.claudeBox = r.boundingBox;
@@ -665,11 +713,19 @@ export class GamesService {
     titlesToSearch.length = 0;
     titlesToSearch.push(...prunedTitles);
 
+    const mergeMs = elapsedMs(mergeStartedAt);
+
     onProgress?.({
       stage: 'merge',
-      message: `Found ${titlesToSearch.length} likely game title(s)`,
+      message: `Found ${titlesToSearch.length} likely game title(s) (${mergeMs}ms merge)`,
       percent: 38,
-      detail: { ...detectDetail, mergedTitles: titlesToSearch.length },
+      detail: {
+        ...detectDetail,
+        mergedTitles: titlesToSearch.length,
+        prepareMs,
+        detectMs,
+        mergeMs,
+      },
     });
 
     const candidates: Array<{
@@ -695,6 +751,7 @@ export class GamesService {
 
     // Process all detected titles in parallel — sequential BGG calls per game
     // were causing 90 s+ timeouts when Claude detects 20+ games.
+    const matchStartedAt = Date.now();
     const matchTotal = titlesToSearch.length;
     let matchDone = 0;
     const bumpMatchProgress = () => {
@@ -711,7 +768,7 @@ export class GamesService {
             ? 'No game titles found yet.'
             : `Matching games to our catalog (${done}/${matchTotal})...`,
         percent: pct,
-        detail: { done, total: matchTotal },
+        detail: { done, total: matchTotal, prepareMs, detectMs, mergeMs },
       });
     };
 
@@ -722,7 +779,7 @@ export class GamesService {
           ? 'No game titles found. Skipping catalog match.'
           : `Matching ${matchTotal} game title(s) to our catalog...`,
       percent: 40,
-      detail: { done: 0, total: matchTotal },
+      detail: { done: 0, total: matchTotal, prepareMs, detectMs, mergeMs },
     });
 
     const settled = await Promise.allSettled(
@@ -900,12 +957,16 @@ export class GamesService {
       detectionNumber: index + 1,
     }));
 
+    const matchMs = elapsedMs(matchStartedAt);
+
     // Draw bounding boxes directly on the image so the frontend can display
     // an annotated photo without fragile CSS overlay positioning.
+    const annotateStartedAt = Date.now();
     onProgress?.({
       stage: 'annotate',
-      message: 'Drawing clean box outlines on your photo...',
+      message: `Drawing clean box outlines on your photo... (${matchMs}ms matching)`,
       percent: 84,
+      detail: { prepareMs, detectMs, mergeMs, matchMs },
     });
 
     const annotatedBuffer = await this.claudeVision
@@ -917,11 +978,25 @@ export class GamesService {
     const annotatedImageBase64 = annotatedBuffer
       ? `data:image/jpeg;base64,${annotatedBuffer.toString('base64')}`
       : undefined;
+    const annotateMs = elapsedMs(annotateStartedAt);
+    const totalMs = elapsedMs(parseStartedAt);
+
+    this.logger.log(
+      `Shelf parse timings (ms): prepare=${prepareMs}, detect=${detectMs}, merge=${mergeMs}, match=${matchMs}, annotate=${annotateMs}, total=${totalMs}`,
+    );
 
     onProgress?.({
       stage: 'finalize',
-      message: 'Preparing your results...',
+      message: `Preparing your results... (${totalMs}ms total)`,
       percent: 97,
+      detail: {
+        prepareMs,
+        detectMs,
+        mergeMs,
+        matchMs,
+        annotateMs,
+        totalMs,
+      },
     });
 
     return { candidates: finalCandidates, annotatedImageBase64 };
