@@ -61,14 +61,11 @@ Rules:
 export class AiRecommendationService {
   private readonly logger = new Logger(AiRecommendationService.name);
   private readonly client: Anthropic | null;
-  private readonly enabled: boolean;
   private static readonly TIMEOUT_MS = 8_000;
   private static readonly MAX_CANDIDATES = 20;
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
-    this.enabled =
-      this.configService.get<string>('AI_RECOMMENDATIONS_ENABLED') === 'true';
     this.client = apiKey ? new Anthropic({ apiKey }) : null;
   }
 
@@ -83,7 +80,7 @@ export class AiRecommendationService {
     candidates: T[],
     context: AiRerankContext,
   ): Promise<T[]> {
-    if (!this.enabled || !this.client || candidates.length === 0) {
+    if (!this.client || candidates.length === 0) {
       return candidates;
     }
 
@@ -94,9 +91,7 @@ export class AiRecommendationService {
       id: c.game.id,
       title: c.game.title,
       bggRating:
-        c.game.bggRating != null
-          ? Number(c.game.bggRating).toFixed(1)
-          : null,
+        c.game.bggRating != null ? Number(c.game.bggRating).toFixed(1) : null,
       playingTime: c.game.playingTime ?? null,
       complexity:
         c.game.weight != null ? Number(c.game.weight).toFixed(1) : null,
@@ -114,7 +109,11 @@ export class AiRecommendationService {
         `- Preferred game length: ~${context.preferredDuration} min`,
       );
     }
-    userPromptLines.push('', `Candidates (${gameList.length}):`, JSON.stringify(gameList));
+    userPromptLines.push(
+      '',
+      `Candidates (${gameList.length}):`,
+      JSON.stringify(gameList),
+    );
     const userPrompt = userPromptLines.join('\n');
 
     try {
@@ -167,7 +166,7 @@ export class AiRecommendationService {
           const candidate = top.find((c) => c.game.id === r.id);
           if (!candidate) return null;
           const reason = reasonMap.get(r.id);
-          if (!reason) return candidate as T;
+          if (!reason) return candidate;
           return {
             ...candidate,
             explanation: { ...candidate.explanation, ai_reason: reason },

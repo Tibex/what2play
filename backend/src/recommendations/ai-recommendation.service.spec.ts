@@ -1,16 +1,39 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { AiRecommendationService, AiRerankContext } from './ai-recommendation.service';
+import {
+  AiRecommendationService,
+  AiRerankContext,
+} from './ai-recommendation.service';
 
 type MinimalCandidate = {
-  game: { id: string; title: string; bggRating?: number; playingTime?: number; weight?: number; minPlayers?: number; maxPlayers?: number };
+  game: {
+    id: string;
+    title: string;
+    bggRating?: number;
+    playingTime?: number;
+    weight?: number;
+    minPlayers?: number;
+    maxPlayers?: number;
+  };
   score: number;
   explanation: Record<string, string>;
 };
 
-function makeCandidate(id: string, title: string, score = 10): MinimalCandidate {
+function makeCandidate(
+  id: string,
+  title: string,
+  score = 10,
+): MinimalCandidate {
   return {
-    game: { id, title, bggRating: 7.5, playingTime: 60, weight: 2.5, minPlayers: 2, maxPlayers: 4 },
+    game: {
+      id,
+      title,
+      bggRating: 7.5,
+      playingTime: 60,
+      weight: 2.5,
+      minPlayers: 2,
+      maxPlayers: 4,
+    },
     score,
     explanation: {},
   };
@@ -22,7 +45,7 @@ describe('AiRecommendationService', () => {
   let service: AiRecommendationService;
   let mockCreate: jest.Mock;
 
-  function buildModule(enabled: string, hasKey: boolean) {
+  function buildModule(hasKey: boolean) {
     mockCreate = jest.fn();
     return Test.createTestingModule({
       providers: [
@@ -31,8 +54,8 @@ describe('AiRecommendationService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              if (key === 'ANTHROPIC_API_KEY') return hasKey ? 'fake-key' : undefined;
-              if (key === 'AI_RECOMMENDATIONS_ENABLED') return enabled;
+              if (key === 'ANTHROPIC_API_KEY')
+                return hasKey ? 'fake-key' : undefined;
               return undefined;
             }),
           },
@@ -43,23 +66,9 @@ describe('AiRecommendationService', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('when AI is disabled', () => {
-    beforeEach(async () => {
-      const module: TestingModule = await buildModule('false', true);
-      service = module.get(AiRecommendationService);
-    });
-
-    it('returns candidates unchanged without calling the API', async () => {
-      const candidates = [makeCandidate('a', 'Catan'), makeCandidate('b', 'Codenames')];
-      const result = await service.rerankCandidates(candidates, context);
-      expect(result).toEqual(candidates);
-      expect(mockCreate).not.toHaveBeenCalled();
-    });
-  });
-
   describe('when API key is missing', () => {
     beforeEach(async () => {
-      const module: TestingModule = await buildModule('true', false);
+      const module: TestingModule = await buildModule(false);
       service = module.get(AiRecommendationService);
     });
 
@@ -72,7 +81,7 @@ describe('AiRecommendationService', () => {
 
   describe('when AI is enabled and configured', () => {
     beforeEach(async () => {
-      const module: TestingModule = await buildModule('true', true);
+      const module: TestingModule = await buildModule(true);
       service = module.get(AiRecommendationService);
       (service as any).client = { messages: { create: mockCreate } };
     });
@@ -105,7 +114,10 @@ describe('AiRecommendationService', () => {
     });
 
     it('injects ai_reason into explanation on success', async () => {
-      const candidates = [makeCandidate('id-x', 'Terra Mystica', 10), makeCandidate('id-y', 'Splendor', 9)];
+      const candidates = [
+        makeCandidate('id-x', 'Terra Mystica', 10),
+        makeCandidate('id-y', 'Splendor', 9),
+      ];
 
       mockCreate.mockResolvedValueOnce({
         content: [
@@ -121,12 +133,17 @@ describe('AiRecommendationService', () => {
 
       const result = await service.rerankCandidates(candidates, context);
 
-      expect(result[0].explanation['ai_reason']).toBe('Perfect complexity match');
+      expect(result[0].explanation['ai_reason']).toBe(
+        'Perfect complexity match',
+      );
       expect(result[1].explanation['ai_reason']).toBe('Fast setup time');
     });
 
     it('falls back to original order when AI returns invalid JSON', async () => {
-      const candidates = [makeCandidate('a', 'Catan'), makeCandidate('b', 'Agricola')];
+      const candidates = [
+        makeCandidate('a', 'Catan'),
+        makeCandidate('b', 'Agricola'),
+      ];
       mockCreate.mockResolvedValueOnce({
         content: [{ type: 'text', text: 'not valid json' }],
       });
@@ -136,9 +153,17 @@ describe('AiRecommendationService', () => {
     });
 
     it('falls back to original order when AI returns fewer than 2 valid entries', async () => {
-      const candidates = [makeCandidate('a', 'Catan'), makeCandidate('b', 'Agricola')];
+      const candidates = [
+        makeCandidate('a', 'Catan'),
+        makeCandidate('b', 'Agricola'),
+      ];
       mockCreate.mockResolvedValueOnce({
-        content: [{ type: 'text', text: JSON.stringify([{ id: 'a', rank: 1, reason: 'ok' }]) }],
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify([{ id: 'a', rank: 1, reason: 'ok' }]),
+          },
+        ],
       });
 
       const result = await service.rerankCandidates(candidates, context);
@@ -146,7 +171,10 @@ describe('AiRecommendationService', () => {
     });
 
     it('ignores AI-returned ids not present in input', async () => {
-      const candidates = [makeCandidate('id-real', 'Real Game', 10), makeCandidate('id-real2', 'Real Game 2', 9)];
+      const candidates = [
+        makeCandidate('id-real', 'Real Game', 10),
+        makeCandidate('id-real2', 'Real Game 2', 9),
+      ];
       mockCreate.mockResolvedValueOnce({
         content: [
           {
