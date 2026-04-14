@@ -26,11 +26,12 @@ const sections: GuideSection[] = [
   {
     heading: "What a board game night planner should solve",
     paragraphs: [
-      "A useful planner must coordinate date, attendance, game options, and final selection in one flow. Splitting those steps across chat, polls, and notes creates friction every week.",
+      "A useful planner must coordinate date, attendance, game options, shelf imports, and final selection in one flow. Splitting those steps across chat, polls, and notes creates friction every week.",
       "When your process is centralized, people know where to RSVP, what games are in scope, and when a final pick is locked.",
     ],
     bullets: [
       "Single place for event setup, attendance, and game candidates",
+      "Collection coverage via BGG sync plus shelf photo parsing (Gemini + Claude + OCR supplement)",
       "Date polling for invite-only groups before finalizing the event time",
       "Clear player-count and time-budget constraints",
       "Final decision workflow so planning does not stall",
@@ -53,6 +54,7 @@ const sections: GuideSection[] = [
       "For larger confirmed events, generate multi-table seating from vote results",
       "Optimize seat coverage first, then preference fit across tables",
       "Lock seats and rerun when host constraints change",
+      "Optionally apply AI recommendation re-ranking before final voting",
     ],
   },
 ];
@@ -93,7 +95,7 @@ export default function BoardGameNightPlannerPage() {
       url: absoluteUrl("/"),
       featureList: [
         "Event setup and RSVP tracking",
-        "Recommendation shortlist",
+        "Recommendation shortlist with optional AI re-ranking",
         "Ranked voting and final lock-in",
       ],
     },
@@ -125,6 +127,7 @@ export default function BoardGameNightPlannerPage() {
           "/board-game-cafe-table-planner",
           "/board-game-voting-app",
           "/board-game-recommendation-tool",
+          "/board-game-shelf-parser",
           "/how-to-plan-a-board-game-night",
         ]}
       />

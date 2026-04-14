@@ -16,7 +16,7 @@ export const KEYWORD_CLUSTERS: KeywordCluster[] = [
     intent: "transactional",
     pageTitle: "Board Game Night Planner for Groups",
     metaDescription:
-      "Plan board game nights with scheduling, constraints, recommendations, and final game selection in one workflow.",
+      "Plan board game nights with scheduling, shelf photo parsing, constraints, recommendations, and final game selection in one workflow.",
     summary:
       "Coordinate your next session without juggling chat threads, spreadsheets, and separate voting tools.",
   },
@@ -49,7 +49,7 @@ export const KEYWORD_CLUSTERS: KeywordCluster[] = [
     intent: "transactional",
     pageTitle: "Board Game Recommendation Tool for Real Group Constraints",
     metaDescription:
-      "Find the best board game for tonight using player count, duration, and complexity constraints.",
+      "Find the best board game for tonight using player count, duration, complexity constraints, and AI re-ranking.",
     summary:
       "Filter by the group you have right now and surface games people can actually bring and play.",
   },
@@ -60,9 +60,20 @@ export const KEYWORD_CLUSTERS: KeywordCluster[] = [
     intent: "transactional",
     pageTitle: "BoardGameGeek Collection Sync for Game Night Planning",
     metaDescription:
-      "Connect your BoardGameGeek profile and use owned games in event recommendations, voting, and planning.",
+      "Connect your BoardGameGeek profile, use shelf photo parsing for missing titles, and use owned games in recommendations, voting, and planning.",
     summary:
       "Import and maintain your library once, then use it across recommendations and event setup.",
+  },
+  {
+    id: "board-game-shelf-parser",
+    path: "/board-game-shelf-parser",
+    primaryKeyword: "board game shelf parser",
+    intent: "transactional",
+    pageTitle: "Board Game Shelf Parser for Fast Collection Import",
+    metaDescription:
+      "Parse shelf photos with Gemini + Claude detection, spine-aware scanning, and OCR supplemental matching in a board game collection scanner app workflow.",
+    summary:
+      "Capture more titles from real shelf photos using a multi-stage photo-to-catalog workflow built for dense game shelves.",
   },
   {
     id: "how-to-plan-a-board-game-night",

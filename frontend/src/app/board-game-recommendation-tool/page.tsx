@@ -26,20 +26,21 @@ const sections: GuideSection[] = [
     heading: "Recommendation quality depends on context, not popularity",
     paragraphs: [
       "A good board game recommendation tool starts with your real table constraints. Player count, remaining time, and complexity tolerance matter more than generic top-game lists.",
-      "Recommendations should be explainable so groups can trust why a game is on the shortlist.",
+      "Recommendations should be explainable so groups can trust why a game is on the shortlist and when AI re-ranking changes order.",
     ],
   },
   {
     heading: "Prioritize games attendees can actually play",
     paragraphs: [
       "If a game is not available in attendee collections, it can still be interesting but less practical for tonight. Your recommendation workflow should separate ideal fits from immediately playable fits.",
-      "What2Play uses collection awareness alongside constraints so your shortlist is useful in real event planning.",
+      "What2Play uses collection awareness alongside constraints and optional AI re-ranking so your shortlist is useful in real event planning.",
     ],
     bullets: [
       "Filter by player count and time first",
       "Apply complexity preferences for the current group",
       "Highlight games attendees can bring now",
       "Support fallback picks when turnout changes",
+      "Optionally apply AI re-ranking based on event context and recent feedback",
     ],
   },
   {
@@ -47,6 +48,13 @@ const sections: GuideSection[] = [
     paragraphs: [
       "Recommendations improve when they are connected to actual outcomes. If a group consistently enjoys specific weight and duration ranges, that feedback loop should influence future shortlists.",
       "This creates a learning system instead of a one-off recommendation result.",
+    ],
+  },
+  {
+    heading: "Speed up setup with shelf photo import",
+    paragraphs: [
+      "Recommendation quality depends on accurate inventory. Shelf photo parsing (Gemini + Claude + OCR supplemental matching) helps hosts capture missing titles quickly before event setup so candidate pools stay complete.",
+      "That means less manual library cleanup and better coverage when new games arrive between events.",
     ],
   },
 ];
@@ -112,6 +120,7 @@ export default function BoardGameRecommendationToolPage() {
           "/board-game-night-planner",
           "/board-game-voting-app",
           "/boardgamegeek-collection-sync",
+          "/board-game-shelf-parser",
         ]}
       />
     </>

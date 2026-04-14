@@ -207,9 +207,9 @@ export function LandingMarketing() {
                 className="mt-5 text-lg sm:text-xl leading-relaxed max-w-lg"
                 style={{ color: "var(--muted)" }}
               >
-                Collect your group&apos;s game libraries, filter by real
-                constraints, run ranked voting, and seat larger events across
-                tables — all in one place.
+                Collect your group&apos;s game libraries, import shelf photos,
+                filter by real constraints, run AI-assisted ranking plus voting,
+                and seat larger events across tables — all in one place.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -334,7 +334,7 @@ export function LandingMarketing() {
               <StepCard
                 step="3"
                 title="Get suggestions"
-                body="See candidates your group can actually bring, each with a short reason why."
+                body="See candidates your group can actually bring, then let AI re-rank by context with clear reasons why."
               />
               <StepCard
                 step="4"
@@ -424,7 +424,7 @@ export function LandingMarketing() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               <FeatureBlock
                 title="Everyone's collection, one picture"
-                body="Suggestions prioritize what attendees own — so 'who brought that?' is answered up front."
+                body="Use BGG sync or shelf photo parsing (multi-model detection + OCR supplement) so suggestions prioritize what attendees actually own."
                 icon={
                   <svg
                     width="18"
@@ -459,6 +459,30 @@ export function LandingMarketing() {
                   >
                     <polyline points="9 11 12 14 22 4" />
                     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                }
+              />
+              <FeatureBlock
+                title="Smarter recommendations"
+                body="AI re-ranking adjusts candidate order using event context and prior feedback while keeping host overrides in control."
+                icon={
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 2v20" />
+                    <path d="M5 8h14" />
+                    <path d="M5 16h14" />
+                    <circle cx="7" cy="8" r="1.5" />
+                    <circle cx="12" cy="16" r="1.5" />
+                    <circle cx="17" cy="8" r="1.5" />
                   </svg>
                 }
               />

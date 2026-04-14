@@ -25,7 +25,7 @@ const sections: GuideSection[] = [
   {
     heading: "Why collection sync matters for recommendations",
     paragraphs: [
-      "Planning quality drops when your game list is outdated. Syncing BoardGameGeek collections keeps owned titles available for recommendation and voting flows.",
+      "Planning quality drops when your game list is outdated. Syncing BoardGameGeek collections and importing shelf photos keeps owned titles available for recommendation and voting flows.",
       "The more accurate your availability data, the fewer dead-end options appear during event planning.",
     ],
   },
@@ -37,6 +37,7 @@ const sections: GuideSection[] = [
     ],
     bullets: [
       "Import owned games from BGG usernames",
+      "Add missing titles from shelf photo parsing before event setup",
       "Use synced data while building candidate lists",
       "Reduce recommendation noise from unavailable titles",
       "Blend owned-game picks with discovery-mode exploration",
@@ -47,6 +48,13 @@ const sections: GuideSection[] = [
     paragraphs: [
       "Even with synced libraries, hosts still need controls for discovery mode, final lock-in, and fallback choices. The best workflow combines data quality with operational flexibility.",
       "That balance keeps planning efficient without forcing one rigid selection strategy.",
+    ],
+  },
+  {
+    heading: "Use BGG sync and shelf scan together",
+    paragraphs: [
+      "BGG sync is strong for known collections, while shelf photo parsing (Gemini + Claude detection with OCR supplement) is useful for new arrivals and titles not yet linked. Using both gives recommendation scoring better real-time inventory.",
+      "For regular groups, this hybrid import flow reduces missing-game friction before each vote cycle.",
     ],
   },
 ];
@@ -66,6 +74,11 @@ const faqs: GuideFaq[] = [
     question: "Is BoardGameGeek affiliation required?",
     answer:
       "No. BGG integration is optional, and manual collection management is also supported.",
+  },
+  {
+    question: "Can shelf photo parsing fill collection gaps after sync?",
+    answer:
+      "Yes. Hosts can import shelf photos to add newly acquired titles that are missing or unsynced before planning an event.",
   },
 ];
 
@@ -104,6 +117,7 @@ export default function BoardGameGeekCollectionSyncPage() {
         faqs={faqs}
         relatedPaths={[
           "/board-game-recommendation-tool",
+          "/board-game-shelf-parser",
           "/board-game-night-planner",
           "/how-to-plan-a-board-game-night",
         ]}

@@ -7,13 +7,15 @@ import { absoluteUrl, createPageMetadata } from '@/lib/seo';
 export const metadata: Metadata = createPageMetadata({
   title: 'Board Game Planning Resources',
   description:
-    'Explore board game night planning guides for voting, recommendations, BoardGameGeek sync, and practical event checklists.',
+    'Explore board game night planning guides for voting, recommendations, BoardGameGeek sync, shelf photo import, and practical event checklists.',
   path: '/resources',
   keywords: [
     'board game night resources',
     'board game planning guide',
     'board game voting app guide',
     'board game recommendation tool guide',
+    'board game shelf scan import guide',
+    'AI board game recommendation guide',
   ],
 });
 
@@ -99,7 +101,7 @@ export default function ResourcesPage() {
         <section className="mt-10 wt-card-raised p-6 sm:p-8">
           <h2 className="text-2xl font-semibold">Want the full workflow in one app?</h2>
           <p className="mt-3 wt-muted">
-            Create an account to run events, gather RSVPs, poll availability, generate recommendations, and lock decisions with ranked voting.
+            Create an account to run events, gather RSVPs, poll availability, import shelf photos, generate recommendations, and lock decisions with ranked voting.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link href="/?m=register" className="wt-btn wt-btn-primary px-5 py-2.5 no-underline text-white">

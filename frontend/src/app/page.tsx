@@ -7,7 +7,7 @@ import { absoluteUrl, createPageMetadata } from "@/lib/seo";
 export const metadata: Metadata = createPageMetadata({
   title: "Board Game Night Planner and Voting App",
   description:
-    "Plan board game nights with recommendations, ranked voting, and multi-table seat optimization for larger events.",
+    "Plan board game nights with shelf photo import, AI re-ranked recommendations, ranked voting, and multi-table seat optimization for larger events.",
   path: "/",
   keywords: [
     "board game night planner",
@@ -19,6 +19,9 @@ export const metadata: Metadata = createPageMetadata({
     "boardgamegeek collection sync",
     "board game availability poll",
     "board game collection stats",
+    "board game shelf parser",
+    "board game photo-to-catalog import",
+    "AI board game recommendations",
   ],
 });
 
@@ -30,7 +33,7 @@ export default function Home() {
       name: "What2Play",
       url: absoluteUrl("/"),
       description:
-        "Plan board game nights with recommendations, voting, and multi-table seating optimization.",
+        "Plan board game nights with shelf photo import, AI re-ranked recommendations, voting, and multi-table seating optimization.",
     },
     {
       "@context": "https://schema.org",
@@ -47,12 +50,14 @@ export default function Home() {
       featureList: [
         "Board game night planning",
         "Collection-aware recommendations",
+        "AI recommendation re-ranking from event context and feedback",
         "Ranked voting for game selection",
         "Post-vote multi-table seating optimization",
         "Availability polling for invite-only events",
         "Open event discovery and RSVP",
         "Fallback game options after vote lock-in",
         "BoardGameGeek collection linking",
+        "Shelf photo parsing via Gemini + Claude detection with OCR supplemental matching",
       ],
     },
     {
@@ -64,7 +69,7 @@ export default function Home() {
           name: "How does What2Play choose board game recommendations?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Recommendations consider player count, duration, complexity, and games your attendees can bring.",
+            text: "Recommendations consider player count, duration, complexity, games attendees can bring, and AI re-ranking from event context and prior feedback.",
           },
         },
         {
@@ -89,6 +94,14 @@ export default function Home() {
           acceptedAnswer: {
             "@type": "Answer",
             text: "Yes. You can link your BoardGameGeek username and use owned games in planning and recommendation flows.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Can I import games from a shelf photo?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Yes. Shelf photo parsing combines Gemini and Claude box detection, a spine-focused pass, and OCR supplemental matching to map titles quickly before planning and voting.",
           },
         },
         {
