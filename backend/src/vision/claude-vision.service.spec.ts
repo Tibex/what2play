@@ -109,7 +109,7 @@ describe('ClaudeVisionService — tiling helpers', () => {
         detectionConfidence: 0.9,
       };
       const [adjusted] = priv.adjustDetectionsForTile([item], tile);
-      const bb = adjusted.boundingBox!;
+      const bb = adjusted.boundingBox;
       // x: 0.4 + 0.5 * 0.6 = 0.70
       expect(bb.x).toBeCloseTo(0.7, 5);
       // y: 0 + 0.5 * 1 = 0.5
@@ -133,7 +133,7 @@ describe('ClaudeVisionService — tiling helpers', () => {
       };
       const [adjusted] = priv.adjustDetectionsForTile([item], tile);
       // Tile covers bottom half of the image: y offset 0.5, height fraction 0.5
-      const poly = adjusted.polygon!;
+      const poly = adjusted.polygon;
       expect(poly[0]).toEqual([0, 0.5]); // TL: [0+0*1, 0.5+0*0.5]
       expect(poly[2]).toEqual([1, 1]); // BR: [0+1*1, 0.5+1*0.5]
     });

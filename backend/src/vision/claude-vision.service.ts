@@ -82,7 +82,6 @@ const SHELF_GAMES_TOOL: Tool = {
   },
 };
 
-
 /** Describes a sub-region of an image used for tiling dense shelves. */
 interface TileRegion {
   /** Left edge as fraction of full image width [0,1] */
@@ -414,8 +413,7 @@ Rules:
     for (const item of parsed) {
       if (item === null || typeof item !== 'object') continue;
       const r = item as Record<string, unknown>;
-      if (typeof r.title !== 'string' || r.title.trim().length === 0)
-        continue;
+      if (typeof r.title !== 'string' || r.title.trim().length === 0) continue;
 
       const title = r.title.replace(/\s+/g, ' ').trim();
       if (title.length >= 100) continue;
@@ -435,9 +433,9 @@ Rules:
         typeof v === 'number' ? Math.max(0, Math.min(1, v)) : undefined;
       const detectionConfidence = clampConf(r.detection_confidence);
       const gameConfidence = clampConf(r.game_confidence);
-      if (detectionConfidence !== undefined && detectionConfidence < 0.30)
+      if (detectionConfidence !== undefined && detectionConfidence < 0.3)
         continue;
-      if (gameConfidence !== undefined && gameConfidence < 0.20) continue;
+      if (gameConfidence !== undefined && gameConfidence < 0.2) continue;
 
       const OCCLUSION_LEVELS = ['none', 'low', 'medium', 'high'] as const;
       const occlusionLevel = OCCLUSION_LEVELS.includes(
@@ -551,16 +549,18 @@ Rules:
   ): Promise<Buffer> {
     const left = Math.round(tile.x * imgWidth);
     const top = Math.round(tile.y * imgHeight);
-    const width = Math.min(
-      Math.round(tile.width * imgWidth),
-      imgWidth - left,
-    );
+    const width = Math.min(Math.round(tile.width * imgWidth), imgWidth - left);
     const height = Math.min(
       Math.round(tile.height * imgHeight),
       imgHeight - top,
     );
     return sharp(buffer)
-      .extract({ left: Math.max(0, left), top: Math.max(0, top), width, height })
+      .extract({
+        left: Math.max(0, left),
+        top: Math.max(0, top),
+        width,
+        height,
+      })
       .jpeg({ quality: 85 })
       .toBuffer();
   }
@@ -586,14 +586,18 @@ Rules:
       const adjustedPolygon = item.polygon
         ? item.polygon.map(
             ([px, py]) =>
-              [
-                tile.x + px * tile.width,
-                tile.y + py * tile.height,
-              ] as [number, number],
+              [tile.x + px * tile.width, tile.y + py * tile.height] as [
+                number,
+                number,
+              ],
           )
         : undefined;
 
-      return { ...item, boundingBox: adjustedBoundingBox, polygon: adjustedPolygon };
+      return {
+        ...item,
+        boundingBox: adjustedBoundingBox,
+        polygon: adjustedPolygon,
+      };
     });
   }
 

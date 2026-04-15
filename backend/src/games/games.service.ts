@@ -729,7 +729,7 @@ export class GamesService {
     const prunedTitles = this.suppressOverlappingShelfTitles(
       titlesToSearch.filter((t) => !this.isJunkShelfTitle(t.title)),
       0.12,
-      0.20,
+      0.2,
     );
     const geometricFiltered = this.filterGeometricOutliers(prunedTitles);
     titlesToSearch.length = 0;
@@ -975,7 +975,8 @@ export class GamesService {
       overlapSmallerMin: 0.18,
     });
     overlapPruned.sort(
-      (a, b) => this.shelfCandidateVisualScore(b) - this.shelfCandidateVisualScore(a),
+      (a, b) =>
+        this.shelfCandidateVisualScore(b) - this.shelfCandidateVisualScore(a),
     );
     const finalCandidates = overlapPruned.map((candidate, index) => ({
       ...candidate,

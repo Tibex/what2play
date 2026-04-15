@@ -43,7 +43,6 @@ export type GeminiDetection = {
   gameConfidence?: number;
 };
 
-
 /** Describes a sub-region of an image used for tiling dense shelves. */
 interface TileRegion {
   /** Left edge as fraction of full image width [0,1] */
@@ -260,7 +259,7 @@ Example: [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon
     try {
       const result = await this.generateContentPrimaryThenFallback(
         parts,
-        this.uprightModel!,
+        this.uprightModel,
         GEMINI_UPRIGHT_MODEL,
         this.spineModel,
         GEMINI_SPINE_MODEL,
@@ -307,16 +306,18 @@ Example: [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon
   ): Promise<Buffer> {
     const left = Math.round(tile.x * imgWidth);
     const top = Math.round(tile.y * imgHeight);
-    const width = Math.min(
-      Math.round(tile.width * imgWidth),
-      imgWidth - left,
-    );
+    const width = Math.min(Math.round(tile.width * imgWidth), imgWidth - left);
     const height = Math.min(
       Math.round(tile.height * imgHeight),
       imgHeight - top,
     );
     return sharp(buffer)
-      .extract({ left: Math.max(0, left), top: Math.max(0, top), width, height })
+      .extract({
+        left: Math.max(0, left),
+        top: Math.max(0, top),
+        width,
+        height,
+      })
       .jpeg({ quality: 85 })
       .toBuffer();
   }
@@ -342,14 +343,18 @@ Example: [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon
       const adjustedPolygon = item.polygon
         ? item.polygon.map(
             ([px, py]) =>
-              [
-                tile.x + px * tile.width,
-                tile.y + py * tile.height,
-              ] as [number, number],
+              [tile.x + px * tile.width, tile.y + py * tile.height] as [
+                number,
+                number,
+              ],
           )
         : undefined;
 
-      return { ...item, boundingBox: adjustedBoundingBox, polygon: adjustedPolygon };
+      return {
+        ...item,
+        boundingBox: adjustedBoundingBox,
+        polygon: adjustedPolygon,
+      };
     });
   }
 
@@ -705,7 +710,7 @@ Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"p
       // Skip very low detection confidence — likely a false positive
       const detectionConfidence =
         typeof r.detect_conf === 'number' ? r.detect_conf : undefined;
-      if (detectionConfidence !== undefined && detectionConfidence < 0.30)
+      if (detectionConfidence !== undefined && detectionConfidence < 0.3)
         continue;
 
       const editionOrVersion =
@@ -715,7 +720,7 @@ Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"p
 
       const gameConfidence =
         typeof r.game_conf === 'number' ? r.game_conf : undefined;
-      if (gameConfidence !== undefined && gameConfidence < 0.20) continue;
+      if (gameConfidence !== undefined && gameConfidence < 0.2) continue;
 
       // Parse polygon: [[x,y],...] in 0-1000 scale → normalize to [0,1]
       const rawPoly = r.polygon;
