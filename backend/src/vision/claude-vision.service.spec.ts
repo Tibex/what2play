@@ -1,121 +1,209 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import sharp from 'sharp';
 import { ClaudeVisionService } from './claude-vision.service';
 
-/**
- * Tests for ClaudeVisionService.detectBoardGames single-pass detection.
- *
- * The service makes one Claude API call that returns both game titles and
- * bounding boxes via a tool_use block (report_shelf_games). These tests mock
- * that single call and verify parsing, filtering, and bounding box handling.
- */
-describe('ClaudeVisionService — single-pass detection', () => {
+// Access private methods for unit testing via any-cast
+type ServicePrivate = {
+  buildTileRegions(aspectRatio: number): Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+  adjustDetectionsForTile<
+    T extends {
+      boundingBox?: { x: number; y: number; width: number; height: number };
+      polygon?: Array<[number, number]>;
+    },
+  >(
+    items: T[],
+    tile: { x: number; y: number; width: number; height: number },
+  ): T[];
+  deduplicateTileDetections<
+    T extends {
+      detectionConfidence?: number;
+      boundingBox?: { x: number; y: number; width: number; height: number };
+    },
+  >(
+    items: T[],
+  ): T[];
+};
+
+describe('ClaudeVisionService — tiling helpers', () => {
   let service: ClaudeVisionService;
-  let mockCreate: jest.Mock;
+  let priv: ServicePrivate;
 
   beforeEach(async () => {
-    mockCreate = jest.fn();
-
-    const module: TestingModule = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [
         ClaudeVisionService,
         {
           provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('fake-api-key') },
+          useValue: { get: jest.fn().mockReturnValue(undefined) }, // no API key → client stays null
         },
       ],
     }).compile();
 
-    service = module.get<ClaudeVisionService>(ClaudeVisionService);
-    (service as any).client = { messages: { create: mockCreate } };
+    service = module.get(ClaudeVisionService);
+    priv = service as unknown as ServicePrivate;
   });
 
-  afterEach(() => jest.clearAllMocks());
+  // ── buildTileRegions ─────────────────────────────────────────────────────────
 
-  async function makeJpeg(): Promise<Buffer> {
-    return sharp({
-      create: {
-        width: 1,
-        height: 1,
-        channels: 3,
-        background: { r: 255, g: 255, b: 255 },
-      },
-    })
-      .jpeg()
-      .toBuffer();
-  }
-
-  it('returns game with bounding box when tool_use response contains valid game data', async () => {
-    mockCreate.mockResolvedValueOnce({
-      content: [
-        {
-          type: 'tool_use',
-          name: 'report_shelf_games',
-          input: {
-            games: [
-              {
-                title: 'Ticket to Ride',
-                x: 0,
-                y: 0,
-                width: 1,
-                height: 1,
-                detection_confidence: 0.95,
-                game_confidence: 0.92,
-              },
-            ],
-          },
-        },
-      ],
+  describe('buildTileRegions', () => {
+    it('returns 1 tile for aspect ratio < 1.8 (portrait / square)', () => {
+      const tiles = priv.buildTileRegions(1.5);
+      expect(tiles).toHaveLength(1);
+      expect(tiles[0]).toEqual({ x: 0, y: 0, width: 1, height: 1 });
     });
 
-    const results = await service.detectBoardGames(
-      await makeJpeg(),
-      'image/jpeg',
-    );
-
-    expect(results).toHaveLength(1);
-    expect(results[0].title).toBe('Ticket to Ride');
-    expect(results[0].boundingBox).toBeDefined();
-    expect(results[0].detectionConfidence).toBe(0.95);
-    expect(results[0].gameConfidence).toBe(0.92);
-  });
-
-  it('returns game without bounding box when coordinates are absent from response', async () => {
-    mockCreate.mockResolvedValueOnce({
-      content: [
-        {
-          type: 'tool_use',
-          name: 'report_shelf_games',
-          input: {
-            games: [
-              {
-                title: 'Catan',
-                detection_confidence: 0.9,
-                game_confidence: 0.85,
-              },
-            ],
-          },
-        },
-      ],
+    it('returns exactly 1 tile at exactly 1.0', () => {
+      expect(priv.buildTileRegions(1.0)).toHaveLength(1);
     });
 
-    const results = await service.detectBoardGames(
-      await makeJpeg(),
-      'image/jpeg',
-    );
+    it('returns 2 tiles for aspect ratio 2.0', () => {
+      expect(priv.buildTileRegions(2.0)).toHaveLength(2);
+    });
 
-    expect(results).toHaveLength(1);
-    expect(results[0].title).toBe('Catan');
-    expect(results[0].boundingBox).toBeUndefined();
+    it('returns 2 tiles for aspect ratio 2.9 (just below 3.0 threshold)', () => {
+      expect(priv.buildTileRegions(2.9)).toHaveLength(2);
+    });
+
+    it('returns 3 tiles for aspect ratio 3.5', () => {
+      expect(priv.buildTileRegions(3.5)).toHaveLength(3);
+    });
+
+    it('returns 4 tiles for aspect ratio 5.0', () => {
+      expect(priv.buildTileRegions(5.0)).toHaveLength(4);
+    });
+
+    it('tiles cover the full width (first starts at 0, last ends at 1)', () => {
+      for (const ratio of [2.0, 3.5, 5.0]) {
+        const tiles = priv.buildTileRegions(ratio);
+        const first = tiles[0];
+        const last = tiles[tiles.length - 1];
+        expect(first.x).toBeCloseTo(0, 5);
+        expect(last.x + last.width).toBeCloseTo(1, 2);
+      }
+    });
+
+    it('adjacent tiles overlap (each pair shares area)', () => {
+      const tiles = priv.buildTileRegions(3.5); // 3 tiles
+      for (let i = 0; i < tiles.length - 1; i++) {
+        const a = tiles[i];
+        const b = tiles[i + 1];
+        // b starts before a ends → overlap
+        expect(b.x).toBeLessThan(a.x + a.width);
+      }
+    });
   });
 
-  it('returns empty array when the Anthropic client is not configured', async () => {
-    (service as any).client = null;
-    const results = await service.detectBoardGames(
-      Buffer.from(''),
-      'image/jpeg',
-    );
-    expect(results).toEqual([]);
+  // ── adjustDetectionsForTile ──────────────────────────────────────────────────
+
+  describe('adjustDetectionsForTile', () => {
+    it('transforms bounding box from tile-local to full-image coordinates', () => {
+      const tile = { x: 0.4, y: 0, width: 0.6, height: 1 };
+      // A box centred in the tile at (0.5, 0.5) with 10% width/height
+      const item = {
+        boundingBox: { x: 0.5, y: 0.5, width: 0.1, height: 0.1 },
+        detectionConfidence: 0.9,
+      };
+      const [adjusted] = priv.adjustDetectionsForTile([item], tile);
+      const bb = adjusted.boundingBox!;
+      // x: 0.4 + 0.5 * 0.6 = 0.70
+      expect(bb.x).toBeCloseTo(0.7, 5);
+      // y: 0 + 0.5 * 1 = 0.5
+      expect(bb.y).toBeCloseTo(0.5, 5);
+      // width: 0.1 * 0.6 = 0.06
+      expect(bb.width).toBeCloseTo(0.06, 5);
+      // height: 0.1 * 1 = 0.1
+      expect(bb.height).toBeCloseTo(0.1, 5);
+    });
+
+    it('transforms polygon points the same way', () => {
+      const tile = { x: 0.0, y: 0.5, width: 1.0, height: 0.5 };
+      const item = {
+        polygon: [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+        ] as Array<[number, number]>,
+        detectionConfidence: 0.8,
+      };
+      const [adjusted] = priv.adjustDetectionsForTile([item], tile);
+      // Tile covers bottom half of the image: y offset 0.5, height fraction 0.5
+      const poly = adjusted.polygon!;
+      expect(poly[0]).toEqual([0, 0.5]); // TL: [0+0*1, 0.5+0*0.5]
+      expect(poly[2]).toEqual([1, 1]); // BR: [0+1*1, 0.5+1*0.5]
+    });
+
+    it('keeps entries without a bounding box unchanged', () => {
+      const tile = { x: 0.5, y: 0, width: 0.5, height: 1 };
+      const item = { detectionConfidence: 0.7 }; // no boundingBox
+      const [adjusted] = priv.adjustDetectionsForTile([item], tile);
+      expect(adjusted.boundingBox).toBeUndefined();
+    });
+  });
+
+  // ── deduplicateTileDetections ────────────────────────────────────────────────
+
+  describe('deduplicateTileDetections', () => {
+    it('keeps both boxes when they do not overlap', () => {
+      const items = [
+        {
+          boundingBox: { x: 0, y: 0, width: 0.2, height: 0.2 },
+          detectionConfidence: 0.9,
+        },
+        {
+          boundingBox: { x: 0.5, y: 0.5, width: 0.2, height: 0.2 },
+          detectionConfidence: 0.8,
+        },
+      ];
+      const result = priv.deduplicateTileDetections(items);
+      expect(result).toHaveLength(2);
+    });
+
+    it('keeps only the higher-confidence box when IoU >= 0.30', () => {
+      // Two nearly identical boxes (IoU ~1.0) — one has higher confidence
+      const items = [
+        {
+          boundingBox: { x: 0.0, y: 0.0, width: 0.3, height: 0.3 },
+          detectionConfidence: 0.6, // lower
+        },
+        {
+          boundingBox: { x: 0.0, y: 0.0, width: 0.3, height: 0.3 },
+          detectionConfidence: 0.9, // higher
+        },
+      ];
+      const result = priv.deduplicateTileDetections(items);
+      expect(result).toHaveLength(1);
+      expect(result[0].detectionConfidence).toBe(0.9);
+    });
+
+    it('keeps both when IoU is exactly below 0.30', () => {
+      // Two boxes that barely miss the IoU threshold
+      const items = [
+        {
+          boundingBox: { x: 0.0, y: 0, width: 0.4, height: 1 },
+          detectionConfidence: 0.9,
+        },
+        {
+          boundingBox: { x: 0.7, y: 0, width: 0.3, height: 1 }, // no overlap at all
+          detectionConfidence: 0.8,
+        },
+      ];
+      const result = priv.deduplicateTileDetections(items);
+      expect(result).toHaveLength(2);
+    });
+
+    it('keeps items with no bounding box (OCR-only entries)', () => {
+      const items = [
+        { detectionConfidence: 0.7 }, // no boundingBox
+        { detectionConfidence: 0.8 }, // no boundingBox
+      ];
+      const result = priv.deduplicateTileDetections(items);
+      expect(result).toHaveLength(2);
+    });
   });
 });

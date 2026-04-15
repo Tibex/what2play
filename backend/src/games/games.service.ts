@@ -72,7 +72,7 @@ const OCR_MATCH_MIN_SCORE = 36;
 const LOCAL_MATCH_MIN_SCORE = 38;
 const BGG_MATCH_MIN_SCORE = 30;
 const TITLE_DUPLICATE_MATCH_SCORE = 90;
-const MAX_OCR_SUPPLEMENTAL_TITLES = 20;
+const MAX_OCR_SUPPLEMENTAL_TITLES = 50;
 
 @Injectable()
 export class GamesService {
@@ -643,10 +643,18 @@ export class GamesService {
         if (!existing.polygon && r.polygon) existing.polygon = r.polygon;
         if (!existing.editionOrVersion && r.editionOrVersion)
           existing.editionOrVersion = r.editionOrVersion;
-        if (!existing.detectionConfidence && r.detectionConfidence)
-          existing.detectionConfidence = r.detectionConfidence;
-        if (!existing.gameConfidence && r.gameConfidence)
-          existing.gameConfidence = r.gameConfidence;
+        if (r.detectionConfidence != null) {
+          existing.detectionConfidence =
+            existing.detectionConfidence != null
+              ? Math.max(existing.detectionConfidence, r.detectionConfidence)
+              : r.detectionConfidence;
+        }
+        if (r.gameConfidence != null) {
+          existing.gameConfidence =
+            existing.gameConfidence != null
+              ? Math.max(existing.gameConfidence, r.gameConfidence)
+              : r.gameConfidence;
+        }
         if (!existing.occlusionLevel && r.occlusionLevel)
           existing.occlusionLevel = r.occlusionLevel;
         if (!existing.titleCandidates?.length && r.candidates?.length)
@@ -670,9 +678,22 @@ export class GamesService {
           detectionConfidence: r.detectionConfidence,
           gameConfidence: r.gameConfidence,
         });
-      } else if (!existing.claudeBox && r.boundingBox) {
-        existing.claudeBox = r.boundingBox;
+      } else {
+        if (!existing.claudeBox && r.boundingBox)
+          existing.claudeBox = r.boundingBox;
         if (!existing.polygon && r.polygon) existing.polygon = r.polygon;
+        if (r.detectionConfidence != null) {
+          existing.detectionConfidence =
+            existing.detectionConfidence != null
+              ? Math.max(existing.detectionConfidence, r.detectionConfidence)
+              : r.detectionConfidence;
+        }
+        if (r.gameConfidence != null) {
+          existing.gameConfidence =
+            existing.gameConfidence != null
+              ? Math.max(existing.gameConfidence, r.gameConfidence)
+              : r.gameConfidence;
+        }
       }
     }
 
@@ -707,8 +728,8 @@ export class GamesService {
 
     const prunedTitles = this.suppressOverlappingShelfTitles(
       titlesToSearch.filter((t) => !this.isJunkShelfTitle(t.title)),
-      0.2,
-      0.28,
+      0.12,
+      0.20,
     );
     const geometricFiltered = this.filterGeometricOutliers(prunedTitles);
     titlesToSearch.length = 0;
@@ -950,9 +971,12 @@ export class GamesService {
     // title-merge NMS never saw. Drop lower-confidence overlaps so outlines
     // cannot intersect in the annotated image / overlay.
     const overlapPruned = this.suppressOverlappingShelfCandidates(renumbered, {
-      iouThreshold: 0.14,
-      overlapSmallerMin: 0.26,
+      iouThreshold: 0.08,
+      overlapSmallerMin: 0.18,
     });
+    overlapPruned.sort(
+      (a, b) => this.shelfCandidateVisualScore(b) - this.shelfCandidateVisualScore(a),
+    );
     const finalCandidates = overlapPruned.map((candidate, index) => ({
       ...candidate,
       detectionNumber: index + 1,

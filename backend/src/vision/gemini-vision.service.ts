@@ -6,7 +6,7 @@ import {
 } from '@google/generative-ai';
 import sharp from 'sharp';
 
-const MAX_IMAGE_WIDTH = 1536;
+const MAX_IMAGE_WIDTH = 2048;
 // Spine pass only reads title text on narrow strips — 1280 is enough and
 // cuts input tokens ~30% versus 1536.
 const SPINE_MAX_IMAGE_WIDTH = 1280;
@@ -29,7 +29,7 @@ const GEMINI_SPINE_MODEL = 'gemini-2.5-flash-lite';
  */
 const GEMINI_GENERATION_CONFIG = {
   responseMimeType: 'application/json',
-  maxOutputTokens: 4096,
+  maxOutputTokens: 16384,
   temperature: 0,
   thinkingConfig: { thinkingBudget: 0 },
 } as unknown as Record<string, unknown>;
@@ -42,6 +42,19 @@ export type GeminiDetection = {
   detectionConfidence?: number;
   gameConfidence?: number;
 };
+
+
+/** Describes a sub-region of an image used for tiling dense shelves. */
+interface TileRegion {
+  /** Left edge as fraction of full image width [0,1] */
+  x: number;
+  /** Top edge as fraction of full image height [0,1] */
+  y: number;
+  /** Tile width as fraction of full image width [0,1] */
+  width: number;
+  /** Tile height as fraction of full image height [0,1] */
+  height: number;
+}
 
 @Injectable()
 export class GeminiVisionService {
@@ -153,21 +166,82 @@ export class GeminiVisionService {
         mediaType,
         MAX_IMAGE_WIDTH,
       );
+      const resizeMs = Date.now() - resizeStartedAt;
 
       const knownGamesHint =
         knownGames.length > 0
           ? `\nKnown games hint (guide, not a rule): ${JSON.stringify(knownGames.slice(0, 100))}\n`
           : '';
 
-      const parts = [
-        {
-          inlineData: {
-            mimeType: finalMediaType,
-            data: buffer.toString('base64'),
-          },
+      // Tile wide (panoramic) shelf photos so each tile can fit more games within
+      // the model's output token budget and each spine is larger in the cropped view.
+      const metadata = await sharp(buffer).metadata();
+      const imgWidth = metadata.width ?? MAX_IMAGE_WIDTH;
+      const imgHeight = metadata.height ?? MAX_IMAGE_WIDTH;
+      const aspectRatio = imgWidth / Math.max(imgHeight, 1);
+      const tiles = this.buildTileRegions(aspectRatio);
+
+      let items: GeminiDetection[];
+      if (tiles.length === 1) {
+        // Fast path — no tiling needed (non-panoramic images)
+        items = await this.detectBoardGamesInBuffer(
+          buffer,
+          finalMediaType,
+          knownGamesHint,
+        );
+      } else {
+        // Run each tile in parallel then merge with cross-tile deduplication.
+        const tileResults = await Promise.all(
+          tiles.map(async (tile) => {
+            const tileBuffer = await this.sliceImageTile(
+              buffer,
+              tile,
+              imgWidth,
+              imgHeight,
+            );
+            const tileItems = await this.detectBoardGamesInBuffer(
+              tileBuffer,
+              'image/jpeg',
+              knownGamesHint,
+            );
+            return this.adjustDetectionsForTile(tileItems, tile);
+          }),
+        );
+        items = this.deduplicateTileDetections(tileResults.flat());
+      }
+
+      const totalMs = Date.now() - startedAt;
+      this.logger.log(
+        `Gemini upright timings (ms): resize=${resizeMs}, total=${totalMs}, detections=${items.length}, tiles=${tiles.length}`,
+      );
+      return items;
+    } catch (error) {
+      this.logger.warn('Gemini vision detection failed', error);
+      this.logger.warn(
+        `Gemini upright failed after ${Date.now() - startedAt}ms`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Core per-buffer detection logic. Called once for non-tiled images and
+   * once per tile for dense panoramic shelves.
+   */
+  private async detectBoardGamesInBuffer(
+    buffer: Buffer,
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
+    knownGamesHint: string,
+  ): Promise<GeminiDetection[]> {
+    const parts = [
+      {
+        inlineData: {
+          mimeType: mediaType,
+          data: buffer.toString('base64'),
         },
-        {
-          text: `Identify every board game box on this shelf. Many games sit spine-out (narrow vertical strip, title rotated 90/180°) — scan shelves row by row and include them.${knownGamesHint}
+      },
+      {
+        text: `Identify every board game box on this shelf. Many games sit spine-out (narrow vertical strip, title rotated 90/180°) — scan shelves row by row and include them.${knownGamesHint}
 
 Return a JSON array only. For each physical box:
 - "label": full title as printed (read every word, not just the largest; e.g. "Here to Slay", not "Slay")
@@ -177,44 +251,144 @@ Return a JSON array only. For each physical box:
 - "detect_conf": 0.0-1.0 this is a game
 - "game_conf": 0.0-1.0 title is correct
 
-Rules: each entry = one physical box, rectangles non-overlapping (edge contact only). Skip books/magazines/DVDs, floors, carpets, walls, tables, furniture, decorative objects, shelf hardware, figurines, and anything without a publisher logo or game title. Do NOT include wall art, rugs, plants, or plain surfaces — a valid detection must show game art or a readable game title. Look for games stacked side-on where only the narrow spine is visible (thin vertical strips, 1–5% of image width). Include games near image corners and edges. Only include a detection if you can read enough text to identify the game — a partial title, expansion name, or publisher logo is sufficient; skip only if no identifying text is visible at all. Do not invent titles. Return [] if none.
+Rules: each entry = one physical box, rectangles non-overlapping (edge contact only). Skip books/magazines/DVDs, floors, carpets, walls, tables, furniture, decorative objects, shelf hardware, figurines, and anything without a publisher logo or game title. Do NOT include wall art, rugs, plants, or plain surfaces — a valid detection must show game art or a readable game title. Look for games stacked side-on where only the narrow spine is visible (thin vertical strips, 1–5% of image width). Include games near image corners and edges. Maximize recall: include every object with any readable text or publisher logo or game art. Assign lower detect_conf/game_conf if uncertain. On dense shelves with 20+ games, include marginal detections rather than miss real games — the downstream catalog matcher filters unrecognised titles. Only skip an object if there is absolutely no identifying text or art. Do not invent titles. Return [] if none.
 
 Example: [{"label":"Wingspan","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.98,"game_conf":0.95}]`,
-        },
-      ];
+      },
+    ];
 
-      const resizeMs = Date.now() - resizeStartedAt;
-
-      const modelStartedAt = Date.now();
+    try {
       const result = await this.generateContentPrimaryThenFallback(
         parts,
-        this.uprightModel,
+        this.uprightModel!,
         GEMINI_UPRIGHT_MODEL,
         this.spineModel,
         GEMINI_SPINE_MODEL,
       );
-      const modelMs = Date.now() - modelStartedAt;
-
-      const parseStartedAt = Date.now();
       const text = result.response.text().trim();
       const parsed = this.parseGeminiJsonArrayFromText(text, 'upright');
       if (parsed.length === 0) return [];
-
-      const items = this.parseDetectionItems(parsed);
-      const parseMs = Date.now() - parseStartedAt;
-      const totalMs = Date.now() - startedAt;
-      this.logger.log(
-        `Gemini upright timings (ms): resize=${resizeMs}, model=${modelMs}, parse=${parseMs}, total=${totalMs}, detections=${items.length}`,
-      );
-
-      return items;
+      return this.parseDetectionItems(parsed);
     } catch (error) {
-      this.logger.warn('Gemini vision detection failed', error);
-      this.logger.warn(
-        `Gemini upright failed after ${Date.now() - startedAt}ms`,
-      );
+      this.logger.warn('detectBoardGamesInBuffer failed', error);
       return [];
     }
+  }
+
+  /**
+   * Splits a wide image into overlapping vertical tile regions.
+   * Returns a single full-image tile for non-panoramic images (ratio < 1.8).
+   */
+  private buildTileRegions(aspectRatio: number): TileRegion[] {
+    if (aspectRatio < 1.8) return [{ x: 0, y: 0, width: 1, height: 1 }];
+
+    let numTiles: number;
+    if (aspectRatio < 3.0) numTiles = 2;
+    else if (aspectRatio < 4.5) numTiles = 3;
+    else numTiles = 4;
+
+    // 15% overlap between adjacent tiles so games on boundaries appear in both.
+    const overlap = 0.15;
+    const tileWidth = 1 / (numTiles - overlap * (numTiles - 1));
+    const step = tileWidth * (1 - overlap);
+
+    return Array.from({ length: numTiles }, (_, i) => {
+      const x = Math.max(0, Math.min(1 - tileWidth, i * step));
+      return { x, y: 0, width: tileWidth, height: 1 };
+    });
+  }
+
+  /** Extracts a tile crop from the image buffer. */
+  private async sliceImageTile(
+    buffer: Buffer,
+    tile: TileRegion,
+    imgWidth: number,
+    imgHeight: number,
+  ): Promise<Buffer> {
+    const left = Math.round(tile.x * imgWidth);
+    const top = Math.round(tile.y * imgHeight);
+    const width = Math.min(
+      Math.round(tile.width * imgWidth),
+      imgWidth - left,
+    );
+    const height = Math.min(
+      Math.round(tile.height * imgHeight),
+      imgHeight - top,
+    );
+    return sharp(buffer)
+      .extract({ left: Math.max(0, left), top: Math.max(0, top), width, height })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  }
+
+  /**
+   * Maps tile-local bounding boxes back to full-image coordinates.
+   */
+  private adjustDetectionsForTile(
+    items: GeminiDetection[],
+    tile: TileRegion,
+  ): GeminiDetection[] {
+    return items.map((item) => {
+      const bb = item.boundingBox;
+      const adjustedBoundingBox = bb
+        ? {
+            x: tile.x + bb.x * tile.width,
+            y: tile.y + bb.y * tile.height,
+            width: bb.width * tile.width,
+            height: bb.height * tile.height,
+          }
+        : undefined;
+
+      const adjustedPolygon = item.polygon
+        ? item.polygon.map(
+            ([px, py]) =>
+              [
+                tile.x + px * tile.width,
+                tile.y + py * tile.height,
+              ] as [number, number],
+          )
+        : undefined;
+
+      return { ...item, boundingBox: adjustedBoundingBox, polygon: adjustedPolygon };
+    });
+  }
+
+  /**
+   * Removes duplicate detections from adjacent tile overlap zones.
+   * Keeps the higher-confidence detection when IoU >= 0.30.
+   */
+  private deduplicateTileDetections(
+    items: GeminiDetection[],
+  ): GeminiDetection[] {
+    const sorted = [...items].sort(
+      (a, b) => (b.detectionConfidence ?? 0) - (a.detectionConfidence ?? 0),
+    );
+    const kept: GeminiDetection[] = [];
+    for (const cur of sorted) {
+      const bb = cur.boundingBox;
+      if (!bb) {
+        kept.push(cur);
+        continue;
+      }
+      const isDuplicate = kept.some((existing) => {
+        const ob = existing.boundingBox;
+        if (!ob) return false;
+        const interW = Math.max(
+          0,
+          Math.min(bb.x + bb.width, ob.x + ob.width) - Math.max(bb.x, ob.x),
+        );
+        const interH = Math.max(
+          0,
+          Math.min(bb.y + bb.height, ob.y + ob.height) - Math.max(bb.y, ob.y),
+        );
+        const inter = interW * interH;
+        if (inter === 0) return false;
+        const union = bb.width * bb.height + ob.width * ob.height - inter;
+        return union > 0 && inter / union >= 0.3;
+      });
+      if (!isDuplicate) kept.push(cur);
+    }
+    return kept;
   }
 
   private async resizeImage(
@@ -285,7 +459,7 @@ Return a JSON array only. For each physical box:
 - "detect_conf": 0.0-1.0 this is a game
 - "game_conf": 0.0-1.0 title is correct
 
-Rules: each entry = one physical box, non-overlapping (edge contact only). Skip books, magazines, DVDs, furniture surfaces, decorative objects, and anything without a game title or publisher logo. Only include entries where you can read enough text to identify the game — a partial title, expansion name, or publisher logo is sufficient. Omit completely unreadable items rather than labeling "UNKNOWN". Return [] if none.
+Rules: each entry = one physical box, non-overlapping (edge contact only). Skip books, magazines, DVDs, furniture surfaces, decorative objects, and anything without a game title or publisher logo. Maximize recall: include every entry with any readable game text or logo. Assign lower detect_conf/game_conf if uncertain. On dense shelves with 20+ games, include marginal detections rather than miss real games — the downstream catalog matcher filters unrecognised titles. Only omit items with absolutely no identifying text or art. Return [] if none.
 
 Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"polygon":[[120,340],[250,340],[250,560],[120,560]],"detect_conf":0.95,"game_conf":0.9}]`,
         },
@@ -531,7 +705,7 @@ Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"p
       // Skip very low detection confidence — likely a false positive
       const detectionConfidence =
         typeof r.detect_conf === 'number' ? r.detect_conf : undefined;
-      if (detectionConfidence !== undefined && detectionConfidence < 0.42)
+      if (detectionConfidence !== undefined && detectionConfidence < 0.30)
         continue;
 
       const editionOrVersion =
@@ -541,7 +715,7 @@ Example: [{"label":"Ticket to Ride","edition":null,"box_2d":[340,120,560,250],"p
 
       const gameConfidence =
         typeof r.game_conf === 'number' ? r.game_conf : undefined;
-      if (gameConfidence !== undefined && gameConfidence < 0.32) continue;
+      if (gameConfidence !== undefined && gameConfidence < 0.20) continue;
 
       // Parse polygon: [[x,y],...] in 0-1000 scale → normalize to [0,1]
       const rawPoly = r.polygon;
